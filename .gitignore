@@ -12,6 +12,7 @@ build/
 
 # PyInstaller
 *.spec
+version_info.txt
 
 # Virtual environments
 venv/

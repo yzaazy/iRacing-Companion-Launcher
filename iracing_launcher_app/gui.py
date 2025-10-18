@@ -11,6 +11,7 @@ from typing import Dict, Optional
 
 from PIL import Image, ImageTk
 
+from version import __version__
 from .app_manager import AppManager
 from .config_manager import ConfigManager
 from .widgets import StatusCard
@@ -102,7 +103,7 @@ class iRacingLauncherGUI:
 
         title_label = ctk.CTkLabel(
             header_frame,
-            text="iRacing Companion Launcher",
+            text=f"iRacing Companion Launcher v{__version__}",
             font=("Segoe UI", 24, "bold"),
             text_color=FG_PRIMARY
         )

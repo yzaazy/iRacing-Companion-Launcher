@@ -6,10 +6,11 @@
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 AppId={{AC6B1A17-D640-431A-8A9B-0CF697BD5075}
 AppName=iRacing Companion Launcher
-AppVersion=1.4
+AppVersion=1.4.1
 ;AppVerName=iRacing Companion Launcher 1.4
 AppPublisher=Tobias Termeczky
 DefaultDirName={autopf}\iRacing Companion Launcher
+UsePreviousAppDir=yes
 UninstallDisplayIcon={app}\iRacing Companion Launcher.exe
 ; "ArchitecturesAllowed=x64compatible" specifies that Setup cannot run
 ; on anything but x64 and Windows 11 on Arm.

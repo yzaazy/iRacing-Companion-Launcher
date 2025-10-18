@@ -52,10 +52,27 @@ python iracing_launcher.py
 python convert_icon.py
 ```
 
+### Version Management
+The application uses centralized version management. To update the version:
+
+1. Edit `version.py` and change the `__version__` variable
+2. Run the update script to propagate the version:
+```bash
+python update_version.py
+```
+
+This will automatically update:
+- Windows version info for the executable (`version_info.txt`)
+- Inno Setup installer script (`windows installer.iss`)
+- The application will display the version in the header
+
 ### Building Executable
 ```bash
+# First, ensure versions are up to date
+python update_version.py
+
 # Build with PyInstaller using the spec file
-pyinstaller "iRacing Companion Launcher v2.spec"
+pyinstaller "iRacing Companion Launcher.spec"
 
 # Output will be in dist/ directory
 ```
@@ -95,11 +112,19 @@ Required Python packages:
 - All paths use raw strings (r"") to properly handle Windows backslashes
 
 ## File Structure
-- `iracing_launcher.py` - Main application source
-- `iracing_launcher V1 works.py` - Previous version (reference only)
+- `iracing_launcher.py` - Main application entry point
+- `iracing_launcher_app/` - Application package directory
+  - `gui.py` - Main GUI class
+  - `app_manager.py` - Application management logic
+  - `config_manager.py` - Configuration handling
+  - `widgets.py` - Custom UI widgets
+  - `constants.py` - UI constants and colors
+- `version.py` - **Single source of truth for version number**
+- `update_version.py` - Script to update version across all files
+- `version_info.txt` - Windows version info (auto-generated)
 - `iRCL.png` / `iRCL.ico` - Application icons
 - `convert_icon.py` - Utility to convert PNG to ICO format
-- `*.spec` - PyInstaller build specifications
+- `iRacing Companion Launcher.spec` - PyInstaller build specification
 - `windows installer.iss` - Inno Setup installer script
 - `dist/` - PyInstaller output directory
 - `build/` - PyInstaller temporary build files

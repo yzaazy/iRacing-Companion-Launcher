@@ -1,11 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+# Import version from version.py
+import sys
+sys.path.insert(0, '.')
+from version import __version__
 
 a = Analysis(
     ['iracing_launcher.py'],
     pathex=[],
     binaries=[],
-    datas=[('iRCL.ico', '.'), ('iRCL.png', '.')],
+    datas=[('iRCL.ico', '.'), ('iRCL.png', '.'), ('version.py', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -36,4 +40,5 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=['iRCL.ico'],
+    version='version_info.txt',
 )
