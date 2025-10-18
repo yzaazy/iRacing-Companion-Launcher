@@ -6,11 +6,12 @@
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 AppId={{AC6B1A17-D640-431A-8A9B-0CF697BD5075}
 AppName=iRacing Companion Launcher
-AppVersion=1.4.1
+AppVersion=1.5.1
 ;AppVerName=iRacing Companion Launcher 1.4
 AppPublisher=Tobias Termeczky
 DefaultDirName={autopf}\iRacing Companion Launcher
 UsePreviousAppDir=yes
+UninstallDisplayName=iRacing Companion Launcher
 UninstallDisplayIcon={app}\iRacing Companion Launcher.exe
 ; "ArchitecturesAllowed=x64compatible" specifies that Setup cannot run
 ; on anything but x64 and Windows 11 on Arm.
@@ -47,4 +48,95 @@ Name: "{autodesktop}\iRacing Companion Launcher"; Filename: "{app}\iRacing Compa
 
 [Run]
 Filename: "{app}\iRacing Companion Launcher.exe"; Description: "{cm:LaunchProgram,iRacing Companion Launcher}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function GetUninstallString(): String;
+var
+  UninstallKey: String;
+  UninstallString: String;
+begin
+  UninstallKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{AC6B1A17-D640-431A-8A9B-0CF697BD5075}_is1';
+  UninstallString := '';
+
+  // Check HKLM (system-wide installation)
+  if not RegQueryStringValue(HKLM, UninstallKey, 'UninstallString', UninstallString) then
+  begin
+    // Check HKCU (current user installation)
+    RegQueryStringValue(HKCU, UninstallKey, 'UninstallString', UninstallString);
+  end;
+
+  Result := UninstallString;
+end;
+
+function IsUpgrade(): Boolean;
+begin
+  Result := (GetUninstallString() <> '');
+end;
+
+function UninstallOldVersion(): Integer;
+var
+  UninstallString: String;
+  ResultCode: Integer;
+begin
+  Result := 0;
+  UninstallString := GetUninstallString();
+
+  if UninstallString <> '' then
+  begin
+    UninstallString := RemoveQuotes(UninstallString);
+
+    if Exec(UninstallString, '/SILENT /NORESTART /SUPPRESSMSGBOXES', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+      Result := ResultCode
+    else
+      Result := -1;
+  end;
+end;
+
+function InitializeSetup(): Boolean;
+var
+  InstalledVersion: String;
+  UninstallKey: String;
+  Response: Integer;
+  Message: String;
+begin
+  Result := True;
+
+  if IsUpgrade() then
+  begin
+    UninstallKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{AC6B1A17-D640-431A-8A9B-0CF697BD5075}_is1';
+
+    // Try to get the installed version
+    if not RegQueryStringValue(HKLM, UninstallKey, 'DisplayVersion', InstalledVersion) then
+      RegQueryStringValue(HKCU, UninstallKey, 'DisplayVersion', InstalledVersion);
+
+    // Check if it's an upgrade or reinstall
+    if InstalledVersion = '{#SetupSetting("AppVersion")}' then
+    begin
+      // Same version - reinstall
+      Message := 'iRacing Companion Launcher version ' + InstalledVersion + ' is already installed.' + #13#10#13#10 +
+                 'Do you want to reinstall?';
+    end
+    else
+    begin
+      // Different version - upgrade
+      Message := 'iRacing Companion Launcher version ' + InstalledVersion + ' is currently installed.' + #13#10#13#10 +
+                 'Do you want to upgrade to version {#SetupSetting("AppVersion")}?';
+    end;
+
+    Response := MsgBox(Message, mbConfirmation, MB_YESNO);
+
+    if Response = IDYES then
+    begin
+      if UninstallOldVersion() <> 0 then
+      begin
+        MsgBox('Failed to uninstall the previous version. Please uninstall it manually before continuing.', mbError, MB_OK);
+        Result := False;
+      end;
+    end
+    else
+    begin
+      Result := False;
+    end;
+  end;
+end;
 

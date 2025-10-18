@@ -97,14 +97,10 @@ def update_inno_setup():
         content = f.read()
 
     # Update AppVersion line
-    # Convert "1.4.0" to "1.4" for Inno Setup (remove .0 if patch is 0)
     major, minor, patch, prerelease = parse_version(__version__)
 
-    # Format version for Inno Setup
-    if patch == 0:
-        inno_version = f"{major}.{minor}"
-    else:
-        inno_version = f"{major}.{minor}.{patch}"
+    # Format version for Inno Setup (always use full version)
+    inno_version = f"{major}.{minor}.{patch}"
 
     if prerelease:
         inno_version += f"-{prerelease}"

@@ -26,7 +26,7 @@ To build the application as a standalone executable:
 python update_version.py
 
 # Build with PyInstaller using the spec file
-pyinstaller "iRacing Companion Launcher.spec"
+python -m PyInstaller iracing_companion_launcher.spec
 ```
 
 The executable will be created in the `dist/` directory.
