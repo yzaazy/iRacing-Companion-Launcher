@@ -117,6 +117,27 @@ iscc "windows installer.iss"
 # Output installer will be in installer_output/
 ```
 
+### Creating a Release
+After committing your changes, follow these steps to publish a release:
+
+1. **Create and push a git tag**:
+   ```bash
+   # Create an annotated tag with the version number
+   git tag -a v{version} -m "Release v{version}"
+
+   # Push the tag to remote
+   git push origin v{version}
+   ```
+
+2. **Create a GitHub release**:
+   ```bash
+   # Using GitHub CLI (recommended)
+   gh release create v{version} "installer_output/iRacingCompanionLauncher-Setup-v{version}.exe" --title "v{version}" --notes "Release notes describing changes"
+
+   # Or create manually via GitHub web interface at:
+   # https://github.com/{username}/{repo}/releases/new
+   ```
+
 ## Dependencies
 Required Python packages:
 - `tkinter` - GUI framework (usually included with Python on Windows)
