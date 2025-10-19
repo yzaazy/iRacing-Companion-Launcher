@@ -6,7 +6,7 @@
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 AppId={{AC6B1A17-D640-431A-8A9B-0CF697BD5075}
 AppName=iRacing Companion Launcher
-AppVersion=1.5.2
+AppVersion=1.6.0
 ;AppVerName=iRacing Companion Launcher 1.4
 AppPublisher=Tobias Termeczky
 DefaultDirName={autopf}\iRacing Companion Launcher
@@ -29,6 +29,8 @@ OutputBaseFilename=iRacing_Companion_Launcher_Setup
 SetupIconFile=C:\Users\tobia\Documents\Scripts\iRCL.ico
 SolidCompression=yes
 WizardStyle=modern
+PrivilegesRequired=admin
+DirExistsWarning=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -37,9 +39,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "C:\Users\tobia\Documents\Scripts\dist\iRacing Companion Launcher.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "iRCL.png"; DestDir: "{app}"; Flags: ignoreversion
-Source: "iRCL.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\Users\tobia\Documents\Scripts\dist\iRacing Companion Launcher\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
@@ -85,7 +85,7 @@ begin
   begin
     UninstallString := RemoveQuotes(UninstallString);
 
-    if Exec(UninstallString, '/SILENT /NORESTART /SUPPRESSMSGBOXES', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    if Exec(UninstallString, '/SILENT /NORESTART /SUPPRESSMSGBOXES /DIR="{app}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
       Result := ResultCode
     else
       Result := -1;

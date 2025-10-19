@@ -176,7 +176,19 @@ class AppManager:
             return False
 
         try:
-            subprocess.Popen([app_path], shell=False, close_fds=True)
+            # Launch the app completely detached from this process
+            # DETACHED_PROCESS: Prevents inheriting console
+            # CREATE_NEW_PROCESS_GROUP: Creates independent process group
+            # This ensures the launched app doesn't hold handles to our temp directory
+            subprocess.Popen(
+                [app_path],
+                shell=False,
+                close_fds=True,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+            )
             time.sleep(2)  # Wait for process to start
 
             exe_name = self.apps[app_name]["exe"]

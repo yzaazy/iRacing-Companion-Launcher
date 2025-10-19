@@ -77,9 +77,14 @@ class iRacingLauncherGUI:
                     # Method 2: Also set via iconphoto with PNG for some contexts
                     png_path = ico_path.replace('.ico', '.png')
                     if os.path.exists(png_path):
-                        icon_image = Image.open(png_path)
-                        icon_photo = ImageTk.PhotoImage(icon_image)
-                        self.root._icon_photo = icon_photo  # Prevent garbage collection
+                        # Open, load, and immediately close the image file
+                        with Image.open(png_path) as icon_image:
+                            # Load the image data into memory
+                            icon_image.load()
+                            # Create PhotoImage from the loaded data
+                            icon_photo = ImageTk.PhotoImage(icon_image)
+                        # Store reference to prevent garbage collection
+                        self.root._icon_photo = icon_photo
                         self.root.iconphoto(True, icon_photo)
                 except Exception as e:
                     print(f"iconphoto failed: {e}")
