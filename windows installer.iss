@@ -6,7 +6,7 @@
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 AppId={{AC6B1A17-D640-431A-8A9B-0CF697BD5075}
 AppName=iRacing Companion Launcher
-AppVersion=1.5.1
+AppVersion=1.5.2
 ;AppVerName=iRacing Companion Launcher 1.4
 AppPublisher=Tobias Termeczky
 DefaultDirName={autopf}\iRacing Companion Launcher

@@ -176,7 +176,7 @@ class AppManager:
             return False
 
         try:
-            subprocess.Popen([app_path], shell=False)
+            subprocess.Popen([app_path], shell=False, close_fds=True)
             time.sleep(2)  # Wait for process to start
 
             exe_name = self.apps[app_name]["exe"]
