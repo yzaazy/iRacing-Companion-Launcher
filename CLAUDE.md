@@ -118,25 +118,59 @@ iscc "windows installer.iss"
 ```
 
 ### Creating a Release
-After committing your changes, follow these steps to publish a release:
+When the user says "release", follow these steps to publish a release:
 
-1. **Create and push a git tag**:
+1. **Ask if the Inno Setup installer has been compiled**:
+   - Before proceeding, confirm with the user that they have compiled the installer using Inno Setup Compiler (ISCC)
+   - The installer should be available in the `installer_output/` directory
+
+2. **Push the git tag to remote**:
    ```bash
-   # Create an annotated tag with the version number
-   git tag -a v{version} -m "Release v{version}"
-
-   # Push the tag to remote
    git push origin v{version}
    ```
 
-2. **Create a GitHub release**:
+3. **Create a GitHub release**:
    ```bash
    # Using GitHub CLI (recommended)
-   gh release create v{version} "installer_output/iRacingCompanionLauncher-Setup-v{version}.exe" --title "v{version}" --notes "Release notes describing changes"
-
-   # Or create manually via GitHub web interface at:
-   # https://github.com/{username}/{repo}/releases/new
+   gh release create v{version} "installer_output/iRacing_Companion_Launcher_Setup.exe" --title "v{version}" --generate-notes
    ```
+
+Note: The installer filename in `installer_output/` is always `iRacing_Companion_Launcher_Setup.exe` (not versioned).
+
+### Discord Release Notifications
+
+To automatically post release notifications to Discord, use **GitTrack.me** - a free service that integrates GitHub with Discord.
+
+**Setup Steps:**
+
+1. **Invite GitTrack Bot**:
+   - Visit https://gittrack.me/
+   - Click "Add to Discord" and select your server
+   - Grant necessary permissions
+
+2. **Connect Your Repository**:
+   - In your Discord server, run: `/setup`
+   - Follow the prompts to connect your GitHub repository
+   - Choose the channel where release notifications should be posted
+
+3. **Configure Notifications**:
+   - GitTrack will provide a webhook URL and secret
+   - Add the webhook to your GitHub repository settings:
+     - Go to: Repository Settings → Webhooks → Add webhook
+     - Paste the webhook URL from GitTrack
+     - Add the secret token
+     - Select events to trigger (at minimum: "Releases")
+
+4. **Test It**:
+   - Publish a new release
+   - GitTrack will automatically post a formatted notification to your Discord channel
+
+**Features:**
+- Automatic, beautifully formatted release notifications
+- Real-time updates with rich embeds
+- No coding or GitHub Actions required
+- Free and easy to maintain
+- Can also track commits, PRs, and issues if desired
 
 ## Dependencies
 Required Python packages:
