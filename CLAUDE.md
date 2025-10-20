@@ -24,9 +24,10 @@ This is a Windows desktop GUI application that launches and manages iRacing comp
 
 ### Application Detection System
 The app uses a path-based auto-detection system for installed applications:
-- Checks multiple common installation directories (Program Files, Program Files (x86), AppData)
+- First checks saved paths in config.ini
+- Falls back to hardcoded common installation directories (Program Files, Program Files (x86), AppData)
 - Each app has a defined list of potential paths checked in order
-- Falls back gracefully with error logging when apps aren't found
+- Users can manually browse for executables if auto-detection fails
 
 ### Build System
 - **PyInstaller**: Used to create standalone Windows executables
@@ -174,8 +175,7 @@ To automatically post release notifications to Discord, use **GitTrack.me** - a 
 
 ## Dependencies
 Required Python packages:
-- `tkinter` - GUI framework (usually included with Python on Windows)
-- `Pillow` (PIL) - Image handling for icons
+- `customtkinter` - Modern GUI framework (extends tkinter)
 - `psutil` - Process management and monitoring
 
 ## Key Implementation Details

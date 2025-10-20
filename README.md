@@ -54,5 +54,4 @@ python iracing_launcher.py
 
 - Python 3.x
 - customtkinter
-- Pillow
 - psutil

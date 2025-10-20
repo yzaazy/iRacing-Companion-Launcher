@@ -9,8 +9,6 @@ import customtkinter as ctk
 from tkinter import filedialog
 from typing import Dict, Optional
 
-from PIL import Image, ImageTk
-
 from version import __version__
 from .app_manager import AppManager
 from .config_manager import ConfigManager
@@ -66,28 +64,11 @@ class iRacingLauncherGUI:
             ico_path = os.path.join(base_dir, "iRCL.ico")
 
             if os.path.exists(ico_path):
-                # Set icon using multiple methods for maximum compatibility
                 try:
-                    # Method 1: iconbitmap (works for title bar and taskbar)
+                    # Set icon using iconbitmap (works for title bar and taskbar)
                     self.root.iconbitmap(ico_path)
                 except Exception as e:
                     print(f"iconbitmap failed: {e}")
-
-                try:
-                    # Method 2: Also set via iconphoto with PNG for some contexts
-                    png_path = ico_path.replace('.ico', '.png')
-                    if os.path.exists(png_path):
-                        # Open, load, and immediately close the image file
-                        with Image.open(png_path) as icon_image:
-                            # Load the image data into memory
-                            icon_image.load()
-                            # Create PhotoImage from the loaded data
-                            icon_photo = ImageTk.PhotoImage(icon_image)
-                        # Store reference to prevent garbage collection
-                        self.root._icon_photo = icon_photo
-                        self.root.iconphoto(True, icon_photo)
-                except Exception as e:
-                    print(f"iconphoto failed: {e}")
             else:
                 print(f"Icon not found at: {ico_path}")
         except Exception as e:
