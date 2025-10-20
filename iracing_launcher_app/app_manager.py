@@ -43,6 +43,13 @@ class AppManager:
                 r"garage61-install\garage61-launcher.exe"
             )
             apps["Garage61"]["paths"] = [appdata_path]
+        # Add dynamic path for Bloops
+        if "Bloops" in apps:
+            localappdata_path = os.path.join(
+                os.getenv('LOCALAPPDATA'),
+                r"Bloops\current\Bloops.exe"
+            )
+            apps["Bloops"]["paths"] = [localappdata_path]
         return apps
 
     def find_app_path(self, app_name: str) -> Optional[str]:

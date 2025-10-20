@@ -34,7 +34,7 @@ class iRacingLauncherGUI:
         """
         self.root = root
         self.root.title("iRacing Companion Launcher")
-        self.root.geometry("800x550")
+        self.root.geometry("800x630")
         self.root.resizable(False, False)
 
         # Initialize managers

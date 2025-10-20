@@ -71,7 +71,12 @@ APPS = {
     },
     "Garage61": {
         "exe": "garage61-launcher.exe",
-        "shortcut_names": ["Garage61.lnk", "garage61.lnk"],
+        "shortcut_names": ["Garage 61 Telemetry Agent.lnk", "Garage61.lnk", "garage61.lnk"],
+        "paths": []  # Will be populated at runtime
+    },
+    "Bloops": {
+        "exe": "Bloops.exe",
+        "shortcut_names": ["Bloops.lnk"],
         "paths": []  # Will be populated at runtime
     }
 }
