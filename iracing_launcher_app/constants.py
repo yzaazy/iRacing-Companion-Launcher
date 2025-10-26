@@ -78,5 +78,10 @@ APPS = {
         "exe": "Bloops.exe",
         "shortcut_names": ["Bloops.lnk"],
         "paths": []  # Will be populated at runtime
+    },
+    "TrackTitan": {
+        "exe": "TrackTitanDesktopApplication.exe",
+        "shortcut_names": ["TrackTitanDesktopApplication.lnk"],
+        "paths": []  # Will be populated at runtime
     }
 }

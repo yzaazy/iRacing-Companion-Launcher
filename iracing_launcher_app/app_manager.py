@@ -50,6 +50,13 @@ class AppManager:
                 r"Bloops\current\Bloops.exe"
             )
             apps["Bloops"]["paths"] = [localappdata_path]
+        # Add dynamic path for TrackTitan
+        if "TrackTitan" in apps:
+            localappdata_path = os.path.join(
+                os.getenv('LOCALAPPDATA'),
+                r"Programs\track-titan-ghost-application\TrackTitanDesktopApplication.exe"
+            )
+            apps["TrackTitan"]["paths"] = [localappdata_path]
         return apps
 
     def find_app_path(self, app_name: str) -> Optional[str]:
