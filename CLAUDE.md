@@ -75,7 +75,7 @@ The app uses a multi-tier path detection system:
 
 ### Build System
 - **PyInstaller**: Used to create standalone Windows executables
-  - Spec file: `iRacing Companion Launcher v2.spec`
+  - Spec file: `iRacing Companion Launcher.spec`
   - Bundles the `iRCL.png` icon with the executable
   - Creates a windowed (non-console) application
   - Uses UPX compression

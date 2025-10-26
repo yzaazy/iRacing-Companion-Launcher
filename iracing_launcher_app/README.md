@@ -13,7 +13,7 @@ iracing_launcher_app/
 ├── widgets.py            # Custom UI widgets (ModernButton, StatusCard)
 └── gui.py               # Main GUI application class
 
-iracing_launcher_v2.py    # Entry point script
+iracing_launcher.py    # Entry point script
 ```
 
 ## Module Overview
@@ -96,7 +96,7 @@ Centralized configuration values:
 
 Run the application:
 ```bash
-python iracing_launcher_v2.py
+python iracing_launcher.py
 ```
 
 ## Migration from Old Version
