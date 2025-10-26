@@ -5,6 +5,13 @@ import sys
 sys.path.insert(0, '.')
 from version import __version__
 
+# Note: Application has been refactored into a modular structure:
+# - iracing_launcher_app/core/      - Core business logic
+# - iracing_launcher_app/managers/  - App and game managers
+# - iracing_launcher_app/ui/        - User interface components
+# - iracing_launcher_app/utils/     - Utility functions
+# PyInstaller will automatically detect and include all modules via import analysis
+
 a = Analysis(
     ['iracing_launcher.py'],
     pathex=[],

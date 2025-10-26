@@ -8,26 +8,70 @@ This is a Windows desktop GUI application that launches and manages iRacing comp
 
 ## Architecture
 
-### Main Application (`iracing_launcher.py`)
-- **iRacingLauncher**: Main application class that orchestrates the GUI and app management
-  - Manages application definitions with auto-detection across common install paths
-  - Uses `psutil` for process monitoring and management
-  - Implements custom UI components for a modern appearance
+The application follows a clean, modular architecture with clear separation of concerns:
 
-- **ModernButton**: Custom Tkinter Canvas-based widget that creates rounded buttons with hover effects
-  - Implements manual state management and event handling
-  - Uses polygon drawing with smoothing for rounded corners
+### Package Structure
+```
+iracing_launcher_app/
+├── core/                    # Core business logic
+│   ├── activity_logger.py   # Logging abstraction
+│   ├── app_definitions.py   # App/game configuration data
+│   └── config_manager.py    # Configuration file management
+│
+├── managers/                # Application managers
+│   ├── process_manager.py   # Shared process operations
+│   ├── app_manager.py       # Companion app management
+│   └── game_manager.py      # Racing game management
+│
+├── ui/                      # User interface
+│   ├── constants.py         # UI constants (colors, sizes)
+│   ├── main_window.py       # Main application window
+│   ├── sections/            # UI section components
+│   │   ├── header.py
+│   │   ├── apps_section.py
+│   │   ├── games_section.py
+│   │   ├── log_section.py
+│   │   ├── buttons_section.py
+│   │   └── footer.py
+│   └── widgets/             # Custom widgets
+│       ├── status_card.py
+│       └── game_card.py
+│
+└── utils/                   # Utilities
+    ├── path_finder.py       # Path detection logic
+    └── steam_registry.py    # Steam registry utilities
+```
 
-- **StatusCard**: Frame-based widget displaying app status with colored indicators
-  - Fixed height (50px) for consistent layout
-  - Color-coded status states: idle, starting, running, failed, stopped
+### Key Components
+
+**Main Window (`ui/main_window.py`)**
+- `iRacingLauncherGUI`: Main application orchestrator
+  - Coordinates UI sections and business logic
+  - Manages application and game state
+  - Handles user interactions and callbacks
+
+**Managers (`managers/`)**
+- `ProcessManager`: Low-level process operations (launch, kill, check)
+- `AppManager`: Companion application management and path detection
+- `GameManager`: Racing game management with Steam integration
+
+**UI Components (`ui/`)**
+- `StatusCard`: Widget displaying companion app status with colored indicators
+- `GameCard`: Widget displaying racing game with radio selection
+- Section classes: Modular UI components for different screen areas
+
+**Core Logic (`core/`)**
+- `ActivityLogger`: Centralized logging with color-coded messages
+- `ConfigManager`: INI file management for storing paths and settings
+- `app_definitions.py`: Configuration data for all apps and games
 
 ### Application Detection System
-The app uses a path-based auto-detection system for installed applications:
-- First checks saved paths in config.ini
-- Falls back to hardcoded common installation directories (Program Files, Program Files (x86), AppData)
-- Each app has a defined list of potential paths checked in order
-- Users can manually browse for executables if auto-detection fails
+The app uses a multi-tier path detection system:
+1. **Saved paths**: Checks config.ini for previously configured paths
+2. **Start Menu shortcuts**: Searches Windows Start Menu for application shortcuts
+3. **Common paths**: Falls back to hardcoded installation directories
+4. **Steam Registry**: For games, checks Windows Registry for Steam installations
+5. **Manual browse**: Users can manually select executables if auto-detection fails
 
 ### Build System
 - **PyInstaller**: Used to create standalone Windows executables
@@ -198,20 +242,49 @@ Required Python packages:
 - All paths use raw strings (r"") to properly handle Windows backslashes
 
 ## File Structure
-- `iracing_launcher.py` - Main application entry point
-- `iracing_launcher_app/` - Application package directory
-  - `gui.py` - Main GUI class
-  - `app_manager.py` - Application management logic
-  - `config_manager.py` - Configuration handling
-  - `widgets.py` - Custom UI widgets
-  - `constants.py` - UI constants and colors
-- `version.py` - **Single source of truth for version number**
-- `update_version.py` - Script to update version across all files
-- `version_info.txt` - Windows version info (auto-generated)
-- `iRCL.png` / `iRCL.ico` - Application icons
-- `convert_icon.py` - Utility to convert PNG to ICO format
-- `iracing_companion_launcher.spec` - PyInstaller build specification
-- `windows installer.iss` - Inno Setup installer script
-- `dist/` - PyInstaller output directory
-- `build/` - PyInstaller temporary build files
-- `installer_output/` - Final installer output directory
+```
+Scripts/
+├── iracing_launcher.py              # Main application entry point
+├── version.py                       # Single source of truth for version number
+├── iRCL.png / iRCL.ico             # Application icons
+├── iracing_companion_launcher.spec # PyInstaller build specification
+├── windows installer.iss            # Inno Setup installer script
+├── version_info.txt                 # Windows version info (auto-generated)
+│
+├── iracing_launcher_app/           # Main application package
+│   ├── core/                       # Core business logic
+│   │   ├── activity_logger.py      # Logging abstraction
+│   │   ├── app_definitions.py      # App/game configuration data
+│   │   └── config_manager.py       # Configuration file management
+│   │
+│   ├── managers/                   # Application managers
+│   │   ├── process_manager.py      # Shared process operations
+│   │   ├── app_manager.py          # Companion app management
+│   │   └── game_manager.py         # Racing game management
+│   │
+│   ├── ui/                         # User interface
+│   │   ├── constants.py            # UI constants (colors, sizes)
+│   │   ├── main_window.py          # Main application window
+│   │   ├── sections/               # UI section components
+│   │   │   ├── header.py
+│   │   │   ├── apps_section.py
+│   │   │   ├── games_section.py
+│   │   │   ├── log_section.py
+│   │   │   ├── buttons_section.py
+│   │   │   └── footer.py
+│   │   └── widgets/                # Custom widgets
+│   │       ├── status_card.py
+│   │       └── game_card.py
+│   │
+│   └── utils/                      # Utilities
+│       ├── path_finder.py          # Path detection logic
+│       └── steam_registry.py       # Steam registry utilities
+│
+├── tools/                           # Development tools
+│   ├── convert_icon.py             # Icon conversion utility
+│   └── update_version.py           # Version update script
+│
+├── dist/                            # PyInstaller output directory
+├── build/                           # PyInstaller temporary build files
+└── installer_output/                # Final installer output directory
+```

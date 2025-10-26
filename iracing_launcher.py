@@ -5,7 +5,7 @@ A modern GUI application to launch and manage iRacing companion apps.
 """
 
 import customtkinter as ctk
-from iracing_launcher_app.gui import iRacingLauncherGUI
+from iracing_launcher_app.ui.main_window import iRacingLauncherGUI
 
 
 def main():
