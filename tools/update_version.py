@@ -6,7 +6,12 @@ This script reads the version from version.py and updates:
 2. Inno Setup .iss file
 """
 
+import os
+import sys
 import re
+
+# Add parent directory to path to import version module
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from version import __version__
 
 
