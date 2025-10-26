@@ -17,6 +17,7 @@ version_info.txt
 venv/
 env/
 ENV/
+config.ini
 
 # IDE
 .vscode/
