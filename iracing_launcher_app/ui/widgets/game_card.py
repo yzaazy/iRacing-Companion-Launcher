@@ -33,6 +33,7 @@ class GameCard(ctk.CTkFrame):
         self.browse_callback = browse_callback
         self.radio_callback = radio_callback
         self.is_not_found = False
+        self.current_status = "idle"  # Track current status
 
         # Radio button for selecting this game
         self.radio_btn = ctk.CTkRadioButton(
@@ -114,6 +115,15 @@ class GameCard(ctk.CTkFrame):
         if self.radio_callback:
             self.radio_callback(self.game_name)
 
+    def get_status(self):
+        """
+        Get the current status of the game.
+
+        Returns:
+            Current status string
+        """
+        return self.current_status
+
     def set_status(self, status):
         """
         Update the status indicator color or show Browse button.
@@ -122,6 +132,8 @@ class GameCard(ctk.CTkFrame):
             status: Status string ("idle", "starting", "running", "failed",
                    "stopped", "not_found")
         """
+        self.current_status = status  # Store the status
+
         if status == "not_found":
             # Hide status indicator, show Browse button
             self.is_not_found = True

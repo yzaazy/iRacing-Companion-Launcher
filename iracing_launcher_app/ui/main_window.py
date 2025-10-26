@@ -468,15 +468,21 @@ class iRacingLauncherGUI:
             else:
                 self.logger.warning("Garage61 Agent was not running")
 
-        # Check game status
+        # Check game status after closing apps
         selected_game = self.selected_game_var.get()
-        if selected_game:
-            if self.game_manager.is_game_running(selected_game):
-                self.logger.warning(
-                    f"⚠ {selected_game} is still running - please close it manually"
-                )
-            else:
-                self.game_cards[selected_game].set_status("idle")
+        if selected_game and selected_game in self.game_cards:
+            # If card shows running, check if game is actually still running
+            if self.game_cards[selected_game].get_status() == "running":
+                game_is_running_now = self.game_manager.is_game_running(selected_game)
+
+                if not game_is_running_now:
+                    # Game was closed manually
+                    self.logger.success(f"{selected_game} was closed manually")
+                    self.game_cards[selected_game].set_status("idle")
+                else:
+                    # Game is still running - warn user
+                    self.logger.warning(f"⚠ {selected_game} is still running - please close it manually")
+            # If card doesn't show running, do nothing (game wasn't running)
 
         self.logger.success("All apps closed!")
         self.close_btn.configure(state="normal")
