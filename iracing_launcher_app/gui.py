@@ -12,7 +12,7 @@ from typing import Dict, Optional
 from version import __version__
 from .app_manager import AppManager
 from .config_manager import ConfigManager
-from .widgets import StatusCard
+from .widgets import StatusCard, GameCard
 from .constants import (
     BG_PRIMARY, BG_SECONDARY, BG_TERTIARY,
     FG_PRIMARY, FG_SECONDARY, FG_TERTIARY,
@@ -32,7 +32,7 @@ class iRacingLauncherGUI:
         """
         self.root = root
         self.root.title("iRacing Companion Launcher")
-        self.root.geometry("800x630")
+        self.root.geometry("1200x700")
         self.root.resizable(False, False)
 
         # Initialize managers
@@ -41,6 +41,8 @@ class iRacingLauncherGUI:
 
         # UI components
         self.status_cards: Dict[str, StatusCard] = {}
+        self.game_cards: Dict[str, "GameCard"] = {}
+        self.selected_game_var: ctk.StringVar = ctk.StringVar(value="")  # Default to None
         self.log_text: Optional[ctk.CTkTextbox] = None
         self.launch_btn: Optional[ctk.CTkButton] = None
         self.close_btn: Optional[ctk.CTkButton] = None
@@ -96,15 +98,96 @@ class iRacingLauncherGUI:
         title_label.pack(pady=20)
 
     def _create_content(self):
-        """Create the main content area with apps and log."""
+        """Create the main content area with games, apps, and log."""
         content_frame = ctk.CTkFrame(self.root, fg_color="transparent")
-        content_frame.pack(pady=5, padx=15, fill="both")
+        content_frame.pack(pady=5, padx=15, fill="both", expand=True)
 
-        # Left side - Companion Apps
+        # Left side - Race Games
+        self._create_games_section(content_frame)
+
+        # Middle - Companion Apps
         self._create_apps_section(content_frame)
 
         # Right side - Activity Log
         self._create_log_section(content_frame)
+
+    def _create_games_section(self, parent: ctk.CTkFrame):
+        """
+        Create the race games section.
+
+        Args:
+            parent: Parent frame widget
+        """
+        games_container = ctk.CTkFrame(parent, fg_color="transparent")
+        games_container.pack(side="left", fill="both", expand=True, padx=(0, 10))
+
+        # Header frame with label
+        header_frame = ctk.CTkFrame(games_container, fg_color="transparent", height=30)
+        header_frame.pack(fill="x", pady=(0, 10))
+        header_frame.pack_propagate(False)
+
+        games_label = ctk.CTkLabel(
+            header_frame,
+            text="Racing Simulators & Games",
+            font=("Segoe UI", 16, "bold"),
+            text_color=FG_SECONDARY,
+            anchor="w"
+        )
+        games_label.pack(side="left")
+
+        # Cards frame
+        cards_frame = ctk.CTkFrame(games_container, fg_color="transparent")
+        cards_frame.pack(fill="both", expand=True)
+
+        # Add "None" option at the top
+        none_frame = ctk.CTkFrame(
+            cards_frame,
+            fg_color="#2d2d30",
+            border_width=1,
+            border_color="#3e3e42",
+            height=STATUS_CARD_HEIGHT,
+            corner_radius=6
+        )
+        none_frame.pack(fill="x", pady=(0, 5))
+        none_frame.pack_propagate(False)
+
+        none_radio = ctk.CTkRadioButton(
+            none_frame,
+            text="",
+            width=20,
+            value="",
+            variable=self.selected_game_var,
+            command=self._on_game_selected_wrapper
+        )
+        none_radio.pack(side="left", padx=(10, 5), pady=10)
+
+        none_label = ctk.CTkLabel(
+            none_frame,
+            text="None",
+            text_color="#ffffff",
+            font=("Segoe UI", 14, "bold"),
+            anchor="w"
+        )
+        none_label.pack(side="left", padx=(5, 15), pady=10)
+
+        # Add actual games
+        game_list = self.app_manager.get_game_list()
+        for idx, game_name in enumerate(game_list):
+            card = GameCard(
+                cards_frame,
+                game_name,
+                browse_callback=self._browse_for_game,
+                radio_callback=self._on_game_selected,
+                radio_variable=self.selected_game_var
+            )
+            # Last card: no bottom padding
+            if idx == len(game_list) - 1:
+                pady = (5, 0)
+            else:
+                pady = 5
+
+            card.pack(fill="x", pady=pady)
+            self.game_cards[game_name] = card
 
     def _create_apps_section(self, parent: ctk.CTkFrame):
         """
@@ -114,11 +197,12 @@ class iRacingLauncherGUI:
             parent: Parent frame widget
         """
         apps_container = ctk.CTkFrame(parent, fg_color="transparent")
-        apps_container.pack(side="left", fill="both", expand=True, padx=(0, 15))
+        apps_container.pack(side="left", fill="both", expand=True, padx=(0, 10))
 
         # Header frame with label and select all button
-        header_frame = ctk.CTkFrame(apps_container, fg_color="transparent")
+        header_frame = ctk.CTkFrame(apps_container, fg_color="transparent", height=30)
         header_frame.pack(fill="x", pady=(0, 10))
+        header_frame.pack_propagate(False)
 
         apps_label = ctk.CTkLabel(
             header_frame,
@@ -280,6 +364,35 @@ class iRacingLauncherGUI:
         self._update_button_text()
         self._update_select_all_button()
 
+        # Initialize game states
+        self._initialize_game_states()
+
+    def _initialize_game_states(self):
+        """Check all games on startup and set initial states."""
+        for game_name in self.app_manager.get_game_list():
+            game_path = self.app_manager.find_game_path(game_name)
+            if not game_path:
+                self.game_cards[game_name].set_status("not_found")
+                self._log_message(f"{game_name} - not configured", "warning")
+            else:
+                # Check if the game is already running
+                if self.app_manager.is_game_running(game_name):
+                    self.game_cards[game_name].set_status("running")
+                    self._log_message(f"{game_name} - already running", "success")
+                else:
+                    self.game_cards[game_name].set_status("idle")
+                    self._log_message(f"{game_name} - configured", "info")
+
+        # Restore selected game from config
+        saved_game = self.config_manager.config.get('Settings', 'selected_game', fallback='')
+        if saved_game and saved_game in self.game_cards:
+            self.selected_game_var.set(saved_game)
+        else:
+            # Default to "None" if no valid saved game
+            self.selected_game_var.set('')
+
+        self._update_button_text()
+
     def _toggle_select_all(self):
         """Toggle all app checkboxes between selected and deselected."""
         # Check if all enabled apps are currently checked
@@ -335,7 +448,7 @@ class iRacingLauncherGUI:
             self.select_all_btn.configure(text="Select All")
 
     def _update_button_text(self):
-        """Update button text to show number of selected apps."""
+        """Update button text to show number of selected apps and selected game."""
         if not self.launch_btn or not self.close_btn:
             return
 
@@ -345,12 +458,19 @@ class iRacingLauncherGUI:
             if card.get_checked()
         )
 
-        # Update button text
-        self.launch_btn.configure(text=f"Launch All ({checked_count})")
-        self.close_btn.configure(text=f"Close All ({checked_count})")
+        # Get selected game
+        selected_game = self.selected_game_var.get()
 
-        # Disable buttons when no apps are selected
-        if checked_count == 0:
+        # Update button text based on game selection
+        if selected_game:
+            self.launch_btn.configure(text=f"Launch with {selected_game} ({checked_count})")
+        else:
+            self.launch_btn.configure(text=f"Launch apps ({checked_count})")
+
+        self.close_btn.configure(text=f"Close all ({checked_count})")
+
+        # Disable buttons only when BOTH no game AND no apps are selected
+        if checked_count == 0 and not selected_game:
             self.launch_btn.configure(state="disabled")
             self.close_btn.configure(state="disabled")
         else:
@@ -463,6 +583,78 @@ class iRacingLauncherGUI:
         self._update_button_text()
         self._update_select_all_button()
 
+    def _browse_for_game(self, game_name: str):
+        """
+        Open file dialog to manually select game executable or shortcut.
+
+        Args:
+            game_name: Name of the game
+        """
+        expected_exe = self.app_manager.get_game_exe(game_name)
+        if not expected_exe:
+            return
+
+        # Open file dialog - allow both .exe and .lnk files
+        file_path = filedialog.askopenfilename(
+            title=f"Select {game_name} executable or shortcut",
+            filetypes=[
+                ("Executable and Shortcuts", "*.exe;*.lnk"),
+                ("Executable files", "*.exe"),
+                ("Shortcuts", "*.lnk"),
+                ("All files", "*.*")
+            ],
+            initialdir="C:\\Program Files"
+        )
+
+        if not file_path:
+            return  # User cancelled
+
+        # Validate file
+        if file_path.lower().endswith('.lnk'):
+            # Accept .lnk files directly
+            if not os.path.exists(file_path):
+                self._log_message(f"Selected file does not exist: {file_path}", "error")
+                return
+        else:
+            # For .exe files, validate the name matches
+            selected_exe = os.path.basename(file_path)
+            if selected_exe.lower() != expected_exe.lower():
+                self._log_message(
+                    f"Invalid file selected. Expected {expected_exe}, got {selected_exe}",
+                    "error"
+                )
+                return
+
+            if not os.path.exists(file_path):
+                self._log_message(f"Selected file does not exist: {file_path}", "error")
+                return
+
+        # Save to config
+        config_key = f"game_{ConfigManager.get_config_key(game_name)}"
+        self.config_manager.set_app_path(config_key, file_path)
+
+        # Update UI
+        self.game_cards[game_name].set_status("idle")
+        self._log_message(f"{game_name} path configured: {file_path}", "success")
+        self._update_button_text()
+
+    def _on_game_selected_wrapper(self):
+        """Handle game selection from radio button (wrapper for None option)."""
+        game_name = self.selected_game_var.get()
+        self._on_game_selected(game_name)
+
+    def _on_game_selected(self, game_name: str):
+        """
+        Handle game radio button selection.
+
+        Args:
+            game_name: Name of the selected game (empty string for None)
+        """
+        # Save selected game to config
+        self.config_manager.config.set('Settings', 'selected_game', game_name)
+        self.config_manager.save_config()
+        self._update_button_text()
+
     def launch_apps(self):
         """Launch all configured companion applications."""
         if not self.launch_btn:
@@ -502,8 +694,46 @@ class iRacingLauncherGUI:
                 self._log_message(f"Try reinstalling {app_name}", "warning")
                 self.status_cards[app_name].set_status("failed")
 
+        self._log_message("All apps launched!", "success")
+
+        # Launch selected game after apps if one is selected
+        selected_game = self.selected_game_var.get()
+        if selected_game:
+            self._launch_selected_game(selected_game)
+
         self._log_message("Launch sequence complete!", "success")
         self.launch_btn.configure(state="normal")
+
+    def _launch_selected_game(self, game_name: str):
+        """
+        Launch the selected game.
+
+        Args:
+            game_name: Name of the game to launch
+        """
+        game_path = self.app_manager.find_game_path(game_name)
+
+        if not game_path:
+            self._log_message(f"Skipping {game_name} - not configured", "warning")
+            return
+
+        # Check if game is already running
+        if self.app_manager.is_game_running(game_name):
+            self._log_message(f"Skipping {game_name} - already running", "info")
+            self.game_cards[game_name].set_status("running")
+            return
+
+        self.game_cards[game_name].set_status("starting")
+        self._log_message(f"Launching {game_name}...", "launch")
+
+        success = self.app_manager.launch_game(game_name, game_path)
+        if success:
+            self._log_message(f"{game_name} started successfully", "success")
+            self.game_cards[game_name].set_status("running")
+        else:
+            self._log_message(f"{game_name} failed to start", "error")
+            self._log_message(f"Try reinstalling {game_name} or selecting a different path", "warning")
+            self.game_cards[game_name].set_status("failed")
 
     def close_apps(self):
         """Close all companion applications."""
@@ -552,6 +782,20 @@ class iRacingLauncherGUI:
                 self._log_message("Garage61 Agent closed", "success")
             else:
                 self._log_message("Garage61 Agent was not running", "warning")
+
+        # Check game status and update card
+        selected_game = self.selected_game_var.get()
+        if selected_game:
+            if self.app_manager.is_game_running(selected_game):
+                # Game is still running - warn user
+                self._log_message(
+                    f"⚠ {selected_game} is still running - please close it manually",
+                    "warning"
+                )
+                # Status stays as "running"
+            else:
+                # Game was closed - update status to idle
+                self.game_cards[selected_game].set_status("idle")
 
         self._log_message("All apps closed!", "success")
         self.close_btn.configure(state="normal")

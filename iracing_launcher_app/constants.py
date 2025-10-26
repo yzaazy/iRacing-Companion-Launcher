@@ -33,7 +33,7 @@ STATUS_COLORS = {
 }
 
 # Widget dimensions
-STATUS_CARD_HEIGHT = 50
+STATUS_CARD_HEIGHT = 55
 
 # Application definitions
 APPS = {
@@ -83,5 +83,46 @@ APPS = {
         "exe": "TrackTitanDesktopApplication.exe",
         "shortcut_names": ["TrackTitanDesktopApplication.lnk"],
         "paths": []  # Will be populated at runtime
+    }
+}
+
+# Race Games definitions
+RACE_GAMES = {
+    "iRacing": {
+        "exe": "iRacingUI.exe",
+        "shortcut_names": ["iRacing.lnk", "iRacing Simulator.lnk"],
+        "steam_appid": "266410",
+        "steam_folder": "iRacing",
+        "paths": [
+            r"C:\Program Files (x86)\iRacing\iRacingLauncher64.exe",
+        ]
+    },
+    "Assetto Corsa Competizione": {
+        "exe": "AC2-Win64-Shipping.exe",
+        "shortcut_names": ["Assetto Corsa Competizione.lnk"],
+        "steam_appid": "805550",
+        "steam_folder": "Assetto Corsa Competizione",
+        "paths": []  # Will check Steam libraries
+    },
+    "Assetto Corsa Evo": {
+        "exe": "AssettoCorsaEVO.exe",  # May need verification
+        "shortcut_names": ["Assetto Corsa Evo.lnk"],
+        "steam_appid": "3058630",
+        "steam_folder": "Assetto Corsa Evo",
+        "paths": []  # Will check Steam libraries
+    },
+    "Automobilista 2": {
+        "exe": "AMS2AVX.exe",
+        "shortcut_names": ["Automobilista 2.lnk"],
+        "steam_appid": "1066890",
+        "steam_folder": "Automobilista 2",
+        "paths": []  # Will check Steam libraries
+    },
+    "rFactor 2": {
+        "exe": "rFactor2.exe",
+        "shortcut_names": ["rFactor 2.lnk"],
+        "steam_appid": "365960",
+        "steam_folder": "rFactor 2",
+        "paths": []  # Will check Steam libraries
     }
 }

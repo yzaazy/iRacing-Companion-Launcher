@@ -5,4 +5,4 @@ This is the single source of truth for version numbers.
 Update this file to change the version across all build artifacts.
 """
 
-__version__ = "1.8.0"
+__version__ = "2.0.0"
