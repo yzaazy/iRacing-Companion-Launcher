@@ -180,6 +180,29 @@ When the user says "release", follow these steps to publish a release:
    gh release create v{version} "installer_output/iRacing_Companion_Launcher_Setup.exe" --title "v{version}" --generate-notes
    ```
 
+4. **Add a changelog to the release**:
+   - Edit the release notes to include a concise changelog
+   - Focus on the **most important changes only**:
+     - New features (🚀)
+     - Bug fixes (🐛)
+     - Major improvements (⚡)
+   - Use clear, user-friendly language
+   - Include emoji sections for better readability
+   ```bash
+   gh release edit v{version} --notes "## What's New
+
+   ### 🚀 New Features
+   - Feature description here
+
+   ### 🐛 Bug Fixes
+   - Fix description here
+
+   ### ⚡ Improvements
+   - Improvement description here
+
+   **Full Changelog**: https://github.com/{user}/{repo}/compare/v{prev}...v{version}"
+   ```
+
 Note: The installer filename in `installer_output/` is always `iRacing_Companion_Launcher_Setup.exe` (not versioned).
 
 ### Discord Release Notifications
