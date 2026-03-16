@@ -24,9 +24,9 @@ ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
 ; Uncomment the following line to run in non administrative install mode (install for current user only).
 ;PrivilegesRequired=lowest
-OutputDir=C:\Users\tobia\Documents\Scripts\installer_output
+OutputDir=installer_output
 OutputBaseFilename=iRacing_Companion_Launcher_Setup
-SetupIconFile=C:\Users\tobia\Documents\Scripts\iRCL.ico
+SetupIconFile=iRCL.ico
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
@@ -39,7 +39,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "C:\Users\tobia\Documents\Scripts\dist\iRacing Companion Launcher\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\iRacing Companion Launcher\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
