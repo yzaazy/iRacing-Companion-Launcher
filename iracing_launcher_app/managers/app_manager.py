@@ -11,21 +11,28 @@ from ..core.app_definitions import APPS
 from ..core.config_manager import ConfigManager
 from ..utils.path_finder import find_shortcut_target, find_path_in_list
 from .process_manager import ProcessManager
+from .process_tracker import ProcessTracker
 
 
 class AppManager:
     """Manages companion application operations."""
 
-    def __init__(self, config_manager: ConfigManager):
+    def __init__(
+        self,
+        config_manager: ConfigManager,
+        process_tracker: ProcessTracker,
+    ):
         """
         Initialize the app manager.
 
         Args:
             config_manager: ConfigManager instance for path persistence
+            process_tracker: Tracker for PID-based launch/close
         """
         self.config_manager = config_manager
         self.apps = self._initialize_apps()
         self.process_manager = ProcessManager()
+        self.process_tracker = process_tracker
 
     def _initialize_apps(self) -> Dict:
         """
@@ -126,74 +133,54 @@ class AppManager:
         return None
 
     def is_app_running(self, app_name: str) -> bool:
-        """
-        Check if an application is currently running.
+        """Whether the app is currently running.
 
-        Args:
-            app_name: Name of the application
-
-        Returns:
-            True if app is running, False otherwise
+        Prefers tracked PID state; falls back to exe-name match so apps
+        the user started outside the launcher still register.
         """
         if app_name not in self.apps:
             return False
 
+        if self.process_tracker.is_tracked(app_name):
+            alive, _ = self.process_tracker.is_tracked_running(app_name)
+            if alive:
+                return True
+            # Fall through: tracked entry was dropped, but the user may
+            # have a separate instance running.
+
         exe_name = self.apps[app_name]["exe"]
         return self.process_manager.is_process_running(exe_name)
+
+    def get_child_count(self, app_name: str) -> int:
+        """Descendant-process count for a tracked app, else 0."""
+        if app_name not in self.apps:
+            return 0
+        return self.process_tracker.get_child_count(app_name)
+
+    def get_child_names(self, app_name: str):
+        """Descendant exe names for a tracked app, else []."""
+        if app_name not in self.apps:
+            return []
+        return self.process_tracker.get_child_names(app_name)
 
     def launch_app(self, app_name: str, app_path: str) -> bool:
-        """
-        Launch an application and verify it started.
-
-        Args:
-            app_name: Name of the application
-            app_path: Full path to the executable
-
-        Returns:
-            True if launched successfully, False otherwise
-        """
+        """Launch an app, track its PID, and report whether it's alive."""
         if app_name not in self.apps:
             return False
-
-        if not self.process_manager.launch_process(app_path):
-            return False
-
-        exe_name = self.apps[app_name]["exe"]
-        return self.process_manager.is_process_running(exe_name)
+        return self.process_tracker.launch_and_track(app_name, app_path)
 
     def close_app(self, app_name: str) -> bool:
-        """
-        Close an application by killing its process.
+        """Close a tracked app and its process tree.
 
-        Args:
-            app_name: Name of the application
-
-        Returns:
-            True if process was killed, False if not running
+        If we don't have a tracked PID (e.g. user launched it manually),
+        fall back to killing by exe name so the close button still works.
         """
         if app_name not in self.apps:
             return False
 
+        if self.process_tracker.is_tracked(app_name):
+            if self.process_tracker.close_tracked(app_name):
+                return True
+
         exe_name = self.apps[app_name]["exe"]
         return self.process_manager.kill_process(exe_name)
-
-    def close_process_by_name(self, exe_name: str) -> bool:
-        """
-        Close a process by its executable name (for special cases like Garage61 Agent).
-
-        Args:
-            exe_name: Name of the executable
-
-        Returns:
-            True if process was killed, False if not running
-        """
-        return self.process_manager.kill_process(exe_name)
-
-    def close_process_by_prefix(self, prefix: str, suffix: str = ".exe") -> bool:
-        """
-        Close any process whose executable name starts with ``prefix`` and
-        ends with ``suffix``. Needed for Garage61's agent, whose filename
-        includes a build timestamp and hash (e.g.
-        ``garage61-agent-20260403124812-3d7a6e2b4.exe``).
-        """
-        return self.process_manager.kill_process_by_prefix(prefix, suffix)

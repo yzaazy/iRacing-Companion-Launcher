@@ -24,7 +24,7 @@ class FooterSection:
 
         copyright_label = ctk.CTkLabel(
             self.frame,
-            text="© 2025 Developed & Designed by Tobias Termeczky • Vibed with Claude",
+            text="© 2026 Developed & Designed by Tobias Termeczky • Vibed with Claude",
             font=("Segoe UI", 10),
             text_color="#888888",
             anchor="e"

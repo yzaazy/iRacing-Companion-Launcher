@@ -43,15 +43,30 @@ class StatusCard(ctk.CTkFrame):
         self.checkbox.select()  # Default to checked
         self.checkbox.pack(side="left", padx=(10, 5), pady=10)
 
-        # App name label
+        # Wrapper holds the app name and an optional subtitle below it.
+        self.text_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.text_frame.pack(side="left", padx=(5, 15), pady=4, fill="y")
+
         self.name_label = ctk.CTkLabel(
-            self,
+            self.text_frame,
             text=app_name,
             text_color="#ffffff",
             font=("Segoe UI", 14, "bold"),
             anchor="w"
         )
-        self.name_label.pack(side="left", padx=(5, 15), pady=10)
+        self.name_label.pack(side="top", anchor="w", pady=0)
+
+        # Subtitle (always present so the name label sits in a stable
+        # position; text toggles between placeholder and helper count).
+        self.subtitle_label = ctk.CTkLabel(
+            self.text_frame,
+            text="No helpers",
+            text_color="#888888",
+            font=("Segoe UI", 9),
+            anchor="w",
+            height=12
+        )
+        self.subtitle_label.pack(side="top", anchor="w")
 
         # Status indicator (will be replaced with Browse button if not found)
         self.status_label = ctk.CTkLabel(
@@ -107,13 +122,15 @@ class StatusCard(ctk.CTkFrame):
         else:
             self.checkbox.deselect()
 
-    def set_status(self, status):
+    def set_status(self, status, child_count=None):
         """
         Update the status indicator color or show Browse button.
 
         Args:
             status: Status string ("idle", "starting", "running", "failed",
                    "stopped", "not_found")
+            child_count: Number of helper processes spawned by the app, if
+                known. Surfaces as a subtitle when status is "running".
         """
         if status == "not_found":
             # Hide status indicator, show Browse button
@@ -124,6 +141,7 @@ class StatusCard(ctk.CTkFrame):
             # Uncheck and disable checkbox for not found apps
             self.checkbox.deselect()
             self.checkbox.configure(state="disabled")
+            self._set_subtitle("Not installed")
         else:
             # Show status indicator, hide Browse button
             if self.is_not_found:
@@ -136,3 +154,15 @@ class StatusCard(ctk.CTkFrame):
 
             color = STATUS_COLORS.get(status, STATUS_COLORS["idle"])
             self.status_label.configure(text_color=color)
+
+            if status == "running" and child_count:
+                noun = "process" if child_count == 1 else "processes"
+                self._set_subtitle(f"{child_count} helper {noun}")
+            else:
+                self._set_subtitle("No helpers")
+
+    def _set_subtitle(self, text):
+        """Update the subtitle line under the app name. The label slot is
+        always reserved so the app name doesn't visually shift when
+        helper info appears or disappears."""
+        self.subtitle_label.configure(text=text)

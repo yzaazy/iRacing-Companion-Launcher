@@ -18,23 +18,19 @@ class ConfigManager:
     def __init__(self):
         """Initialize the config manager and load existing config."""
         self.config = configparser.ConfigParser()
-        self.config_path = self._get_config_path()
+        self.config_dir = self._resolve_config_dir()
+        self.config_path = os.path.join(self.config_dir, self.CONFIG_FILENAME)
         self._load_config()
 
-    def _get_config_path(self) -> str:
-        """
-        Get the path to the config.ini file.
-
-        Returns:
-            Full path to config.ini
-        """
+    @staticmethod
+    def _resolve_config_dir() -> str:
+        """Resolve the directory where config and other state files live."""
         if getattr(sys, 'frozen', False):
             # Running as compiled executable - use AppData folder
             # This avoids permission issues when installed to Program Files
             appdata = os.getenv('APPDATA')
             if appdata:
                 app_dir = os.path.join(appdata, 'iRacingCompanionLauncher')
-                # Create directory if it doesn't exist
                 os.makedirs(app_dir, exist_ok=True)
             else:
                 # Fallback to executable directory (shouldn't happen on Windows)
@@ -42,7 +38,11 @@ class ConfigManager:
         else:
             # Running as script - use script directory
             app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        return os.path.join(app_dir, self.CONFIG_FILENAME)
+        return app_dir
+
+    def get_config_dir(self) -> str:
+        """Return the directory holding config.ini and other state files."""
+        return self.config_dir
 
     def _load_config(self):
         """Load configuration from config.ini."""

@@ -86,34 +86,6 @@ class ProcessManager:
         return killed
 
     @staticmethod
-    def kill_process_by_prefix(prefix: str, suffix: str = ".exe") -> bool:
-        """
-        Kill any process whose executable name starts with the given prefix
-        and ends with the given suffix. Used for processes that include a
-        version or build hash in their filename (e.g. Garage61's agent
-        ``garage61-agent-<timestamp>-<hash>.exe``).
-
-        Args:
-            prefix: Leading portion of the executable name (case-insensitive)
-            suffix: Trailing portion of the executable name (default ``.exe``)
-
-        Returns:
-            True if at least one matching process was killed, False otherwise
-        """
-        killed = False
-        prefix_lower = prefix.lower()
-        suffix_lower = suffix.lower()
-        for proc in psutil.process_iter(['name']):
-            try:
-                name = (proc.info['name'] or "").lower()
-                if name.startswith(prefix_lower) and name.endswith(suffix_lower):
-                    proc.kill()
-                    killed = True
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                pass
-        return killed
-
-    @staticmethod
     def kill_all_processes(process_names: List[str]) -> bool:
         """
         Kill all processes matching the given names.

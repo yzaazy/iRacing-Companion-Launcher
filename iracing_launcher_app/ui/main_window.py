@@ -12,6 +12,7 @@ from ..core.config_manager import ConfigManager
 from ..core.activity_logger import ActivityLogger
 from ..managers.app_manager import AppManager
 from ..managers.game_manager import GameManager
+from ..managers.process_tracker import ProcessTracker
 from .sections.header import HeaderSection
 from .sections.footer import FooterSection
 from .sections.apps_section import AppsSection
@@ -39,7 +40,10 @@ class iRacingLauncherGUI:
 
         # Initialize managers
         self.config_manager = ConfigManager()
-        self.app_manager = AppManager(self.config_manager)
+        self.process_tracker = ProcessTracker(
+            os.path.join(self.config_manager.get_config_dir(), "process_state.json")
+        )
+        self.app_manager = AppManager(self.config_manager, self.process_tracker)
         self.game_manager = GameManager(self.config_manager)
         self.logger = ActivityLogger()
 
@@ -149,8 +153,16 @@ class iRacingLauncherGUI:
                 self.config_manager.config.set('Settings', config_key, 'False')
             else:
                 if self.app_manager.is_app_running(app_name):
-                    self.status_cards[app_name].set_status("running")
+                    child_names = self.app_manager.get_child_names(app_name)
+                    self.status_cards[app_name].set_status(
+                        "running",
+                        child_count=len(child_names),
+                    )
                     self.logger.success(f"{app_name} - already running")
+                    if child_names:
+                        self.logger.info(
+                            f"  helpers: {', '.join(child_names)}"
+                        )
                 else:
                     self.status_cards[app_name].set_status("idle")
                     self.logger.info(f"{app_name} - configured")
@@ -375,7 +387,15 @@ class iRacingLauncherGUI:
 
             if self.app_manager.is_app_running(app_name):
                 self.logger.info(f"Skipping {app_name} - already running")
-                self.status_cards[app_name].set_status("running")
+                child_names = self.app_manager.get_child_names(app_name)
+                if child_names:
+                    self.logger.info(
+                        f"  helpers: {', '.join(child_names)}"
+                    )
+                self.status_cards[app_name].set_status(
+                    "running",
+                    child_count=len(child_names),
+                )
                 continue
 
             self.status_cards[app_name].set_status("starting")
@@ -384,7 +404,15 @@ class iRacingLauncherGUI:
             success = self.app_manager.launch_app(app_name, app_path)
             if success:
                 self.logger.success(f"{app_name} started successfully")
-                self.status_cards[app_name].set_status("running")
+                child_names = self.app_manager.get_child_names(app_name)
+                if child_names:
+                    self.logger.info(
+                        f"  helpers: {', '.join(child_names)}"
+                    )
+                self.status_cards[app_name].set_status(
+                    "running",
+                    child_count=len(child_names),
+                )
             else:
                 self.logger.error(f"{app_name} failed to start")
                 self.logger.warning(f"Try reinstalling {app_name}")
@@ -447,6 +475,11 @@ class iRacingLauncherGUI:
 
             self.status_cards[app_name].set_status("stopping")
             self.logger.info(f"Closing {app_name}...")
+            child_names = self.app_manager.get_child_names(app_name)
+            if child_names:
+                self.logger.info(
+                    f"  helpers to close: {', '.join(child_names)}"
+                )
 
             killed = self.app_manager.close_app(app_name)
 
@@ -460,14 +493,9 @@ class iRacingLauncherGUI:
                 else:
                     self.status_cards[app_name].set_status("idle")
 
-        # Close Garage61 Agent (special case — agent filename includes a
-        # build timestamp/hash, e.g. garage61-agent-<ts>-<hash>.exe)
-        if "Garage61" in self.status_cards and self.status_cards["Garage61"].get_checked():
-            self.logger.info("Closing Garage61 Agent...")
-            if self.app_manager.close_process_by_prefix("garage61-agent"):
-                self.logger.success("Garage61 Agent closed")
-            else:
-                self.logger.warning("Garage61 Agent was not running")
+        # Helper processes (e.g. Garage61's versioned agent) are killed
+        # automatically by ProcessTracker when it walks the launched
+        # process tree, so no per-app special cases are needed here.
 
         # Check game status after closing apps
         selected_game = self.selected_game_var.get()

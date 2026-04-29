@@ -77,7 +77,7 @@ VSVersionInfo(
         StringStruct(u'FileDescription', u'iRacing Companion Launcher'),
         StringStruct(u'FileVersion', u'{__version__}'),
         StringStruct(u'InternalName', u'iRacing Companion Launcher'),
-        StringStruct(u'LegalCopyright', u'© 2025 Tobias Termeczky'),
+        StringStruct(u'LegalCopyright', u'© 2026 Tobias Termeczky'),
         StringStruct(u'OriginalFilename', u'iRacing Companion Launcher.exe'),
         StringStruct(u'ProductName', u'iRacing Companion Launcher'),
         StringStruct(u'ProductVersion', u'{__version__}')])
