@@ -460,10 +460,11 @@ class iRacingLauncherGUI:
                 else:
                     self.status_cards[app_name].set_status("idle")
 
-        # Close Garage61 Agent (special case)
+        # Close Garage61 Agent (special case — agent filename includes a
+        # build timestamp/hash, e.g. garage61-agent-<ts>-<hash>.exe)
         if "Garage61" in self.status_cards and self.status_cards["Garage61"].get_checked():
             self.logger.info("Closing Garage61 Agent...")
-            if self.app_manager.close_process_by_name("garage61-agent.exe"):
+            if self.app_manager.close_process_by_prefix("garage61-agent"):
                 self.logger.success("Garage61 Agent closed")
             else:
                 self.logger.warning("Garage61 Agent was not running")

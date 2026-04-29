@@ -188,3 +188,12 @@ class AppManager:
             True if process was killed, False if not running
         """
         return self.process_manager.kill_process(exe_name)
+
+    def close_process_by_prefix(self, prefix: str, suffix: str = ".exe") -> bool:
+        """
+        Close any process whose executable name starts with ``prefix`` and
+        ends with ``suffix``. Needed for Garage61's agent, whose filename
+        includes a build timestamp and hash (e.g.
+        ``garage61-agent-20260403124812-3d7a6e2b4.exe``).
+        """
+        return self.process_manager.kill_process_by_prefix(prefix, suffix)
