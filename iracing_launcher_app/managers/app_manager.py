@@ -54,14 +54,6 @@ class AppManager:
         # Elgato Stream Deck uses static paths from app_definitions.py
         # No dynamic path needed
 
-        # Add dynamic path for TrackTitan
-        if "TrackTitan" in apps:
-            localappdata_path = os.path.join(
-                os.getenv('LOCALAPPDATA'),
-                r"Programs\track-titan-ghost-application\TrackTitanDesktopApplication.exe"
-            )
-            apps["TrackTitan"]["paths"] = [localappdata_path]
-
         return apps
 
     def get_app_list(self) -> List[str]:

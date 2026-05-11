@@ -51,10 +51,12 @@ APPS = {
             r"C:\Program Files\Elgato\StreamDeck\StreamDeck.exe"
         ]
     },
-    "TrackTitan": {
-        "exe": "TrackTitanDesktopApplication.exe",
-        "shortcut_names": ["TrackTitanDesktopApplication.lnk"],
-        "paths": []  # Will be populated at runtime
+    "MarvinsAIRA Refactored": {
+        "exe": "MarvinsAIRARefactored.exe",
+        "shortcut_names": ["Marvins Awesome iRacing App.lnk", "MarvinsAIRARefactored.lnk"],
+        "paths": [
+            r"C:\Program Files\Marvins Awesome iRacing App - Refactored\MarvinsAIRARefactored.exe"
+        ]
     }
 }
 
