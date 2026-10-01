@@ -19,6 +19,18 @@ from typing import Dict, Optional, Tuple
 import psutil
 
 
+def _pids_by_exe(exe_name: str) -> set:
+    """Return the PIDs of all running processes named ``exe_name``."""
+    pids = set()
+    for proc in psutil.process_iter(['pid', 'name']):
+        try:
+            if proc.info['name'] and proc.info['name'].lower() == exe_name.lower():
+                pids.add(proc.info['pid'])
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    return pids
+
+
 # Tolerance (seconds) when comparing persisted vs. live ``create_time``.
 # Wall-clock based, so a small NTP correction can shift it slightly.
 _CREATE_TIME_EPSILON = 0.5
@@ -38,11 +50,45 @@ class ProcessTracker:
         key: str,
         exe_path: str,
         wait_time: float = 2.0,
+        needs_shell_launch: bool = False,
     ) -> bool:
         """Launch ``exe_path`` and remember its PID under ``key``.
 
+        ``needs_shell_launch`` launches via ``os.startfile`` (ShellExecute)
+        instead of ``subprocess.Popen`` (raw CreateProcess), required for
+        apps whose manifest requests ``uiAccess="true"`` (e.g. Elgato Stream
+        Deck) - Windows rejects those from a direct CreateProcess call with
+        WinError 740 regardless of file permissions.
+
         Returns True if the launched process is alive after ``wait_time``.
         """
+        if needs_shell_launch:
+            exe_name = os.path.basename(exe_path)
+            pids_before = _pids_by_exe(exe_name)
+            try:
+                os.startfile(exe_path)
+            except Exception as e:
+                print(f"Error launching {exe_path}: {e}")
+                return False
+
+            time.sleep(wait_time)
+            new_pids = _pids_by_exe(exe_name) - pids_before
+            if not new_pids:
+                return False
+            pid = next(iter(new_pids))
+            try:
+                create_time = psutil.Process(pid).create_time()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                return False
+
+            self._state[key] = {
+                "pid": pid,
+                "create_time": create_time,
+                "exe_path": exe_path,
+            }
+            self._save()
+            return True
+
         try:
             proc = subprocess.Popen(
                 [exe_path],
@@ -135,7 +181,13 @@ class ProcessTracker:
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
 
-        _, alive = psutil.wait_procs(targets, timeout=3)
+        try:
+            _, alive = psutil.wait_procs(targets, timeout=3)
+        except psutil.AccessDenied:
+            # Some descendants (e.g. Stream Deck's uiAccess-related helpers)
+            # deny SYNCHRONIZE rights, so wait() raises instead of listing
+            # them as still alive. terminate() above already signaled them.
+            alive = []
         for p in alive:
             try:
                 p.kill()

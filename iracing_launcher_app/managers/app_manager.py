@@ -159,7 +159,10 @@ class AppManager:
         """Launch an app, track its PID, and report whether it's alive."""
         if app_name not in self.apps:
             return False
-        return self.process_tracker.launch_and_track(app_name, app_path)
+        needs_shell_launch = self.apps[app_name].get("needs_shell_launch", False)
+        return self.process_tracker.launch_and_track(
+            app_name, app_path, needs_shell_launch=needs_shell_launch
+        )
 
     def close_app(self, app_name: str) -> bool:
         """Close a tracked app and its process tree.

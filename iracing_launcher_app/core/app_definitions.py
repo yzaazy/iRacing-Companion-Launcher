@@ -47,6 +47,12 @@ APPS = {
     "Elgato Stream Deck": {
         "exe": "StreamDeck.exe",
         "shortcut_names": ["Elgato Stream Deck.lnk", "Stream Deck.lnk"],
+        # StreamDeck.exe's manifest requests uiAccess="true" (it draws UI
+        # over other elevated/fullscreen windows). Windows only allows
+        # uiAccess processes to start via a trusted launch path (ShellExecute
+        # / Explorer); a direct CreateProcess call (what subprocess.Popen
+        # uses) is rejected with WinError 740 regardless of file permissions.
+        "needs_shell_launch": True,
         "paths": [
             r"C:\Program Files\Elgato\StreamDeck\StreamDeck.exe"
         ]
