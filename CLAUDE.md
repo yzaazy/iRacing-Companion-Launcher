@@ -75,8 +75,8 @@ The app uses a multi-tier path detection system:
 
 ### Build System
 - **PyInstaller**: Used to create standalone Windows executables
-  - Spec file: `iRacing Companion Launcher.spec`
-  - Bundles the `iRCL.png` icon with the executable
+  - Spec file: `iracing_companion_launcher.spec`
+  - Bundles the `iRCL.ico` and `iRCL.png` icons with the executable
   - Creates a windowed (non-console) application
   - Uses UPX compression
 
@@ -87,6 +87,26 @@ The app uses a multi-tier path detection system:
 
 ## Development Commands
 
+### Getting Started (First-time Setup)
+```bash
+# 1. Clone the repository
+git clone https://github.com/yzaazy/iRacing-Companion-Launcher.git
+cd iRacing-Companion-Launcher
+
+# 2. Create a virtual environment (recommended)
+python -m venv venv
+venv\Scripts\activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Generate version_info.txt (required for building)
+python tools/update_version.py
+
+# 5. Run the application
+python iracing_launcher.py
+```
+
 ### Running the Application
 ```bash
 python iracing_launcher.py
@@ -94,7 +114,7 @@ python iracing_launcher.py
 
 ### Converting Icon (if needed)
 ```bash
-python convert_icon.py
+python tools/convert_icon.py
 ```
 
 ### Version Management
@@ -112,7 +132,7 @@ When the user says "bump version", follow this workflow:
 
 3. **Run the update script** to propagate the version:
    ```bash
-   python update_version.py
+   python tools/update_version.py
    ```
 
 4. **Build the executable automatically**:
@@ -139,13 +159,13 @@ To manually update the version:
 1. Edit `version.py` and change the `__version__` variable
 2. Run the update script to propagate the version:
 ```bash
-python update_version.py
+python tools/update_version.py
 ```
 
 ### Building Executable
 ```bash
 # First, ensure versions are up to date
-python update_version.py
+python tools/update_version.py
 
 # Build with PyInstaller using the spec file
 python -m PyInstaller iracing_companion_launcher.spec
@@ -241,9 +261,12 @@ To automatically post release notifications to Discord, use **GitTrack.me** - a 
 - Can also track commits, PRs, and issues if desired
 
 ## Dependencies
-Required Python packages:
+Required Python packages (install with `pip install -r requirements.txt`):
 - `customtkinter` - Modern GUI framework (extends tkinter)
 - `psutil` - Process management and monitoring
+- `pywin32` - Windows API access (required by winshell)
+- `winshell` - Windows shell integration (Start Menu shortcut reading)
+- `pyinstaller` - Build tool for creating Windows executables
 
 ## Key Implementation Details
 

@@ -10,8 +10,11 @@ import os
 import sys
 import re
 
-# Add parent directory to path to import version module
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Get project root directory (parent of tools/)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Add project root to path to import version module
+sys.path.insert(0, PROJECT_ROOT)
 from version import __version__
 
 
@@ -87,15 +90,16 @@ VSVersionInfo(
 )
 """
 
-    with open('version_info.txt', 'w', encoding='utf-8') as f:
+    version_info_path = os.path.join(PROJECT_ROOT, 'version_info.txt')
+    with open(version_info_path, 'w', encoding='utf-8') as f:
         f.write(version_info)
 
-    print(f"Created version_info.txt with version {__version__}")
+    print(f"Created {version_info_path} with version {__version__}")
 
 
 def update_inno_setup():
     """Update the Inno Setup .iss file with the current version."""
-    iss_file = 'windows installer.iss'
+    iss_file = os.path.join(PROJECT_ROOT, 'windows installer.iss')
 
     # Read the file
     with open(iss_file, 'r', encoding='utf-8') as f:
