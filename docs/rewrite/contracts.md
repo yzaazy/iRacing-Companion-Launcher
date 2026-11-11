@@ -147,6 +147,14 @@ pub fn find_path_in_list(paths: &[String]) -> Option<String>;
 pub fn check_steam_game_installed(appid: &str) -> bool;
 ```
 
+### What wave 1 established
+
+- **UI**: call `ui::install_fonts` once at startup and `ui::draw(ui, &state)` once per frame. `draw` paints the whole viewport and never requests a repaint itself. Actions are emitted on the frame a click is released; `ToggleApp` carries the new value; `SelectGame` fires only for a radio that is not already selected; controls of not-found entries and disabled buttons emit nothing. The log jumps to the end when its length or last line changes; log text carries no trailing newline. `ui::sections::geometry(ctx, state, window)` resolves the full layout, because sizes depend on measured text.
+- **Config**: checkbox keys are `config_key(name) + "_enabled"`, game path keys `"game_" + config_key(name)`. Booleans are written as `True` / `False`. `set_setting` does not save. `setting("selected_game")` is `Some("")` for None and `None` when missing; both mean no game. `ConfigStore` has no interior locking.
+- **Process**: `launch_and_track`, `close_tracked` and `launch_process` block for their waits, so they run on the worker thread. `is_tracked_running` and `get_child_names` each take a full process snapshot. The exe-name fallbacks in `is_app_running` and `close_app` belong to the manager, as in Python.
+- **Detection**: synchronous, safe from any thread, writes nothing. Saving a detected path is the manager's job.
+- **Tests that render** take turns behind the mutex in `tests/ui_snapshots.rs`'s pattern: two headless GPU devices created at once crash intermittently.
+
 `managers.rs`, `app.rs` and `worker.rs` belong to one agent and have no cross-agent seam beyond the types above. In eframe 0.37 the app implements `App::ui(&mut self, ui, frame)`, with `logic(ctx, frame)` available for work that is not drawing.
 
 ## Config and state location
