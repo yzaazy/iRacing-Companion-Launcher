@@ -16,7 +16,7 @@ struct ScaffoldApp {
 
 impl eframe::App for ScaffoldApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let _actions = ui::draw(ui.ctx(), &self.state);
+        let _actions = ui::draw(ui, &self.state);
     }
 }
 
@@ -47,7 +47,8 @@ fn main() -> eframe::Result {
     eframe::run_native(
         WINDOW_TITLE,
         options,
-        Box::new(|_cc| {
+        Box::new(|cc| {
+            ui::install_fonts(&cc.egui_ctx);
             Ok(Box::new(ScaffoldApp {
                 state: placeholder_state(),
             }))

@@ -42,8 +42,9 @@ fn render(state: &ViewState) -> image::RgbaImage {
         .with_size(WINDOW)
         .with_pixels_per_point(1.0)
         .wgpu()
+        .with_context_setup(ui::install_fonts)
         .build_ui(|ui| {
-            ui::draw(ui.ctx(), state);
+            ui::draw(ui, state);
         });
     harness.run();
     harness
