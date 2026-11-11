@@ -20,7 +20,7 @@ The seams between agents. Each agent builds its own module against these and nob
 | `src/detect/shortcuts.rs`, `steam.rs`, `paths.rs` | detect | `utils/*.py` |
 | `src/ui/theme.rs`, `layout.rs`, `widgets.rs`, `sections.rs`, `mod.rs`, `tests/ui_snapshots.rs` | ui | `ui/sections/`, `ui/widgets/`, `ui/constants.py` |
 | `src/managers.rs`, `src/app.rs`, `src/worker.rs` | controller | `managers/app_manager.py`, `game_manager.py`, `ui/main_window.py` |
-| `build.rs`, `windows installer.iss`, `CLAUDE.md`, `README.md` | packaging | `.spec`, `version.py`, `tools/update_version.py` |
+| `build.rs`, `windows installer.iss`, `[package.metadata.winresource]` in `Cargo.toml`, the Rust section of `CLAUDE.md` | packaging (done) | `.spec`, `version.py`, `tools/update_version.py` |
 | `tools/capture_reference.py`, `docs/rewrite/fixtures.json`, `ui-spec.json`, `reference/` | capture (done, frozen) | — |
 | `tools/ui_diff.py` | ui, from wave 1 | — |
 
