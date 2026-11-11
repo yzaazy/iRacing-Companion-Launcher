@@ -67,4 +67,5 @@ These are the only places Rust may differ from Python. Anything else that differ
 - Game names longer than 18 characters wrap onto a second line at the last space before the limit ([game_card.py:83](../../iracing_launcher_app/ui/widgets/game_card.py)).
 - Card subtitle: "Not installed" when not found; "N helper process(es)" only when running with a non-zero count; otherwise "No helpers".
 - The status dot is the `●` glyph at 40 px in Python. Draw a circle whose size and position come from the reference capture.
-- Browse: native open dialog, initial directory `C:\Program Files`. Apps require the exact exe name, case-insensitive. Games accept any `.lnk`, otherwise the exact exe name. A valid app pick sets the card idle, checks it and saves.
+- Browse: native open dialog, initial directory `C:\Program Files`. Apps require the exact exe name, case-insensitive. Games accept any `.lnk`, otherwise the exact exe name. A valid app pick sets the card idle, checks it and saves. The picked path is logged and saved with forward slashes, as Tk returns it.
+- Tk 8.6's dialog does not set the option that keeps a picked shortcut unresolved, so picking a `.lnk` returns its target and the `.lnk` branch of `_browse_for_game` almost never fires. The Rust dialog uses the same options and behaves the same.

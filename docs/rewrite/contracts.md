@@ -7,7 +7,7 @@ The seams between agents. Each agent builds its own module against these and nob
 - One package at the repo root: a library (`src/lib.rs`, which declares every module) and a thin binary (`src/main.rs`, the window shell). Tests under `tests/` use the library. Package and binary name `iracing-companion-launcher`, edition 2024, version `3.0.0`. The installer renames the exe to `iRacing Companion Launcher.exe`.
 - Versions are pinned in `Cargo.toml`: eframe, egui and egui_kittest 0.37, `windows` 0.62. Write against those APIs.
 - The module named `core` shadows nothing as long as code writes `crate::core::...`, never a bare `core::...`.
-- Crates: `eframe`/`egui` for the UI, `windows` for every Win32 call, `rfd` for the file dialog, `serde` + `serde_json`, `winresource` as a build dependency, `egui_kittest` and `image` as dev dependencies. The INI reader/writer is hand-written because the file format must match Python's `configparser`.
+- Crates: `eframe`/`egui` for the UI, `windows` for every Win32 call, the Browse dialog opened as `IFileOpenDialog` through `windows` with Tk's exact options (`raw-window-handle` supplies the owner window), `serde` + `serde_json`, `winresource` as a build dependency, `egui_kittest` and `image` as dev dependencies. The INI reader/writer is hand-written because the file format must match Python's `configparser`.
 - `#![windows_subsystem = "windows"]` in release builds.
 
 ## Layout and ownership
