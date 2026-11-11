@@ -1,10 +1,5 @@
 //! Library half of the launcher (ports the `iracing_launcher_app` package); `main.rs` is the window shell.
 
-// Scaffold only: module bodies are stubs until wave 1 fills them in, so their
-// parameters and private fields are unused. Removed in wave 2 when the
-// controller wires everything together.
-#![allow(dead_code, unused_variables)]
-
 pub mod app;
 pub mod contract;
 pub mod managers;
