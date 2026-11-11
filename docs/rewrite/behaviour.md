@@ -12,6 +12,7 @@ These are the only places Rust may differ from Python. Anything else that differ
 4. **Config location in debug builds.** See `contracts.md`.
 5. **`print()` diagnostics are dropped.** They are invisible in the windowed Python build. They never become log lines.
 6. **`config.ini` is written as UTF-8.** See Config below.
+7. **An unset `APPDATA` or `ProgramData` skips that Start Menu root.** Python raises there; the case cannot occur on a real Windows session.
 
 ## Quirks to port unchanged
 
@@ -48,6 +49,7 @@ These are the only places Rust may differ from Python. Anything else that differ
 
 - App order: saved path, Start Menu shortcut, common paths. Game order: saved path, Steam registry.
 - Start Menu search: user Start Menu first, then `ProgramData`. For each root, for each shortcut name in order, recursive match on file name (case-insensitive on Windows). For apps the shortcut is resolved through the shell and the target must exist.
+- When several shortcuts share a name, Python 3.13's `rglob` order decides the winner: the root itself first, then a stack of directories where the directory met last is entered first; junctions are followed, directory symlinks are not. A game-mode hit is returned with the casing of the name searched for, not the casing on disk. `src/detect/shortcuts.rs` reproduces this and is cross-checked against the Python.
 - Garage61's common path is built at runtime: `%APPDATA%\garage61-install\garage61-launcher.exe`.
 - Steam check: `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App <appid>` exists, 64-bit registry view. A hit returns and saves `steam://rungameid/<appid>`.
 - Game launch: `steam://` through the shell then wait 3 s; `.lnk` through the shell then wait 2 s; `.exe` detached then wait 2 s, untracked. Success is "the game's exe name is running afterwards".
