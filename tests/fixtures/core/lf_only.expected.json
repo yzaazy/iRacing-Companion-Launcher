@@ -1,0 +1,39 @@
+{
+  "defaults": [],
+  "sections": [
+    [
+      "Settings",
+      [
+        [
+          "selected_game",
+          "iRacing"
+        ]
+      ]
+    ],
+    [
+      "AppPaths",
+      [
+        [
+          "x",
+          "y"
+        ]
+      ]
+    ]
+  ],
+  "get": {
+    "Settings/selected_game": "iRacing",
+    "Settings/missing_key": null,
+    "AppPaths/x": "y",
+    "AppPaths/missing_key": null
+  },
+  "getboolean": {
+    "Settings/selected_game": {
+      "error": true
+    },
+    "Settings/missing_key": null,
+    "AppPaths/x": {
+      "error": true
+    },
+    "AppPaths/missing_key": null
+  }
+}

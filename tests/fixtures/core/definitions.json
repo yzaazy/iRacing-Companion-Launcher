@@ -1,0 +1,144 @@
+{
+  "apps": [
+    {
+      "name": "Fanatec",
+      "exe": "Fanatec.exe",
+      "shortcut_names": [
+        "Fanatec.lnk",
+        "Fanatec Control Panel.lnk"
+      ],
+      "paths": [
+        "C:\\Program Files\\Fanatec\\FanatecUI\\UI\\Fanatec.exe",
+        "C:\\Program Files (x86)\\Fanatec\\FanatecUI\\UI\\Fanatec.exe"
+      ],
+      "needs_shell_launch": false
+    },
+    {
+      "name": "Crew Chief V4",
+      "exe": "CrewChiefV4.exe",
+      "shortcut_names": [
+        "Crew Chief V4.lnk",
+        "CrewChiefV4.lnk"
+      ],
+      "paths": [
+        "C:\\Program Files (x86)\\Britton IT Ltd\\CrewChiefV4\\CrewChiefV4.exe",
+        "C:\\Program Files\\Britton IT Ltd\\CrewChiefV4\\CrewChiefV4.exe"
+      ],
+      "needs_shell_launch": false
+    },
+    {
+      "name": "Trading Paints",
+      "exe": "Trading Paints.exe",
+      "shortcut_names": [
+        "Trading Paints.lnk"
+      ],
+      "paths": [
+        "C:\\Program Files (x86)\\Rhinode LLC\\Trading Paints\\Trading Paints.exe",
+        "C:\\Program Files\\Rhinode LLC\\Trading Paints\\Trading Paints.exe"
+      ],
+      "needs_shell_launch": false
+    },
+    {
+      "name": "SimHub",
+      "exe": "SimHubWPF.exe",
+      "shortcut_names": [
+        "SimHub.lnk"
+      ],
+      "paths": [
+        "C:\\Program Files (x86)\\SimHub\\SimHubWPF.exe",
+        "C:\\Program Files\\SimHub\\SimHubWPF.exe"
+      ],
+      "needs_shell_launch": false
+    },
+    {
+      "name": "Garage61",
+      "exe": "garage61-launcher.exe",
+      "shortcut_names": [
+        "Garage 61 Telemetry Agent.lnk",
+        "Garage61.lnk",
+        "garage61.lnk"
+      ],
+      "paths": [],
+      "needs_shell_launch": false
+    },
+    {
+      "name": "Elgato Stream Deck",
+      "exe": "StreamDeck.exe",
+      "shortcut_names": [
+        "Elgato Stream Deck.lnk",
+        "Stream Deck.lnk"
+      ],
+      "paths": [
+        "C:\\Program Files\\Elgato\\StreamDeck\\StreamDeck.exe"
+      ],
+      "needs_shell_launch": true
+    },
+    {
+      "name": "MarvinsAIRA Refactored",
+      "exe": "MarvinsAIRARefactored.exe",
+      "shortcut_names": [
+        "Marvins Awesome iRacing App.lnk",
+        "MarvinsAIRARefactored.lnk"
+      ],
+      "paths": [
+        "C:\\Program Files\\Marvins Awesome iRacing App - Refactored\\MarvinsAIRARefactored.exe"
+      ],
+      "needs_shell_launch": false
+    }
+  ],
+  "games": [
+    {
+      "name": "iRacing",
+      "exe": "iRacingUI.exe",
+      "shortcut_names": [
+        "iRacing.lnk",
+        "iRacing Simulator.lnk"
+      ],
+      "steam_appid": "266410",
+      "steam_folder": "iRacing",
+      "paths": [
+        "C:\\Program Files (x86)\\iRacing\\iRacingLauncher64.exe"
+      ]
+    },
+    {
+      "name": "Assetto Corsa Competizione",
+      "exe": "AC2-Win64-Shipping.exe",
+      "shortcut_names": [
+        "Assetto Corsa Competizione.lnk"
+      ],
+      "steam_appid": "805550",
+      "steam_folder": "Assetto Corsa Competizione",
+      "paths": []
+    },
+    {
+      "name": "Assetto Corsa Evo",
+      "exe": "AssettoCorsaEVO.exe",
+      "shortcut_names": [
+        "Assetto Corsa Evo.lnk"
+      ],
+      "steam_appid": "3058630",
+      "steam_folder": "Assetto Corsa Evo",
+      "paths": []
+    },
+    {
+      "name": "Automobilista 2",
+      "exe": "AMS2AVX.exe",
+      "shortcut_names": [
+        "Automobilista 2.lnk"
+      ],
+      "steam_appid": "1066890",
+      "steam_folder": "Automobilista 2",
+      "paths": []
+    },
+    {
+      "name": "rFactor 2",
+      "exe": "rFactor2.exe",
+      "shortcut_names": [
+        "rFactor 2.lnk"
+      ],
+      "steam_appid": "365960",
+      "steam_folder": "rFactor 2",
+      "paths": []
+    }
+  ]
+}

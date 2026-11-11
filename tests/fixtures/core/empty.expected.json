@@ -1,0 +1,21 @@
+{
+  "defaults": [],
+  "sections": [
+    [
+      "AppPaths",
+      []
+    ],
+    [
+      "Settings",
+      []
+    ]
+  ],
+  "get": {
+    "AppPaths/missing_key": null,
+    "Settings/missing_key": null
+  },
+  "getboolean": {
+    "AppPaths/missing_key": null,
+    "Settings/missing_key": null
+  }
+}

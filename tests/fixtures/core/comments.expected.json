@@ -1,0 +1,152 @@
+{
+  "defaults": [
+    [
+      "shared_key",
+      "from default"
+    ]
+  ],
+  "sections": [
+    [
+      "Settings",
+      [
+        [
+          "fanatec_enabled",
+          "yes\nSimHub_Enabled   =   OFF"
+        ],
+        [
+          "selected_game",
+          "iRacing"
+        ],
+        [
+          "garage61_enabled",
+          "1"
+        ],
+        [
+          "crew_chief_v4_enabled",
+          "maybe"
+        ],
+        [
+          "empty_value",
+          ""
+        ],
+        [
+          "colon_and_equals",
+          "a = b"
+        ],
+        [
+          "multi",
+          "first line\nsecond line\n\nafter blank"
+        ]
+      ]
+    ],
+    [
+      "My Custom Section",
+      [
+        [
+          "some key",
+          "Some Value"
+        ],
+        [
+          "url",
+          "http://example.com:8080/x"
+        ]
+      ]
+    ],
+    [
+      "AppPaths",
+      [
+        [
+          "fanatec",
+          "C:\\Program Files\\Fanatec\\FanatecUI\\UI\\Fanatec.exe"
+        ],
+        [
+          "trailing",
+          "value with trailing spaces"
+        ]
+      ]
+    ],
+    [
+      "Trailing Junk",
+      [
+        [
+          "k",
+          "v"
+        ]
+      ]
+    ]
+  ],
+  "get": {
+    "Settings/fanatec_enabled": "yes\nSimHub_Enabled   =   OFF",
+    "Settings/selected_game": "iRacing",
+    "Settings/garage61_enabled": "1",
+    "Settings/crew_chief_v4_enabled": "maybe",
+    "Settings/empty_value": "",
+    "Settings/colon_and_equals": "a = b",
+    "Settings/multi": "first line\nsecond line\n\nafter blank",
+    "Settings/shared_key": "from default",
+    "Settings/missing_key": null,
+    "My Custom Section/some key": "Some Value",
+    "My Custom Section/url": "http://example.com:8080/x",
+    "My Custom Section/shared_key": "from default",
+    "My Custom Section/missing_key": null,
+    "AppPaths/fanatec": "C:\\Program Files\\Fanatec\\FanatecUI\\UI\\Fanatec.exe",
+    "AppPaths/trailing": "value with trailing spaces",
+    "AppPaths/shared_key": "from default",
+    "AppPaths/missing_key": null,
+    "Trailing Junk/k": "v",
+    "Trailing Junk/shared_key": "from default",
+    "Trailing Junk/missing_key": null
+  },
+  "getboolean": {
+    "Settings/fanatec_enabled": {
+      "error": true
+    },
+    "Settings/selected_game": {
+      "error": true
+    },
+    "Settings/garage61_enabled": true,
+    "Settings/crew_chief_v4_enabled": {
+      "error": true
+    },
+    "Settings/empty_value": {
+      "error": true
+    },
+    "Settings/colon_and_equals": {
+      "error": true
+    },
+    "Settings/multi": {
+      "error": true
+    },
+    "Settings/shared_key": {
+      "error": true
+    },
+    "Settings/missing_key": null,
+    "My Custom Section/some key": {
+      "error": true
+    },
+    "My Custom Section/url": {
+      "error": true
+    },
+    "My Custom Section/shared_key": {
+      "error": true
+    },
+    "My Custom Section/missing_key": null,
+    "AppPaths/fanatec": {
+      "error": true
+    },
+    "AppPaths/trailing": {
+      "error": true
+    },
+    "AppPaths/shared_key": {
+      "error": true
+    },
+    "AppPaths/missing_key": null,
+    "Trailing Junk/k": {
+      "error": true
+    },
+    "Trailing Junk/shared_key": {
+      "error": true
+    },
+    "Trailing Junk/missing_key": null
+  }
+}
