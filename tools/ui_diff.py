@@ -19,9 +19,17 @@ target/ui-snapshots/<state>.png in the three classes of the parity criteria
          neighbourhood in the reference is not uniform): anti-aliasing only.
   text   every text element and log line in ui-spec.json. Its ink box is
          measured the same way in both images, inside its text region; it
-         passes when left edge and bottom (the baseline, or the descenders
-         where the text has them) are within 1 px and the right edge within
-         2 px. Glyph pixels themselves are free to differ.
+         passes when left edge, top and bottom (the baseline, or the
+         descenders where the text has them) are within 1 px, the right edge
+         within 2 px, and its ink colour within 16 per channel. Glyph pixels
+         themselves are free to differ.
+
+         The ink colour is fringe-proof, because the reference is drawn with
+         ClearType: the direction from the background to the colour is the sum
+         of every ink pixel's difference from the background (the red and blue
+         fringes either side of a stem cancel out), and the distance is the
+         farthest any pixel gets along that direction, which some pixel in a
+         stem reaches in both renderers.
 
 Text regions come from ui-spec.json (states.<state>.text_regions, ink grown by
 2 px); edge zones are derived from the element rects. It writes
@@ -65,7 +73,9 @@ WINDOW_BG = "#242424"
 CARD_BG = "#2d2d30"
 INK_THRESHOLD = 48  # max channel distance from the background that counts as ink
 TEXT_SEARCH_X = 3  # px the text window extends left and right of its region
-TEXT_TOL_LEFT, TEXT_TOL_BOTTOM, TEXT_TOL_RIGHT = 1, 1, 2
+TEXT_TOL_LEFT, TEXT_TOL_TOP, TEXT_TOL_BOTTOM, TEXT_TOL_RIGHT = 1, 1, 1, 2
+TEXT_TOL_COLOR = 16  # max channel difference of the ink colour
+AA_THRESHOLD = 16  # min channel distance from the background that counts towards the ink colour
 
 
 def rgb(hex_color: str) -> tuple[int, int, int]:
@@ -211,6 +221,26 @@ def ink_box(img: Image.Image, window, bg) -> tuple | None:
     return tuple(found) if found else None
 
 
+def ink_color(img: Image.Image, window, bg) -> tuple | None:
+    """The text colour inside window, from its ink pixels (see the module docstring)."""
+    x0, y0, x1, y1 = window
+    px = img.load()
+    diffs = []
+    for y in range(y0, y1):
+        for x in range(x0, x1):
+            p = px[x, y]
+            d = (p[0] - bg[0], p[1] - bg[1], p[2] - bg[2])
+            if max(abs(v) for v in d) > AA_THRESHOLD:
+                diffs.append(d)
+    total = [sum(d[i] for d in diffs) for i in range(3)]
+    norm = math.sqrt(sum(v * v for v in total))
+    if not norm:
+        return None
+    direction = [v / norm for v in total]
+    reach = max(sum(d[i] * direction[i] for i in range(3)) for d in diffs)
+    return tuple(max(0, min(255, round(bg[i] + reach * direction[i]))) for i in range(3))
+
+
 def check_text(item: dict, ref: Image.Image, new: Image.Image) -> dict:
     r = item["region"]
     window = clip((r["x"] - TEXT_SEARCH_X, r["y"], r["x"] + r["w"] + TEXT_SEARCH_X, r["y"] + r["h"]), ref.size)
@@ -223,12 +253,25 @@ def check_text(item: dict, ref: Image.Image, new: Image.Image) -> dict:
     if nb is None:
         res["ok"], res["why"] = False, "no ink"
         return res
-    dl, db, dr = nb[0] - rb[0], nb[3] - rb[3], nb[2] - rb[2]
-    res.update(dl=dl, db=db, dr=dr)
-    res["ok"] = abs(dl) <= TEXT_TOL_LEFT and abs(db) <= TEXT_TOL_BOTTOM and abs(dr) <= TEXT_TOL_RIGHT
+    dl, dt, db, dr = nb[0] - rb[0], nb[1] - rb[1], nb[3] - rb[3], nb[2] - rb[2]
+    rc, nc = ink_color(ref, window, bg), ink_color(new, window, bg)
+    dc = max(abs(a - b) for a, b in zip(rc, nc)) if rc and nc else 0
+    res.update(dl=dl, dt=dt, db=db, dr=dr, ref_color=rc, new_color=nc)
+    box_ok = (abs(dl) <= TEXT_TOL_LEFT and abs(dt) <= TEXT_TOL_TOP and abs(db) <= TEXT_TOL_BOTTOM
+              and abs(dr) <= TEXT_TOL_RIGHT)
+    res["ok"] = box_ok and dc <= TEXT_TOL_COLOR
     if not res["ok"]:
-        res["why"] = f"left {dl:+d}, baseline {db:+d}, right {dr:+d}"
+        why = []
+        if not box_ok:
+            why.append(f"left {dl:+d}, top {dt:+d}, baseline {db:+d}, right {dr:+d}")
+        if dc > TEXT_TOL_COLOR:
+            why.append(f"colour {hex_color(nc)} != reference {hex_color(rc)}")
+        res["why"] = "; ".join(why)
     return res
+
+
+def hex_color(c) -> str:
+    return "#{:02x}{:02x}{:02x}".format(*c)
 
 
 # ----------------------------------------------------------------------------------------- flat
@@ -426,6 +469,42 @@ def self_test(spec: dict, tol: int) -> int:
             failures.append(f"edited shapes: expected those two zones to fail, got {failed}")
         if res["flat"]["px"]:
             failures.append(f"edited shapes: {res['flat']['px']} px leaked into flat")
+
+        # text colour: a name and a log line repainted in another colour, ink boxes unchanged.
+        def recolor(img, region, bg, color):
+            px, bg = img.load(), rgb(bg)
+            x0, y0, x1, y1 = clip(rect_box(region), img.size)
+            full = max(abs(c - b) for c, b in zip(color, bg))
+            for y in range(y0, y1):
+                for x in range(x0, x1):
+                    p = px[x, y]
+                    a = min(1.0, dist(p, bg) / full)
+                    px[x, y] = tuple(round(b + a * (c - b)) for b, c in zip(bg, color))
+        regions = {r["name"]: r for r in st["text_regions"]}
+        # The first log line with text on it (not the divider, a 1 px rule).
+        log_line = next(t for t in text_items(st) if t["name"].startswith("log.line") and t["region"]["h"] > 6)
+        cases = (
+            ("apps.crew_chief_v4.name", tx["apps.crew_chief_v4.name"]["background"], (239, 83, 80)),
+            (log_line["name"], log_line["bg"], (239, 83, 80)),
+        )
+        for target, bg, color in cases:
+            res = altered(lambda img: recolor(img, regions[target], bg, color))
+            print(f"self-test, {target} recoloured:")
+            report(res)
+            failed = {t["name"] for t in res["text"]["failed"]}
+            if failed != {target}:
+                failures.append(f"recoloured {target}: expected text to fail for it only, got {failed}")
+            if res["flat"]["px"] or res["edges"]["failed"]:
+                failures.append(f"recoloured {target}: leaked into flat or edges")
+
+        # text top: one ink pixel 2 px above the Trading Paints name, as a taller glyph would add.
+        tp = tx["apps.trading_paints.name"]["ink"]
+        res = altered(lambda img: img.putpixel((tp["x"] + 3, tp["y"] - 2), (255, 255, 255)))
+        print("self-test, ink added above the Trading Paints name:")
+        report(res)
+        failed = {t["name"] for t in res["text"]["failed"]}
+        if failed != {"apps.trading_paints.name"}:
+            failures.append(f"raised top: expected text to fail for apps.trading_paints.name only, got {failed}")
 
         # A size mismatch and a missing file must fail.
         d = tmp / "broken"

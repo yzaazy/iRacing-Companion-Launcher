@@ -76,6 +76,10 @@ pub const RADIO_BORDER: Color32 = hex(0x949a9f);
 // The log's CTkScrollbar: `gray41`, `gray53` on hover.
 pub const SCROLL_THUMB: Color32 = hex(0x696969);
 pub const SCROLL_THUMB_HOVER: Color32 = hex(0x878787);
+/// The keyboard focus ring (no Python counterpart): white outside, black inside, as Windows
+/// draws focus in dark mode.
+pub const FOCUS_RING: Color32 = hex(0xffffff);
+pub const FOCUS_RING_INNER: Color32 = hex(0x000000);
 /// Tk's default selection background on Windows (`SystemHighlight`).
 pub const LOG_SELECTION: Color32 = hex(0x0078d7);
 

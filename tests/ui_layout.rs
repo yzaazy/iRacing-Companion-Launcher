@@ -180,8 +180,7 @@ fn layout_matches_spec_for_every_state() {
         assert!(st.is_object(), "state {name} missing from ui-spec.json");
         let (geom, rows) = with_ctx(|ctx| {
             let geom = sections::geometry(ctx, &state, WINDOW);
-            let galley = sections::log_galley(ctx, &state, geom.log.inner.w as f32);
-            let rows: Vec<String> = galley.rows.iter().map(|r| r.text()).collect();
+            let rows = ui::log::row_texts(ctx, &state, geom.log.inner.w as f32);
             (geom, rows)
         });
         let ours = elements(&geom, &state);
@@ -369,4 +368,54 @@ fn game_names_wrap_like_python() {
         sections::wrap_game_name("Exactly eighteen!!"),
         "Exactly eighteen!!"
     );
+}
+
+/// GDI advances the pen by whole device pixels, so at any display scale every glyph starts on a
+/// device pixel and each step is the glyph's own advance rounded at that scale: no gap opens or
+/// closes between letters ("Not installed", not "Notinstalled").
+#[test]
+fn text_advances_are_whole_device_pixels_at_every_scale() {
+    for ppp in [1.0f32, 1.25, 1.5, 2.0] {
+        let ctx = egui::Context::default();
+        ui::install_fonts(&ctx);
+        let mut input = egui::RawInput::default();
+        input
+            .viewports
+            .entry(egui::ViewportId::ROOT)
+            .or_default()
+            .native_pixels_per_point = Some(ppp);
+        let mut output = ctx.run_ui(input, |ui| {
+            let ctx = ui.ctx();
+            assert_eq!(ctx.pixels_per_point(), ppp);
+            for (text, font) in [
+                ("Not installed", theme::SUBTITLE_FONT),
+                ("Tobias Termeczky", theme::FOOTER_FONT),
+                ("Launch with iRacing (5)", theme::HEADING_FONT),
+                ("MarvinsAIRA Refactored", theme::NAME_FONT),
+                ("[19:45:07] Closing Fanatec...", theme::LOG_FONT),
+            ] {
+                let run = ui::text::Run {
+                    text,
+                    color: egui::Color32::WHITE,
+                };
+                let galley = ui::text::layout(ctx, &[run], &font, None);
+                let glyphs = &galley.rows[0].row.glyphs;
+                let mut pen = 0.0f32;
+                for (i, g) in glyphs.iter().enumerate() {
+                    let device = g.pos.x * ppp;
+                    assert!(
+                        (device - pen).abs() < 0.01,
+                        "{text:?} at {ppp}: glyph {i} {:?} at {device} device px, expected {pen}",
+                        g.chr
+                    );
+                    let linear = ctx.fonts_mut(|f| f.glyph_width(&font.id(), g.chr));
+                    pen += (linear * ppp + 1e-3).round();
+                }
+                // The width Tk measures is the same pen, in whole points.
+                let width = ui::text::width(ctx, text, &font);
+                assert_eq!(width, (pen / ppp - 1e-3).ceil() as i32, "{text:?} at {ppp}");
+            }
+        });
+        output.textures_delta.clear();
+    }
 }
