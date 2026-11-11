@@ -15,6 +15,7 @@ These are the only places Rust may differ from Python. Anything else that differ
 7. **An unset `APPDATA` or `ProgramData` is tolerated.** Python raises there; the case cannot occur on a real Windows session.
 8. **A malformed config value falls back instead of crashing startup.** A non-boolean `*_enabled` value or a broken `%` reference makes Python raise while the window is being built. Rust uses the fallback (`true`, or no saved path). A leading UTF-8 byte-order mark is skipped. A `process_state.json` entry without an integer `pid` is dropped. A detected path containing `%`, which Python cannot save and crashes on, is used unsaved.
 9. **The window opens with the startup log complete.** Python's logger forces a repaint per line, so its window appears during startup and the lines arrive one by one. Rust finishes startup before the window exists.
+10. **Keyboard access, by the owner's decision.** The Python app has none: Tab reaches nothing. The Rust app allows it under these rules: nothing is focused at startup and a mouse click leaves no focus, so a stray key can never launch or close apps; Tab and Shift+Tab move a visible focus indicator through the enabled controls in layout order; Space and Enter activate only the focused control. An unfocused window is pixel-identical to the Python reference.
 
 ## Quirks to port unchanged
 
