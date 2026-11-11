@@ -1,0 +1,53 @@
+{
+  "defaults": [],
+  "sections": [
+    [
+      "AppPaths",
+      [
+        [
+          "crew_chief_v4",
+          "C:\\Programme\\Spiele\\Équipe Müller\\CrewChiefV4.exe"
+        ],
+        [
+          "game_rfactor_2",
+          "D:\\Jeux\\rFactor 2 – Édition\\rFactor2.exe"
+        ]
+      ]
+    ],
+    [
+      "Settings",
+      [
+        [
+          "crew_chief_v4_enabled",
+          "True"
+        ],
+        [
+          "selected_game",
+          "rFactor 2"
+        ]
+      ]
+    ]
+  ],
+  "get": {
+    "AppPaths/crew_chief_v4": "C:\\Programme\\Spiele\\Équipe Müller\\CrewChiefV4.exe",
+    "AppPaths/game_rfactor_2": "D:\\Jeux\\rFactor 2 – Édition\\rFactor2.exe",
+    "AppPaths/missing_key": null,
+    "Settings/crew_chief_v4_enabled": "True",
+    "Settings/selected_game": "rFactor 2",
+    "Settings/missing_key": null
+  },
+  "getboolean": {
+    "AppPaths/crew_chief_v4": {
+      "error": true
+    },
+    "AppPaths/game_rfactor_2": {
+      "error": true
+    },
+    "AppPaths/missing_key": null,
+    "Settings/crew_chief_v4_enabled": true,
+    "Settings/selected_game": {
+      "error": true
+    },
+    "Settings/missing_key": null
+  }
+}

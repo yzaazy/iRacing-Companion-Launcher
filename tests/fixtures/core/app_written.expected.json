@@ -1,0 +1,73 @@
+{
+  "defaults": [],
+  "sections": [
+    [
+      "AppPaths",
+      [
+        [
+          "fanatec",
+          "C:\\Program Files\\Fanatec\\FanatecUI\\UI\\Fanatec.exe"
+        ],
+        [
+          "simhub",
+          "C:\\Program Files (x86)\\SimHub\\SimHubWPF.exe"
+        ],
+        [
+          "game_iracing",
+          "steam://rungameid/266410"
+        ]
+      ]
+    ],
+    [
+      "Settings",
+      [
+        [
+          "fanatec_enabled",
+          "True"
+        ],
+        [
+          "simhub_enabled",
+          "False"
+        ],
+        [
+          "garage61_enabled",
+          "False"
+        ],
+        [
+          "selected_game",
+          ""
+        ]
+      ]
+    ]
+  ],
+  "get": {
+    "AppPaths/fanatec": "C:\\Program Files\\Fanatec\\FanatecUI\\UI\\Fanatec.exe",
+    "AppPaths/simhub": "C:\\Program Files (x86)\\SimHub\\SimHubWPF.exe",
+    "AppPaths/game_iracing": "steam://rungameid/266410",
+    "AppPaths/missing_key": null,
+    "Settings/fanatec_enabled": "True",
+    "Settings/simhub_enabled": "False",
+    "Settings/garage61_enabled": "False",
+    "Settings/selected_game": "",
+    "Settings/missing_key": null
+  },
+  "getboolean": {
+    "AppPaths/fanatec": {
+      "error": true
+    },
+    "AppPaths/simhub": {
+      "error": true
+    },
+    "AppPaths/game_iracing": {
+      "error": true
+    },
+    "AppPaths/missing_key": null,
+    "Settings/fanatec_enabled": true,
+    "Settings/simhub_enabled": false,
+    "Settings/garage61_enabled": false,
+    "Settings/selected_game": {
+      "error": true
+    },
+    "Settings/missing_key": null
+  }
+}

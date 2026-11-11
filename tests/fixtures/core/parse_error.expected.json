@@ -1,0 +1,47 @@
+{
+  "defaults": [],
+  "sections": [
+    [
+      "AppPaths",
+      [
+        [
+          "fanatec",
+          "C:\\a.exe"
+        ],
+        [
+          "simhub",
+          "C:\\b.exe"
+        ]
+      ]
+    ],
+    [
+      "Settings",
+      [
+        [
+          "selected_game",
+          "iRacing"
+        ]
+      ]
+    ]
+  ],
+  "get": {
+    "AppPaths/fanatec": "C:\\a.exe",
+    "AppPaths/simhub": "C:\\b.exe",
+    "AppPaths/missing_key": null,
+    "Settings/selected_game": "iRacing",
+    "Settings/missing_key": null
+  },
+  "getboolean": {
+    "AppPaths/fanatec": {
+      "error": true
+    },
+    "AppPaths/simhub": {
+      "error": true
+    },
+    "AppPaths/missing_key": null,
+    "Settings/selected_game": {
+      "error": true
+    },
+    "Settings/missing_key": null
+  }
+}

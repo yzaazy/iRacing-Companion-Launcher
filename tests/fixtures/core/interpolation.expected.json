@@ -1,0 +1,97 @@
+{
+  "defaults": [],
+  "sections": [
+    [
+      "AppPaths",
+      [
+        [
+          "base",
+          "C:\\Games"
+        ],
+        [
+          "percent",
+          "C:\\100%% Racing\\app.exe"
+        ],
+        [
+          "ref",
+          "%(base)s\\iRacing\\x.exe"
+        ],
+        [
+          "chain",
+          "%(ref)s.bak"
+        ],
+        [
+          "bad",
+          "C:\\50% off\\x.exe"
+        ],
+        [
+          "missing_ref",
+          "%(nope)s\\x"
+        ],
+        [
+          "loop",
+          "%(loop)s"
+        ]
+      ]
+    ],
+    [
+      "Settings",
+      [
+        [
+          "flag",
+          "%(on)s"
+        ],
+        [
+          "on",
+          "yes"
+        ]
+      ]
+    ]
+  ],
+  "get": {
+    "AppPaths/base": "C:\\Games",
+    "AppPaths/percent": "C:\\100% Racing\\app.exe",
+    "AppPaths/ref": "C:\\Games\\iRacing\\x.exe",
+    "AppPaths/chain": "C:\\Games\\iRacing\\x.exe.bak",
+    "AppPaths/bad": {
+      "error": true
+    },
+    "AppPaths/missing_ref": {
+      "error": true
+    },
+    "AppPaths/loop": {
+      "error": true
+    },
+    "AppPaths/missing_key": null,
+    "Settings/flag": "yes",
+    "Settings/on": "yes",
+    "Settings/missing_key": null
+  },
+  "getboolean": {
+    "AppPaths/base": {
+      "error": true
+    },
+    "AppPaths/percent": {
+      "error": true
+    },
+    "AppPaths/ref": {
+      "error": true
+    },
+    "AppPaths/chain": {
+      "error": true
+    },
+    "AppPaths/bad": {
+      "error": true
+    },
+    "AppPaths/missing_ref": {
+      "error": true
+    },
+    "AppPaths/loop": {
+      "error": true
+    },
+    "AppPaths/missing_key": null,
+    "Settings/flag": true,
+    "Settings/on": true,
+    "Settings/missing_key": null
+  }
+}
