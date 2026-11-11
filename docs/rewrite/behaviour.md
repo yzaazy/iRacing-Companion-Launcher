@@ -13,7 +13,7 @@ These are the only places Rust may differ from Python. Anything else that differ
 5. **`print()` diagnostics are dropped.** They are invisible in the windowed Python build. They never become log lines.
 6. **`config.ini` is written as UTF-8.** See Config below.
 7. **An unset `APPDATA` or `ProgramData` is tolerated.** Python raises there; the case cannot occur on a real Windows session.
-8. **A malformed config value falls back instead of crashing startup.** A non-boolean `*_enabled` value or a broken `%` reference makes Python raise while the window is being built. Rust uses the fallback (`true`, or no saved path). A leading UTF-8 byte-order mark is skipped.
+8. **A malformed config value falls back instead of crashing startup.** A non-boolean `*_enabled` value or a broken `%` reference makes Python raise while the window is being built. Rust uses the fallback (`true`, or no saved path). A leading UTF-8 byte-order mark is skipped. A `process_state.json` entry without an integer `pid` is dropped.
 
 ## Quirks to port unchanged
 
@@ -39,10 +39,10 @@ These are the only places Rust may differ from Python. Anything else that differ
 
 - `process_state.json` is `{ "<App Name>": { "pid": int, "create_time": float, "exe_path": str } }`, UTF-8, written atomically (tmp file then replace). `create_time` is epoch seconds as a float, derived from the process creation `FILETIME`. Keep sub-second precision: entries written by the Python version must still validate, with the same 0.5 s tolerance.
 - A tracked entry is valid only if the PID is alive and its creation time matches. Every failed validation drops the entry and saves. All entries are revalidated at load.
-- `psutil` `children(recursive=True)`: build the tree from a snapshot of (pid, parent pid). A process counts as a child only if it was created at or after its parent. That guards against a recycled parent PID.
-- `terminate()` and `kill()` are both `TerminateProcess` on Windows. `close_tracked`: terminate root and descendants, wait up to 3 s for all, kill survivors, drop the entry. Access-denied at any step is swallowed. It returns true whenever the tracked root was alive at the start.
+- `psutil` `children(recursive=True)`: build the tree from a snapshot of (pid, parent pid). A descendant counts only if it was created at or after the tracked **root**, which guards against a recycled PID. Creation time falls back to `NtQuerySystemInformation` for processes that refuse to be opened.
+- `terminate()` and `kill()` are both `TerminateProcess` on Windows. `close_tracked`: terminate root and descendants, wait up to 3 s for all, kill survivors, drop the entry. Access-denied at any step is swallowed, and when waiting on any one process is refused the kill pass is skipped for the whole tree. It returns true whenever the tracked root was alive at the start.
 - Direct launch: argv is the exe path alone, `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`, stdio to null, inherited working directory. State is saved before the 2 s wait; success is "still alive after the wait".
-- Shell launch (`needs_shell_launch`, used for Stream Deck's `uiAccess` manifest): `ShellExecute` open, wait 2 s, then take any PID with that exe name that was absent before the launch. No new PID means failure.
+- Shell launch (`needs_shell_launch`, used for Stream Deck's `uiAccess` manifest): `ShellExecute` with no verb (the default verb, as `os.startfile` does), wait 2 s, then take a PID with that exe name that was absent before the launch. Python takes an arbitrary one; Rust takes the lowest. No new PID means failure.
 - Name matching (`is_process_running`, `kill_process`) compares exe base names case-insensitively across all processes, and `kill_process` kills every match.
 - `is_app_running`: tracked and alive, otherwise fall back to the name match so apps started outside the launcher still show as running.
 - `close_app`: tracked close when tracked, otherwise kill by exe name.
