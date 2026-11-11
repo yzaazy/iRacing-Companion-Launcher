@@ -5,13 +5,14 @@
 //! long name, the log scrollbar). [`show`] paints that geometry and turns clicks into actions.
 //! The layout test reads the same geometry, so what is tested is what is drawn.
 
-use crate::contract::{AppCard, GameCard, LogLevel, Status, UiAction, ViewState};
+use crate::contract::{AppCard, GameCard, Status, UiAction, ViewState};
+use crate::ui::input::{Control, Controls, Kind, Ring};
 use crate::ui::layout::{self, Anchor, Bounds, ButtonRow, CardParts, Layout, LogText, Trailing};
-use crate::ui::text::{self, Run};
+use crate::ui::log as log_view;
+use crate::ui::text;
 use crate::ui::theme::{self, Font};
 use crate::ui::widgets::{self, ButtonLook};
-use egui::{Color32, CursorIcon, Id, Role, Sense, Ui, WidgetInfo};
-use std::sync::Arc;
+use egui::{Color32, Id, Role, Ui, WidgetInfo};
 
 pub const FOOTER_TEXT: &str = "© 2026 Developed & Designed by Tobias Termeczky • Vibed with Claude";
 pub const GAMES_HEADING: &str = "Racing Simulators & Games";
@@ -58,12 +59,14 @@ impl TextGeom {
             .collect()
     }
 
+    /// Paint the text, clipped to its label as Tk clips a label's text at the widget's edge.
     fn paint(&self, ctx: &egui::Context, painter: &egui::Painter, color: Color32) {
         if !self.label.is_mapped() {
             return;
         }
+        let painter = painter.with_clip_rect(painter.clip_rect().intersect(self.label.rect()));
         text::paint_block(
-            ctx, painter, &self.text, &self.font, color, self.left, self.top,
+            ctx, &painter, &self.text, &self.font, color, self.left, self.top,
         );
     }
 }
@@ -243,8 +246,7 @@ fn app_card_geom(ctx: &egui::Context, card: Bounds, app: &AppCard) -> AppCardGeo
 /// the scrollbar shows and takes width from the text (CTkTextbox's automatic scrollbar).
 fn log_needs_scrollbar(ctx: &egui::Context, layout: &Layout, state: &ViewState) -> bool {
     let plain = layout.log_text(false);
-    let galley = log_galley(ctx, state, plain.inner.w as f32);
-    galley.size().y > plain.inner.h as f32
+    log_view::content_height(ctx, state, plain.inner.w as f32) > plain.inner.h as f32
 }
 
 pub fn geometry(ctx: &egui::Context, state: &ViewState, window: egui::Vec2) -> Geometry {
@@ -367,91 +369,83 @@ pub fn geometry(ctx: &egui::Context, state: &ViewState, window: egui::Vec2) -> G
 }
 
 // ---------------------------------------------------------------------------------------------
-// The log text.
-
-/// The whole log as one galley: every line in its level's colour, each followed by a newline as
-/// Tk inserts it, wrapped at any character to the Text widget's inner width.
-pub fn log_galley(ctx: &egui::Context, state: &ViewState, inner_width: f32) -> Arc<egui::Galley> {
-    // ActivityLogger inserts the text plus a newline, so a newline ends every line, the last too.
-    let lines: Vec<(String, Color32)> = state
-        .log
-        .iter()
-        .map(|line| (format!("{}\n", line.text), theme::log_color(&line.level)))
-        .collect();
-    let runs: Vec<Run<'_>> = lines
-        .iter()
-        .map(|(text, color)| Run {
-            text,
-            color: *color,
-        })
-        .collect();
-    text::layout(ctx, &runs, &theme::LOG_FONT, Some(inner_width))
-}
-
-// ---------------------------------------------------------------------------------------------
 // Painting and interaction.
 
-fn clickable(ui: &Ui, id: Id, b: Bounds, enabled: bool, info: WidgetInfo) -> egui::Response {
-    let sense = if enabled {
-        Sense::click()
-    } else {
-        Sense::hover()
-    };
-    let response = ui.interact(b.rect(), id, sense);
-    response.widget_info(|| info.clone());
-    if enabled {
-        response.on_hover_cursor(CursorIcon::PointingHand)
-    } else {
-        response
-    }
-}
-
-fn button(
-    ui: &Ui,
+/// A CTkButton that emits `action` when pressed.
+struct ButtonSpec<'a> {
     id: Id,
-    geom: &ButtonGeom,
+    geom: &'a ButtonGeom,
     radius: f32,
     colors: theme::ButtonColors,
     enabled: bool,
-    a11y: &str,
-) -> bool {
-    if !geom.rect.is_mapped() {
-        return false;
+    action: UiAction,
+    a11y: &'a str,
+}
+
+fn button(ui: &Ui, controls: &mut Controls, b: ButtonSpec<'_>) {
+    if !b.geom.rect.is_mapped() {
+        return;
     }
-    let response = clickable(
+    let pointer = controls.control(
         ui,
-        id,
-        geom.rect,
-        enabled,
-        WidgetInfo::labeled(Role::Button, enabled, a11y),
+        Control {
+            id: b.id,
+            hit: vec![b.geom.rect],
+            enabled: b.enabled,
+            action: Some(b.action),
+            kind: Kind::Button,
+            ring: Ring::Rounded {
+                rect: b.geom.rect.painted(),
+                radius: b.radius,
+            },
+            info: WidgetInfo::labeled(Role::Button, b.enabled, b.a11y),
+        },
     );
     widgets::button(
         ui.ctx(),
         ui.painter(),
         &ButtonLook {
-            rect: geom.rect,
-            label: geom.label,
-            text: &geom.text.text,
-            font: &geom.text.font,
-            corner_radius: radius,
-            colors,
-            enabled,
-            hovered: response.hovered(),
+            rect: b.geom.rect,
+            label: b.geom.label,
+            text: &b.geom.text.text,
+            font: &b.geom.text.font,
+            corner_radius: b.radius,
+            colors: b.colors,
+            enabled: b.enabled,
+            hovered: pointer.hover_look,
         },
     );
-    enabled && response.clicked()
 }
 
-fn browse(ui: &Ui, id: Id, geom: &ButtonGeom, name: &str) -> bool {
+fn browse(
+    ui: &Ui,
+    controls: &mut Controls,
+    id: Id,
+    geom: &ButtonGeom,
+    name: &str,
+    action: UiAction,
+) {
     button(
         ui,
-        id,
-        geom,
-        theme::SMALL_BUTTON_RADIUS,
-        theme::BROWSE_BUTTON,
-        true,
-        &format!("Browse for {name}"),
-    )
+        controls,
+        ButtonSpec {
+            id,
+            geom,
+            radius: theme::SMALL_BUTTON_RADIUS,
+            colors: theme::BROWSE_BUTTON,
+            enabled: true,
+            action,
+            a11y: &format!("Browse for {name}"),
+        },
+    );
+}
+
+/// Where a CTkCheckBox or CTkRadioButton reacts to the pointer: its box canvas and its empty
+/// text label, the widget's last column. The 6 px spacing column between them is bound to
+/// nothing. The label's height is not measured; it is taken as the widget's.
+fn toggle_hit(parts: &CardParts) -> Vec<Bounds> {
+    let t = parts.toggle;
+    vec![parts.toggle_box, Bounds::new(t.right() - 1, t.y, 1, t.h)]
 }
 
 fn heading(ui: &Ui, geom: &TextGeom) {
@@ -460,11 +454,11 @@ fn heading(ui: &Ui, geom: &TextGeom) {
 
 fn game_card(
     ui: &Ui,
+    controls: &mut Controls,
     id: Id,
     geom: &GameCardGeom,
     game: Option<&GameCard>,
     selected: bool,
-    actions: &mut Vec<UiAction>,
 ) {
     if !geom.card.is_mapped() {
         return;
@@ -486,24 +480,29 @@ fn game_card(
     );
 
     let label = game.map_or(NONE_LABEL, |g| g.name.as_str());
-    let radio = clickable(
+    // CTkRadioButton.invoke only acts when it is not already selected.
+    let action = (!selected).then(|| UiAction::SelectGame(game.map(|g| g.name.clone())));
+    let radio = controls.control(
         ui,
-        id.with("radio"),
-        geom.parts.toggle,
-        found,
-        WidgetInfo::selected(Role::RadioButton, found, selected, label),
+        Control {
+            id: id.with("radio"),
+            hit: toggle_hit(&geom.parts),
+            enabled: found,
+            action,
+            kind: Kind::Toggle {
+                changes_state: !selected,
+            },
+            ring: Ring::Circle(geom.parts.toggle_box),
+            info: WidgetInfo::selected(Role::RadioButton, found, selected, label),
+        },
     );
     widgets::radio(
         painter,
         geom.parts.toggle_box,
         selected,
-        found && radio.hovered(),
+        radio.hover_look,
         theme::CARD_FILL,
     );
-    // CTkRadioButton.invoke only acts when it is not already selected.
-    if found && radio.clicked() && !selected {
-        actions.push(UiAction::SelectGame(game.map(|g| g.name.clone())));
-    }
 
     let name_color = if found {
         theme::TEXT_WHITE
@@ -514,9 +513,8 @@ fn game_card(
 
     if let Some(game) = game {
         if let Some(b) = &geom.browse {
-            if browse(ui, id.with("browse"), b, &game.name) {
-                actions.push(UiAction::BrowseGame(game.name.clone()));
-            }
+            let action = UiAction::BrowseGame(game.name.clone());
+            browse(ui, controls, id.with("browse"), b, &game.name, action);
         } else {
             widgets::dot(
                 painter,
@@ -527,7 +525,7 @@ fn game_card(
     }
 }
 
-fn app_card(ui: &Ui, id: Id, geom: &AppCardGeom, app: &AppCard, actions: &mut Vec<UiAction>) {
+fn app_card(ui: &Ui, controls: &mut Controls, id: Id, geom: &AppCardGeom, app: &AppCard) {
     if !geom.card.is_mapped() {
         return;
     }
@@ -541,26 +539,33 @@ fn app_card(ui: &Ui, id: Id, geom: &AppCardGeom, app: &AppCard, actions: &mut Ve
         theme::CARD_FILL,
     );
     let found = app.status != Status::NotFound;
-    let check = clickable(
+    let check = controls.control(
         ui,
-        id.with("checkbox"),
-        geom.parts.toggle,
-        found,
-        WidgetInfo::selected(Role::CheckBox, found, app.checked, &app.name),
+        Control {
+            id: id.with("checkbox"),
+            hit: toggle_hit(&geom.parts),
+            enabled: found,
+            action: Some(UiAction::ToggleApp {
+                name: app.name.clone(),
+                checked: !app.checked,
+            }),
+            kind: Kind::Toggle {
+                changes_state: true,
+            },
+            ring: Ring::Rounded {
+                rect: geom.parts.toggle_box.painted(),
+                radius: theme::CHECKBOX_RADIUS,
+            },
+            info: WidgetInfo::selected(Role::CheckBox, found, app.checked, &app.name),
+        },
     );
     widgets::checkbox(
         painter,
         geom.parts.toggle_box,
         app.checked,
-        found && check.hovered(),
+        check.hover_look,
         theme::CARD_FILL,
     );
-    if found && check.clicked() {
-        actions.push(UiAction::ToggleApp {
-            name: app.name.clone(),
-            checked: !app.checked,
-        });
-    }
 
     let name_color = if found {
         theme::TEXT_WHITE
@@ -571,9 +576,8 @@ fn app_card(ui: &Ui, id: Id, geom: &AppCardGeom, app: &AppCard, actions: &mut Ve
     geom.subtitle.paint(ui.ctx(), painter, theme::TEXT_DIM);
 
     if let Some(b) = &geom.browse {
-        if browse(ui, id.with("browse"), b, &app.name) {
-            actions.push(UiAction::BrowseApp(app.name.clone()));
-        }
+        let action = UiAction::BrowseApp(app.name.clone());
+        browse(ui, controls, id.with("browse"), b, &app.name, action);
     } else {
         widgets::dot(
             painter,
@@ -583,128 +587,12 @@ fn app_card(ui: &Ui, id: Id, geom: &AppCardGeom, app: &AppCard, actions: &mut Ve
     }
 }
 
-/// Remembers how much log the scroll area last showed, so a new line scrolls to the end.
-#[derive(Clone, Copy, PartialEq)]
-struct LogSeen {
-    lines: usize,
-    hash: u64,
-}
-
-fn log_hash(state: &ViewState) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    if let Some(last) = state.log.last() {
-        last.text.hash(&mut h);
-    }
-    h.finish()
-}
-
-fn log(ui: &mut Ui, geom: &Geometry, state: &ViewState) {
-    let ctx = ui.ctx().clone();
-    let id = ui.scope_id().with("activity_log");
-    let log_box = geom.layout.log.log_box;
-    widgets::rounded(
-        ui.painter(),
-        log_box.painted(),
-        theme::LOG_RADIUS,
-        theme::LOG_BG,
-    );
-
-    let inner = geom.log.inner;
-    let galley = log_galley(&ctx, state, inner.w as f32);
-    let content_h = galley.size().y;
-    let view_h = inner.h as f32;
-    let max_offset = (content_h - view_h).max(0.0);
-
-    let seen = LogSeen {
-        lines: state.log.len(),
-        hash: log_hash(state),
-    };
-    let changed = ctx.data(|d| d.get_temp::<LogSeen>(id)) != Some(seen);
-    ctx.data_mut(|d| d.insert_temp(id, seen));
-
-    let scroll_id = id.with("scroll");
-    let mut offset = if changed {
-        // ActivityLogger calls see("end") after every line.
-        Some(max_offset)
-    } else {
-        None
-    };
-
-    // The scrollbar: press or drag anywhere on it to centre the thumb on the pointer, as
-    // CTkScrollbar does.
-    if let Some(bar) = geom.log.scrollbar {
-        let response = ui.interact(bar.rect(), id.with("scrollbar"), Sense::click_and_drag());
-        response.widget_info(|| WidgetInfo::labeled(Role::ScrollBar, true, LOG_HEADING));
-        if let Some(pointer) = response.interact_pointer_pos()
-            && (response.dragged() || response.is_pointer_button_down_on())
-        {
-            let canvas = bar.painted();
-            let len = (view_h / content_h).min(1.0);
-            let value = (pointer.y - canvas.y as f32) / canvas.h as f32;
-            let start = (value - len / 2.0).clamp(0.0, 1.0 - len);
-            offset = Some(start * content_h);
-        }
-    }
-
-    let mut area = egui::ScrollArea::vertical()
-        .id_salt(scroll_id)
-        .auto_shrink(false)
-        .animated(false)
-        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden);
-    if let Some(offset) = offset {
-        area = area.vertical_scroll_offset(offset.min(max_offset));
-    }
-    let output = ui
-        .scope_builder(egui::UiBuilder::new().max_rect(inner.rect()), |ui| {
-            ui.visuals_mut().selection.bg_fill = theme::LOG_SELECTION;
-            ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
-            // Tk's Text widget does not fade its edges when scrolled.
-            ui.spacing_mut().scroll.fade.strength = 0.0;
-            // Nor does it coast or overscroll; momentum would also carry on past a jump to the end.
-            ui.spacing_mut().scroll.kinetic.decay_time = 0.0;
-            ui.spacing_mut().scroll.kinetic.rubber_band = false;
-            area.show(ui, |ui| {
-                // A selectable label, but with each line's baseline where Tk puts it: `ascent`
-                // below the line's top.
-                let font = &theme::LOG_FONT;
-                let shift = font.ascent as f32 - text::baseline_offset(&galley, font);
-                let sense = Sense::click_and_drag() - Sense::FOCUSABLE;
-                let (rect, response) = ui.allocate_exact_size(galley.size(), sense);
-                response.widget_info(|| WidgetInfo::labeled(Role::Label, true, LOG_HEADING));
-                let response = response.on_hover_cursor(CursorIcon::Text);
-                egui::text_selection::LabelSelectionState::label_text_selection(
-                    ui,
-                    &response,
-                    rect.min + egui::vec2(0.0, shift),
-                    galley,
-                    theme::log_color(&LogLevel::Info),
-                    egui::Stroke::NONE,
-                );
-            })
-        })
-        .inner;
-
-    if let Some(bar) = geom.log.scrollbar {
-        let top = output.state.clamped_offset().y;
-        let start = (top / content_h).clamp(0.0, 1.0);
-        let end = ((top + view_h) / content_h).clamp(0.0, 1.0);
-        let hovered = ui.rect_contains_pointer(bar.rect());
-        let color = if hovered {
-            theme::SCROLL_THUMB_HOVER
-        } else {
-            theme::SCROLL_THUMB
-        };
-        widgets::scrollbar_thumb(ui.painter(), bar, start, end, color);
-    }
-}
-
 /// Paint the whole window for `state` and collect what the user did.
 pub fn show(ui: &mut Ui, state: &ViewState) -> Vec<UiAction> {
     let ctx = ui.ctx().clone();
     let window = ui.max_rect().size();
     let geom = geometry(&ctx, state, window);
-    let mut actions = Vec::new();
+    let mut controls = Controls::begin(ui);
     let painter = ui.painter().clone();
     let root = ui.scope_id().with("launcher");
 
@@ -719,74 +607,91 @@ pub fn show(ui: &mut Ui, state: &ViewState) -> Vec<UiAction> {
     );
     geom.title.paint(&ctx, &painter, theme::TEXT_WHITE);
 
-    // Games column.
+    // Controls are added in reading order, which is the Tab order: the games column top to
+    // bottom, the apps column (Select All, then each card), the log, then Launch and Close.
     heading(ui, &geom.games_heading);
     game_card(
         ui,
+        &mut controls,
         root.with("game:none"),
         &geom.none_card,
         None,
         state.selected_game.is_none(),
-        &mut actions,
     );
     for (game, g) in state.games.iter().zip(&geom.games) {
         let selected = state.selected_game.as_deref() == Some(game.name.as_str());
         game_card(
             ui,
+            &mut controls,
             root.with(("game", &game.name)),
             g,
             Some(game),
             selected,
-            &mut actions,
         );
     }
 
-    // Apps column.
     heading(ui, &geom.apps_heading);
-    if button(
+    button(
         ui,
-        root.with("select_all"),
-        &geom.select_all,
-        theme::SMALL_BUTTON_RADIUS,
-        theme::GREY_BUTTON,
-        true,
-        &state.select_all_label,
-    ) {
-        actions.push(UiAction::ToggleSelectAll);
-    }
+        &mut controls,
+        ButtonSpec {
+            id: root.with("select_all"),
+            geom: &geom.select_all,
+            radius: theme::SMALL_BUTTON_RADIUS,
+            colors: theme::GREY_BUTTON,
+            enabled: true,
+            action: UiAction::ToggleSelectAll,
+            a11y: &state.select_all_label,
+        },
+    );
     for (app, a) in state.apps.iter().zip(&geom.apps) {
-        app_card(ui, root.with(("app", &app.name)), a, app, &mut actions);
+        app_card(ui, &mut controls, root.with(("app", &app.name)), a, app);
     }
 
-    // Log column.
     heading(ui, &geom.log_heading);
-    log(ui, &geom, state);
-
-    // Action buttons.
-    if button(
+    log_view::show(
         ui,
-        root.with("launch"),
-        &geom.launch,
-        theme::ACTION_BUTTON_RADIUS,
-        theme::LAUNCH_BUTTON,
-        state.launch_enabled,
-        &state.launch_label,
-    ) {
-        actions.push(UiAction::Launch);
-    }
-    if button(
-        ui,
-        root.with("close"),
-        &geom.close,
-        theme::ACTION_BUTTON_RADIUS,
-        theme::CLOSE_BUTTON,
-        state.close_enabled,
-        &state.close_label,
-    ) {
-        actions.push(UiAction::Close);
+        &mut controls,
+        log_view::LogGeom {
+            log_box: geom.layout.log.log_box,
+            text: &geom.log,
+        },
+        state,
+    );
+
+    for (id, b, colors, enabled, action, label) in [
+        (
+            "launch",
+            &geom.launch,
+            theme::LAUNCH_BUTTON,
+            state.launch_enabled,
+            UiAction::Launch,
+            &state.launch_label,
+        ),
+        (
+            "close",
+            &geom.close,
+            theme::CLOSE_BUTTON,
+            state.close_enabled,
+            UiAction::Close,
+            &state.close_label,
+        ),
+    ] {
+        button(
+            ui,
+            &mut controls,
+            ButtonSpec {
+                id: root.with(id),
+                geom: b,
+                radius: theme::ACTION_BUTTON_RADIUS,
+                colors,
+                enabled,
+                action,
+                a11y: label,
+            },
+        );
     }
 
-    // Footer.
     geom.footer.paint(&ctx, &painter, theme::TEXT_DIM);
-    actions
+    controls.finish(ui)
 }

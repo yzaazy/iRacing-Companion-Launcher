@@ -131,10 +131,15 @@ pub fn button(ctx: &egui::Context, painter: &Painter, look: &ButtonLook<'_>) {
     } else {
         theme::BUTTON_TEXT_DISABLED
     };
-    // The Tk label pads its text by 1 px on every side.
+    // The Tk label pads its text by 1 px on every side, clips it at its edges, and is itself
+    // clipped by the button.
+    let clip = painter
+        .clip_rect()
+        .intersect(look.rect.rect())
+        .intersect(look.label.rect());
     text::paint_block(
         ctx,
-        painter,
+        &painter.with_clip_rect(clip),
         look.text,
         look.font,
         color,
