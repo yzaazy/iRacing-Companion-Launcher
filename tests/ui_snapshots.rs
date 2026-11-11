@@ -8,6 +8,15 @@ use std::path::{Path, PathBuf};
 
 const WINDOW: egui::Vec2 = egui::vec2(1200.0, 700.0);
 
+/// The headless wgpu adapter crashes when two threads create devices at once; tests in this
+/// binary take turns.
+static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn gpu() -> std::sync::MutexGuard<'static, ()> {
+    GPU.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 fn repo_root() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
 }
@@ -38,12 +47,18 @@ fn placeholder() -> ViewState {
 }
 
 fn render(state: &ViewState) -> image::RgbaImage {
+    render_at(state, WINDOW)
+}
+
+fn render_at(state: &ViewState, window: egui::Vec2) -> image::RgbaImage {
+    let _gpu = gpu();
     let mut harness = Harness::builder()
-        .with_size(WINDOW)
+        .with_size(window)
         .with_pixels_per_point(1.0)
         .wgpu()
+        .with_context_setup(ui::install_fonts)
         .build_ui(|ui| {
-            ui::draw(ui.ctx(), state);
+            ui::draw(ui, state);
         });
     harness.run();
     harness
@@ -60,5 +75,27 @@ fn render_fixture_states() {
         assert_eq!(image.dimensions(), (1200, 700), "state {name}");
         let path = out_dir.join(format!("{name}.png"));
         image.save(&path).unwrap();
+    }
+}
+
+/// The same rules at other window sizes, for a look: `target/ui-snapshots/other-sizes/`.
+/// ui_diff.py does not compare these; they have no reference.
+#[test]
+fn render_other_window_sizes() {
+    let out_dir: PathBuf = repo_root().join("target/ui-snapshots/other-sizes");
+    std::fs::create_dir_all(&out_dir).unwrap();
+    let states = fixture_states();
+    for (name, size) in [
+        ("mixed", egui::vec2(1400.0, 800.0)),
+        ("log-full", egui::vec2(1000.0, 640.0)),
+    ] {
+        let Some(state) = states.get(name) else {
+            continue;
+        };
+        let image = render_at(state, size);
+        assert_eq!(image.dimensions(), (size.x as u32, size.y as u32));
+        image
+            .save(out_dir.join(format!("{name}-{}x{}.png", size.x, size.y)))
+            .unwrap();
     }
 }
