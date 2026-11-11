@@ -12,7 +12,8 @@ These are the only places Rust may differ from Python. Anything else that differ
 4. **Config location in debug builds.** See `contracts.md`.
 5. **`print()` diagnostics are dropped.** They are invisible in the windowed Python build. They never become log lines.
 6. **`config.ini` is written as UTF-8.** See Config below.
-7. **An unset `APPDATA` or `ProgramData` skips that Start Menu root.** Python raises there; the case cannot occur on a real Windows session.
+7. **An unset `APPDATA` or `ProgramData` is tolerated.** Python raises there; the case cannot occur on a real Windows session.
+8. **A malformed config value falls back instead of crashing startup.** A non-boolean `*_enabled` value or a broken `%` reference makes Python raise while the window is being built. Rust uses the fallback (`true`, or no saved path). A leading UTF-8 byte-order mark is skipped.
 
 ## Quirks to port unchanged
 
@@ -22,12 +23,13 @@ These are the only places Rust may differ from Python. Anything else that differ
 - A saved `selected_game` is restored even when that game is not found: the radio is selected and disabled.
 - At the end of a launch the Launch button is set to enabled unconditionally, and likewise Close after a close, even when `_update_button_text` would have disabled it.
 - `shortcut_names` and `paths` in `RACE_GAMES` are never consulted. Games are found by saved path or Steam registry only.
+- A path containing `%` cannot be saved: `configparser` rejects the value, so `set_app_path` fails and Browse stops before the card is set idle or checked. `ConfigStore::set_app_path` returns false in that case.
 
 ## Config (`core/config_manager.py`)
 
 - Python writes `config.ini` with the locale encoding (Windows-1252 on a typical install), not UTF-8. Read as UTF-8 and fall back to the ANSI code page when that fails. Write UTF-8.
 - `configparser` format to reproduce on write: `[Section]`, then `key = value` lines, then one blank line after each section. Section order: `AppPaths`, `Settings`. Keys are lowercased. An empty value is written as `key = ` with the trailing space.
-- Accept on read what `configparser` accepts: `=` or `:` as delimiter, surrounding whitespace, `#` and `;` comment lines, keys in any case.
+- Accept on read what `configparser` accepts: `=` or `:` as delimiter, surrounding whitespace, `#` and `;` comment lines, keys in any case, indented continuation lines, `[DEFAULT]`, and `%` interpolation (`%%` is a literal `%`). `src/core/config.rs` is tested byte-for-byte against fixtures produced by the real `configparser`.
 - Booleans are stored as `True` / `False`. `getboolean` accepts `1 yes true on` and `0 no false off`, case-insensitive. The fallback for a missing `*_enabled` key is true.
 - Keys: `ConfigManager.get_config_key(name)` is lowercase with spaces as underscores. App paths live under that key in `[AppPaths]`; game paths under `game_<key>`. Checkbox state is `<key>_enabled` in `[Settings]`; the game choice is `selected_game` (empty string for None).
 - `get_app_path` returns a saved value only when it exists on disk. A saved `steam://rungameid/...` never exists on disk, so every lookup for a Steam game falls through to the registry check and re-saves the URL.
