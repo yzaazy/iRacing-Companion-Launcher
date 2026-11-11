@@ -15,7 +15,11 @@ These are the only places Rust may differ from Python. Anything else that differ
 7. **An unset `APPDATA` or `ProgramData` is tolerated.** Python raises there; the case cannot occur on a real Windows session.
 8. **A malformed config value falls back instead of crashing startup.** A non-boolean `*_enabled` value or a broken `%` reference makes Python raise while the window is being built. Rust uses the fallback (`true`, or no saved path). A leading UTF-8 byte-order mark is skipped. A `process_state.json` entry without an integer `pid` is dropped. A detected path containing `%`, which Python cannot save and crashes on, is used unsaved.
 9. **The window opens with the startup log complete.** Python's logger forces a repaint per line, so its window appears during startup and the lines arrive one by one. Rust finishes startup before the window exists.
-10. **Keyboard access, by the owner's decision.** The Python app has none: Tab reaches nothing. The Rust app allows it under these rules: nothing is focused at startup and a mouse click leaves no focus, so a stray key can never launch or close apps; Tab and Shift+Tab move a visible focus indicator through the enabled controls in layout order; Space and Enter activate only the focused control. An unfocused window is pixel-identical to the Python reference.
+10. **Keyboard access, by the owner's decision.** The Python app has none: Tab reaches nothing. The Rust app allows it under these rules: nothing is focused at startup and a mouse click leaves no focus, so a stray key can never launch or close apps; Tab and Shift+Tab move a visible focus indicator through the enabled controls in layout order; Space and Enter activate only the focused control, once per key press. An unfocused window is pixel-identical to the Python reference.
+    - Indicator: a ring drawn on top, outside the control's shape: 1 px gap, 1 px black, 2 px white, following the control's corner radius (a circle for radios).
+    - Tab order: the None radio; each game card's radio, or its Browse button when the game is not found; Select All; each app card's checkbox, or its Browse button when not found; the log, only while it has a scrollbar; Launch; Close. Disabled buttons are skipped. Tab wraps at both ends.
+    - Escape or any mouse press drops the focus.
+    - The focused log scrolls with the arrow, page, Home and End keys. Python's log took those keys after a click on it.
 
 ## Quirks to port unchanged
 
