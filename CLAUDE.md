@@ -19,6 +19,29 @@ The app is being ported to Rust (egui/eframe) for release as v3.0.0. Until then 
 - Edit only the files your brief assigns to you.
 - Pushing, tagging, building the installer and releasing each wait for the user's explicit go.
 
+### Version, build and release (Rust)
+
+This replaces the Python-era "Version Management", "Building Executable", "Creating Installer" and "Creating a Release" sections once the Python code is removed. Semantic versioning (MAJOR.MINOR.PATCH), tags `v{version}`.
+
+`version` in `Cargo.toml` is the single source of truth. `build.rs` embeds it, with the icon `iRCL.ico` and the version-resource strings from `[package.metadata.winresource]`, into the exe; the app header reads it through `env!("CARGO_PKG_VERSION")`; `windows installer.iss` reads it back from the built exe's `ProductVersion`. Nothing is propagated by a script.
+
+**Bump version** (when the user says "bump version"; ask bug/feature/major if they didn't say):
+1. Edit `version` in `Cargo.toml`: patch `x.y.Z` for fixes, minor `x.Y.0` for features, major `X.0.0` for breaking changes.
+2. `cargo check`, so `Cargo.lock` picks up the new version. Commit both files.
+3. Build the release exe (below), then `git tag v{version}`.
+
+**Build**: `cargo build --release` writes `target\release\iracing-companion-launcher.exe`, a single self-contained exe. Check the embedded version with `(Get-Item target\release\iracing-companion-launcher.exe).VersionInfo`.
+
+**Installer** (after the release build): `& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "windows installer.iss"` writes `installer_output\iRacing_Companion_Launcher_Setup.exe` (fixed name, not versioned). It installs the exe as `{app}\iRacing Companion Launcher.exe`. ISCC stops with an error when the release exe is missing or has no version. To compile only for validation, add `/O<temp dir>` so `installer_output\` stays untouched.
+
+**Release** (when the user says "release"):
+1. Ask whether the installer has been compiled from the tagged build.
+2. `git push origin v{version}`
+3. `gh release create v{version} "installer_output/iRacing_Companion_Launcher_Setup.exe" --title "v{version}" --generate-notes`
+4. `gh release edit v{version} --notes "..."` with a short changelog: 🚀 New Features, 🐛 Bug Fixes, ⚡ Improvements, then `**Full Changelog**: https://github.com/yzaazy/iRacing-Companion-Launcher/compare/v{prev}...v{version}`. Most important changes only, user-facing wording.
+
+**When the Python code is removed**: delete `version.py`, `tools/update_version.py`, `iracing_companion_launcher.spec` and the `version_info.txt` line in `.gitignore` (the file itself is generated and untracked); `requirements.txt` and the PyInstaller `dist/`/`build/` ignores go with them. Replace the four Python-era sections named above with this one.
+
 ## Project Overview
 
 This is a Windows desktop GUI application that launches and manages iRacing companion applications (Fanatec, Crew Chief V4, Trading Paints, and Garage61). Built with Python and Tkinter, it provides a modern dark-themed interface for batch launching/closing these applications with real-time status monitoring.

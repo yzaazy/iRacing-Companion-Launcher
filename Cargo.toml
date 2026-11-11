@@ -6,6 +6,16 @@ rust-version = "1.95"
 description = "Launches and manages iRacing companion applications"
 publish = false
 
+# String fields of the exe's version resource, embedded by build.rs. FileVersion and
+# ProductVersion come from `version` above.
+[package.metadata.winresource]
+CompanyName = "Tobias Termeczky"
+FileDescription = "iRacing Companion Launcher"
+InternalName = "iRacing Companion Launcher"
+LegalCopyright = "© 2026 Tobias Termeczky"
+OriginalFilename = "iRacing Companion Launcher.exe"
+ProductName = "iRacing Companion Launcher"
+
 [[bin]]
 name = "iracing-companion-launcher"
 path = "src/main.rs"
