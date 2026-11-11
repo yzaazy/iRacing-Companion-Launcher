@@ -1,0 +1,171 @@
+# Contracts
+
+The seams between agents. Each agent builds its own module against these and nobody waits on anybody. After wave 0 the contract is **frozen**: a change is the orchestrator's decision, so stop and report instead of editing a shared type.
+
+## Crate
+
+- One binary crate at the repo root. Package and binary name `iracing-companion-launcher`, edition 2024, version `3.0.0`. The installer renames the exe to `iRacing Companion Launcher.exe`.
+- Crates: `eframe`/`egui` for the UI, `windows` for every Win32 call, `rfd` for the file dialog, `serde` + `serde_json`, `winresource` as a build dependency, `egui_kittest` and `image` as dev dependencies. The INI reader/writer is hand-written because the file format must match Python's `configparser`.
+- `#![windows_subsystem = "windows"]` in release builds.
+
+## Layout and ownership
+
+| Path | Owner | Ports |
+|---|---|---|
+| `Cargo.toml`, `src/main.rs`, `src/contract.rs` | scaffold | — |
+| `src/core/definitions.rs`, `config.rs`, `log.rs` | core | `core/*.py` |
+| `src/process/mod.rs`, `tracker.rs` | process | `managers/process_manager.py`, `process_tracker.py` |
+| `src/detect/shortcuts.rs`, `steam.rs`, `paths.rs` | detect | `utils/*.py` |
+| `src/ui/theme.rs`, `layout.rs`, `widgets.rs`, `sections.rs`, `mod.rs`, `tests/ui_snapshots.rs` | ui | `ui/sections/`, `ui/widgets/`, `ui/constants.py` |
+| `src/managers.rs`, `src/app.rs`, `src/worker.rs` | controller | `managers/app_manager.py`, `game_manager.py`, `ui/main_window.py` |
+| `build.rs`, `windows installer.iss`, `CLAUDE.md`, `README.md` | packaging | `.spec`, `version.py`, `tools/update_version.py` |
+| `tools/capture_reference.py`, `tools/ui_diff.py`, `docs/rewrite/fixtures.json`, `ui-spec.json`, `reference/` | capture | — |
+
+The scaffold creates every module file as a compiling stub with the signatures below, so wave 1 agents fill in bodies and add private items.
+
+## Shared types (`src/contract.rs`)
+
+All derive `Debug, Clone, PartialEq` and serde `Serialize, Deserialize` with `snake_case` names, so a fixture file deserialises straight into `ViewState`.
+
+```rust
+pub enum Status { Idle, Starting, Running, Failed, Stopping, Stopped, NotFound }
+pub enum LogLevel { Info, Success, Error, Warning, Launch, Close, Divider }
+
+pub struct LogLine { pub level: LogLevel, pub text: String } // text is final, timestamp included
+pub struct AppCard { pub name: String, pub status: Status, pub checked: bool, pub helper_count: usize }
+pub struct GameCard { pub name: String, pub status: Status }
+
+pub struct ViewState {
+    pub version: String,
+    pub apps: Vec<AppCard>,
+    pub games: Vec<GameCard>,
+    pub selected_game: Option<String>, // None is the "None" radio
+    pub log: Vec<LogLine>,
+    pub select_all_label: String,
+    pub launch_label: String,
+    pub close_label: String,
+    pub launch_enabled: bool,
+    pub close_enabled: bool,
+}
+
+pub enum UiAction {
+    ToggleApp { name: String, checked: bool },
+    ToggleSelectAll,
+    SelectGame(Option<String>),
+    BrowseApp(String),
+    BrowseGame(String),
+    Launch,
+    Close,
+}
+
+pub enum Command {
+    Launch { apps: Vec<String>, game: Option<String> },
+    Close { apps: Vec<String>, game: Option<String> },
+}
+
+pub enum Event {
+    Log(LogLine),
+    AppStatus { name: String, status: Status, helper_count: usize },
+    GameStatus { name: String, status: Status },
+    LaunchFinished,
+    CloseFinished,
+}
+```
+
+## The UI seam
+
+```rust
+// src/ui/mod.rs
+pub fn draw(ctx: &egui::Context, state: &ViewState) -> Vec<UiAction>;
+// src/ui/layout.rs
+pub fn layout(window: egui::Vec2, n_apps: usize, n_games: usize) -> Layout;
+```
+
+- `draw` is a pure function of `ViewState`. The UI holds scroll position and hover, nothing else. Labels and enabled flags arrive computed.
+- Every position comes from `layout`, every colour and font size from `theme.rs`. `layout` is rule-based (margins, card height, gaps, column shares, minimum sizes) so the window can become resizable later, and a test asserts it reproduces `ui-spec.json` at 1200x700.
+- Card lists are drawn from `state.apps` and `state.games`, whatever their length.
+- Fonts: Segoe UI regular and bold and Consolas, loaded from `C:\Windows\Fonts` at startup, with egui's defaults as fallback.
+- The window is 1200x700 logical pixels, not resizable, title `iRacing Companion Launcher`.
+
+## Module APIs
+
+Names mirror the Python methods so the mapping stays obvious. Signatures may gain parameters that make them testable (a root directory, a state file path); they keep their meaning.
+
+```rust
+// core/definitions.rs
+pub struct AppDef { pub name: &'static str, pub exe: &'static str, pub shortcut_names: &'static [&'static str], pub paths: Vec<String>, pub needs_shell_launch: bool }
+pub struct GameDef { pub name: &'static str, pub exe: &'static str, pub shortcut_names: &'static [&'static str], pub steam_appid: &'static str, pub steam_folder: &'static str, pub paths: &'static [&'static str] }
+pub fn apps() -> Vec<AppDef>;   // Python order; Garage61's path resolved from %APPDATA%
+pub fn games() -> Vec<GameDef>; // Python order
+
+// core/config.rs
+pub fn resolve_config_dir() -> PathBuf;
+pub fn config_key(name: &str) -> String;
+impl ConfigStore {
+    pub fn load(dir: &Path) -> Self;
+    pub fn config_dir(&self) -> &Path;
+    pub fn app_path(&self, key: &str) -> Option<String>;      // only if it exists on disk
+    pub fn set_app_path(&mut self, key: &str, path: &str) -> bool; // saves
+    pub fn setting(&self, key: &str) -> Option<String>;
+    pub fn bool_setting(&self, key: &str, fallback: bool) -> bool;
+    pub fn set_setting(&mut self, key: &str, value: &str);     // does not save
+    pub fn save(&self) -> bool;
+}
+
+// core/log.rs
+pub fn line(level: LogLevel, message: &str) -> LogLine; // prefixes [HH:MM:SS]
+pub fn divider() -> LogLine;
+
+// process/mod.rs
+pub fn is_process_running(exe_name: &str) -> bool;
+pub fn kill_process(exe_name: &str) -> bool;
+pub fn launch_process(exe_path: &str, wait: Duration) -> bool; // detached, untracked
+pub fn shell_open(target: &str) -> std::io::Result<()>;
+
+// process/tracker.rs
+impl ProcessTracker {
+    pub fn new(state_file: PathBuf) -> Self;
+    pub fn launch_and_track(&mut self, key: &str, exe_path: &str, wait: Duration, needs_shell_launch: bool) -> bool;
+    pub fn is_tracked(&self, key: &str) -> bool;
+    pub fn is_tracked_running(&mut self, key: &str) -> (bool, usize);
+    pub fn get_child_names(&mut self, key: &str) -> Vec<String>;
+    pub fn close_tracked(&mut self, key: &str) -> bool;
+    pub fn forget(&mut self, key: &str);
+}
+
+// detect/
+pub fn find_shortcut_target(shortcut_names: &[&str], is_game: bool) -> Option<String>;
+pub fn find_path_in_list(paths: &[String]) -> Option<String>;
+pub fn check_steam_game_installed(appid: &str) -> bool;
+```
+
+`managers.rs`, `app.rs` and `worker.rs` belong to one agent and have no cross-agent seam beyond the types above.
+
+## Config and state location
+
+- `IRCL_CONFIG_DIR`, when set, wins.
+- Release build: `%APPDATA%\iRacingCompanionLauncher`, created if missing.
+- Debug build: `target/dev-config/` under the repo.
+- Tests always pass an explicit temp directory.
+
+## UI fixtures
+
+`docs/rewrite/fixtures.json` is `{ "<state>": ViewState }`. The Python capture script and the Rust snapshot tests both read it, so both render the same content. Timestamps in fixture log text are fixed strings, and `version` is `2.3.2` to match the reference screenshots.
+
+Required states:
+
+| State | Shows |
+|---|---|
+| `idle` | Every app found, checked and idle; every game found; None selected; startup log |
+| `mixed` | Running apps with 0, 1 and 3 helpers, one idle, one failed, one not found; a game selected; one game not found |
+| `none-selected` | Every app unchecked, no game: both buttons disabled, label "Select All" |
+| `all-missing` | Every app and game not found: Browse buttons everywhere |
+| `log-full` | More log lines than fit, every level present, one line long enough to wrap |
+
+The capture agent writes the reference image for each state to `docs/rewrite/reference/<state>.png`. The snapshot tests write `target/ui-snapshots/<state>.png`. `python tools/ui_diff.py` compares the two sets.
+
+## Testing rules
+
+- Process tests spawn their own dummy child (for example `ping -n 60 127.0.0.1` or `cmd /c timeout`) under a unique copied exe name where name matching is under test, and clean it up.
+- Detection tests build a fake Start Menu tree in a temp directory.
+- Config tests round-trip a fixture written in Python's exact format, including a Windows-1252 file with a non-ASCII path.

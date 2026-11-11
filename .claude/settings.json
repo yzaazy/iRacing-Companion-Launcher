@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo *)",
+      "PowerShell(cargo *)",
+      "Bash(pwsh tools/gate.ps1*)",
+      "PowerShell(pwsh tools/gate.ps1*)",
+      "PowerShell(./tools/gate.ps1*)",
+      "PowerShell(python tools/ui_diff.py*)",
+      "Bash(python tools/ui_diff.py*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "$j = [Console]::In.ReadToEnd() | ConvertFrom-Json; $f = $j.tool_input.file_path; if ($f -like '*.rs' -and (Test-Path $f)) { & \"$env:USERPROFILE\\.cargo\\bin\\rustfmt.exe\" --edition 2024 $f 2>$null }; exit 0",
+            "timeout": 20,
+            "statusMessage": "rustfmt"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -29,6 +29,9 @@ config.ini
 .DS_Store
 Thumbs.db
 
+# Rust build output
+target/
+
 # Installer output
 installer_output/
 

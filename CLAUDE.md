@@ -2,6 +2,23 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Rust rewrite (in progress on `rust-rewrite`)
+
+The app is being ported to Rust (egui/eframe) for release as v3.0.0. Until then the Python code is the **reference implementation**: read it, leave it unedited. Every section below this one describes the Python app.
+
+- **Spec**: the Python source. Port behaviour 1:1, known quirks included. [docs/rewrite/behaviour.md](docs/rewrite/behaviour.md) lists the parity traps that reading the code alone misses, and the only deliberate differences.
+- **Contract**: [docs/rewrite/contracts.md](docs/rewrite/contracts.md) fixes module layout, file ownership and the shared types. Read it before writing Rust. Changing a shared type is the orchestrator's call: stop and report.
+- **UI numbers**: `docs/rewrite/ui-spec.json` and `docs/rewrite/reference/*.png` are measured from the running Python app. Layout rules reproduce them at 1200x700.
+- **Gate**: `pwsh tools/gate.ps1` runs format, clippy with warnings as errors, and tests. Rust work is done when it prints `GATE GREEN`.
+- **Run**: `cargo run`. When `cargo` is not found, prepend `$env:USERPROFILE\.cargo\bin` to PATH.
+
+### Guardrails
+
+- The developer's real companion apps and games (Fanatec, Stream Deck, SimHub, iRacing and the rest) run on this machine. Tests launch and kill only **dummy processes** they started themselves, under names no real app uses. Pressing Launch or Close in a running build is the developer's step.
+- Debug builds and tests keep config and state under `target/dev-config/` or a temp directory. Only an installed release build uses `%APPDATA%\iRacingCompanionLauncher`.
+- Edit only the files your brief assigns to you.
+- Pushing, tagging, building the installer and releasing each wait for the user's explicit go.
+
 ## Project Overview
 
 This is a Windows desktop GUI application that launches and manages iRacing companion applications (Fanatec, Crew Chief V4, Trading Paints, and Garage61). Built with Python and Tkinter, it provides a modern dark-themed interface for batch launching/closing these applications with real-time status monitoring.
