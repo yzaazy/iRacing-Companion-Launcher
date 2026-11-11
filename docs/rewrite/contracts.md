@@ -4,7 +4,9 @@ The seams between agents. Each agent builds its own module against these and nob
 
 ## Crate
 
-- One binary crate at the repo root. Package and binary name `iracing-companion-launcher`, edition 2024, version `3.0.0`. The installer renames the exe to `iRacing Companion Launcher.exe`.
+- One package at the repo root: a library (`src/lib.rs`, which declares every module) and a thin binary (`src/main.rs`, the window shell). Tests under `tests/` use the library. Package and binary name `iracing-companion-launcher`, edition 2024, version `3.0.0`. The installer renames the exe to `iRacing Companion Launcher.exe`.
+- Versions are pinned in `Cargo.toml`: eframe, egui and egui_kittest 0.37, `windows` 0.62. Write against those APIs.
+- The module named `core` shadows nothing as long as code writes `crate::core::...`, never a bare `core::...`.
 - Crates: `eframe`/`egui` for the UI, `windows` for every Win32 call, `rfd` for the file dialog, `serde` + `serde_json`, `winresource` as a build dependency, `egui_kittest` and `image` as dev dependencies. The INI reader/writer is hand-written because the file format must match Python's `configparser`.
 - `#![windows_subsystem = "windows"]` in release builds.
 
@@ -12,7 +14,7 @@ The seams between agents. Each agent builds its own module against these and nob
 
 | Path | Owner | Ports |
 |---|---|---|
-| `Cargo.toml`, `src/main.rs`, `src/contract.rs` | scaffold | — |
+| `Cargo.toml`, `src/lib.rs`, `src/main.rs`, `src/contract.rs` | scaffold (frozen) | — |
 | `src/core/definitions.rs`, `config.rs`, `log.rs` | core | `core/*.py` |
 | `src/process/mod.rs`, `tracker.rs` | process | `managers/process_manager.py`, `process_tracker.py` |
 | `src/detect/shortcuts.rs`, `steam.rs`, `paths.rs` | detect | `utils/*.py` |
@@ -21,7 +23,9 @@ The seams between agents. Each agent builds its own module against these and nob
 | `build.rs`, `windows installer.iss`, `CLAUDE.md`, `README.md` | packaging | `.spec`, `version.py`, `tools/update_version.py` |
 | `tools/capture_reference.py`, `tools/ui_diff.py`, `docs/rewrite/fixtures.json`, `ui-spec.json`, `reference/` | capture | — |
 
-The scaffold creates every module file as a compiling stub with the signatures below, so wave 1 agents fill in bodies and add private items.
+The scaffold created every module file as a compiling stub with the signatures below, so wave 1 agents fill in bodies and add private items. Placeholder fields in `ConfigStore`, `ProcessTracker` and `Layout` are yours to replace if you own the file.
+
+Frozen files change only in two announced cases: the ui agent updates the one `ui::draw` call in `main.rs` when it changes the seam below, and the controller agent replaces the placeholder app in `main.rs` and removes the scaffold-only `#![allow(...)]` in `lib.rs` in wave 2. A missing `windows` feature is added as a single line in `Cargo.toml` and named in your report.
 
 ## Shared types (`src/contract.rs`)
 
@@ -76,11 +80,14 @@ pub enum Event {
 
 ```rust
 // src/ui/mod.rs
-pub fn draw(ctx: &egui::Context, state: &ViewState) -> Vec<UiAction>;
+pub fn draw(ui: &mut egui::Ui, state: &ViewState) -> Vec<UiAction>;
+pub fn install_fonts(ctx: &egui::Context);
 // src/ui/layout.rs
 pub fn layout(window: egui::Vec2, n_apps: usize, n_games: usize) -> Layout;
 ```
 
+- `draw` takes the root `Ui` that eframe 0.37 hands to `App::ui`. The scaffold stub still takes a `Context`; the ui agent changes it to this signature.
+- `install_fonts` is called once at startup by `main.rs` and by the snapshot harness (`with_context_setup`), so both render with the same fonts. egui's built-in fonts lack `●` and `─`, and egui_kittest fails a test on a missing glyph.
 - `draw` is a pure function of `ViewState`. The UI holds scroll position and hover, nothing else. Labels and enabled flags arrive computed.
 - Every position comes from `layout`, every colour and font size from `theme.rs`. `layout` is rule-based (margins, card height, gaps, column shares, minimum sizes) so the window can become resizable later, and a test asserts it reproduces `ui-spec.json` at 1200x700.
 - Card lists are drawn from `state.apps` and `state.games`, whatever their length.
@@ -139,7 +146,7 @@ pub fn find_path_in_list(paths: &[String]) -> Option<String>;
 pub fn check_steam_game_installed(appid: &str) -> bool;
 ```
 
-`managers.rs`, `app.rs` and `worker.rs` belong to one agent and have no cross-agent seam beyond the types above.
+`managers.rs`, `app.rs` and `worker.rs` belong to one agent and have no cross-agent seam beyond the types above. In eframe 0.37 the app implements `App::ui(&mut self, ui, frame)`, with `logic(ctx, frame)` available for work that is not drawing.
 
 ## Config and state location
 
