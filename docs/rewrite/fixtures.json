@@ -1,0 +1,763 @@
+{
+  "idle": {
+    "version": "2.3.2",
+    "apps": [
+      {
+        "name": "Fanatec",
+        "status": "idle",
+        "checked": true,
+        "helper_count": 0
+      },
+      {
+        "name": "Crew Chief V4",
+        "status": "idle",
+        "checked": true,
+        "helper_count": 0
+      },
+      {
+        "name": "Trading Paints",
+        "status": "idle",
+        "checked": true,
+        "helper_count": 0
+      },
+      {
+        "name": "SimHub",
+        "status": "idle",
+        "checked": true,
+        "helper_count": 0
+      },
+      {
+        "name": "Garage61",
+        "status": "idle",
+        "checked": true,
+        "helper_count": 0
+      },
+      {
+        "name": "Elgato Stream Deck",
+        "status": "idle",
+        "checked": true,
+        "helper_count": 0
+      },
+      {
+        "name": "MarvinsAIRA Refactored",
+        "status": "idle",
+        "checked": true,
+        "helper_count": 0
+      }
+    ],
+    "games": [
+      {
+        "name": "iRacing",
+        "status": "idle"
+      },
+      {
+        "name": "Assetto Corsa Competizione",
+        "status": "idle"
+      },
+      {
+        "name": "Assetto Corsa Evo",
+        "status": "idle"
+      },
+      {
+        "name": "Automobilista 2",
+        "status": "idle"
+      },
+      {
+        "name": "rFactor 2",
+        "status": "idle"
+      }
+    ],
+    "selected_game": null,
+    "log": [
+      {
+        "level": "divider",
+        "text": "──────────────────────────────────────────────────"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Checking application status..."
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Fanatec - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Crew Chief V4 - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Trading Paints - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] SimHub - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Garage61 - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Elgato Stream Deck - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] MarvinsAIRA Refactored - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] iRacing - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Assetto Corsa Competizione - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Assetto Corsa Evo - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Automobilista 2 - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] rFactor 2 - configured"
+      }
+    ],
+    "select_all_label": "Deselect All",
+    "launch_label": "Launch apps (7)",
+    "close_label": "Close all (7)",
+    "launch_enabled": true,
+    "close_enabled": true
+  },
+  "mixed": {
+    "version": "2.3.2",
+    "apps": [
+      {
+        "name": "Fanatec",
+        "status": "running",
+        "checked": true,
+        "helper_count": 1
+      },
+      {
+        "name": "Crew Chief V4",
+        "status": "running",
+        "checked": true,
+        "helper_count": 0
+      },
+      {
+        "name": "Trading Paints",
+        "status": "idle",
+        "checked": false,
+        "helper_count": 0
+      },
+      {
+        "name": "SimHub",
+        "status": "running",
+        "checked": true,
+        "helper_count": 3
+      },
+      {
+        "name": "Garage61",
+        "status": "failed",
+        "checked": true,
+        "helper_count": 0
+      },
+      {
+        "name": "Elgato Stream Deck",
+        "status": "not_found",
+        "checked": false,
+        "helper_count": 0
+      },
+      {
+        "name": "MarvinsAIRA Refactored",
+        "status": "starting",
+        "checked": true,
+        "helper_count": 0
+      }
+    ],
+    "games": [
+      {
+        "name": "iRacing",
+        "status": "running"
+      },
+      {
+        "name": "Assetto Corsa Competizione",
+        "status": "not_found"
+      },
+      {
+        "name": "Assetto Corsa Evo",
+        "status": "idle"
+      },
+      {
+        "name": "Automobilista 2",
+        "status": "failed"
+      },
+      {
+        "name": "rFactor 2",
+        "status": "idle"
+      }
+    ],
+    "selected_game": "iRacing",
+    "log": [
+      {
+        "level": "divider",
+        "text": "──────────────────────────────────────────────────"
+      },
+      {
+        "level": "launch",
+        "text": "[18:03:45] Starting launch sequence..."
+      },
+      {
+        "level": "info",
+        "text": "[18:03:45] Skipping Fanatec - already running"
+      },
+      {
+        "level": "info",
+        "text": "[18:03:45]   helpers: FanatecService.exe"
+      },
+      {
+        "level": "info",
+        "text": "[18:03:45] Skipping Crew Chief V4 - already running"
+      },
+      {
+        "level": "info",
+        "text": "[18:03:45] Launching SimHub..."
+      },
+      {
+        "level": "success",
+        "text": "[18:03:47] SimHub started successfully"
+      },
+      {
+        "level": "info",
+        "text": "[18:03:47]   helpers: SimHubUpdater.exe, CefSharp.BrowserSubprocess.exe, SimHub.Plugins.exe"
+      },
+      {
+        "level": "info",
+        "text": "[18:03:47] Launching Garage61..."
+      },
+      {
+        "level": "error",
+        "text": "[18:03:49] Garage61 failed to start"
+      },
+      {
+        "level": "warning",
+        "text": "[18:03:49] Try reinstalling Garage61"
+      },
+      {
+        "level": "info",
+        "text": "[18:03:49] Launching MarvinsAIRA Refactored..."
+      }
+    ],
+    "select_all_label": "Select All",
+    "launch_label": "Launch with iRacing (5)",
+    "close_label": "Close all (5)",
+    "launch_enabled": true,
+    "close_enabled": true
+  },
+  "none-selected": {
+    "version": "2.3.2",
+    "apps": [
+      {
+        "name": "Fanatec",
+        "status": "idle",
+        "checked": false,
+        "helper_count": 0
+      },
+      {
+        "name": "Crew Chief V4",
+        "status": "idle",
+        "checked": false,
+        "helper_count": 0
+      },
+      {
+        "name": "Trading Paints",
+        "status": "idle",
+        "checked": false,
+        "helper_count": 0
+      },
+      {
+        "name": "SimHub",
+        "status": "idle",
+        "checked": false,
+        "helper_count": 0
+      },
+      {
+        "name": "Garage61",
+        "status": "idle",
+        "checked": false,
+        "helper_count": 0
+      },
+      {
+        "name": "Elgato Stream Deck",
+        "status": "idle",
+        "checked": false,
+        "helper_count": 0
+      },
+      {
+        "name": "MarvinsAIRA Refactored",
+        "status": "idle",
+        "checked": false,
+        "helper_count": 0
+      }
+    ],
+    "games": [
+      {
+        "name": "iRacing",
+        "status": "idle"
+      },
+      {
+        "name": "Assetto Corsa Competizione",
+        "status": "idle"
+      },
+      {
+        "name": "Assetto Corsa Evo",
+        "status": "idle"
+      },
+      {
+        "name": "Automobilista 2",
+        "status": "idle"
+      },
+      {
+        "name": "rFactor 2",
+        "status": "idle"
+      }
+    ],
+    "selected_game": null,
+    "log": [
+      {
+        "level": "divider",
+        "text": "──────────────────────────────────────────────────"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Checking application status..."
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Fanatec - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Crew Chief V4 - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Trading Paints - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] SimHub - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Garage61 - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Elgato Stream Deck - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] MarvinsAIRA Refactored - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] iRacing - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Assetto Corsa Competizione - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Assetto Corsa Evo - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Automobilista 2 - configured"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] rFactor 2 - configured"
+      }
+    ],
+    "select_all_label": "Select All",
+    "launch_label": "Launch apps (0)",
+    "close_label": "Close all (0)",
+    "launch_enabled": false,
+    "close_enabled": false
+  },
+  "all-missing": {
+    "version": "2.3.2",
+    "apps": [
+      {
+        "name": "Fanatec",
+        "status": "not_found",
+        "checked": false,
+        "helper_count": 0
+      },
+      {
+        "name": "Crew Chief V4",
+        "status": "not_found",
+        "checked": false,
+        "helper_count": 0
+      },
+      {
+        "name": "Trading Paints",
+        "status": "not_found",
+        "checked": false,
+        "helper_count": 0
+      },
+      {
+        "name": "SimHub",
+        "status": "not_found",
+        "checked": false,
+        "helper_count": 0
+      },
+      {
+        "name": "Garage61",
+        "status": "not_found",
+        "checked": false,
+        "helper_count": 0
+      },
+      {
+        "name": "Elgato Stream Deck",
+        "status": "not_found",
+        "checked": false,
+        "helper_count": 0
+      },
+      {
+        "name": "MarvinsAIRA Refactored",
+        "status": "not_found",
+        "checked": false,
+        "helper_count": 0
+      }
+    ],
+    "games": [
+      {
+        "name": "iRacing",
+        "status": "not_found"
+      },
+      {
+        "name": "Assetto Corsa Competizione",
+        "status": "not_found"
+      },
+      {
+        "name": "Assetto Corsa Evo",
+        "status": "not_found"
+      },
+      {
+        "name": "Automobilista 2",
+        "status": "not_found"
+      },
+      {
+        "name": "rFactor 2",
+        "status": "not_found"
+      }
+    ],
+    "selected_game": null,
+    "log": [
+      {
+        "level": "divider",
+        "text": "──────────────────────────────────────────────────"
+      },
+      {
+        "level": "info",
+        "text": "[09:41:00] Checking application status..."
+      },
+      {
+        "level": "warning",
+        "text": "[09:41:00] Fanatec - not configured"
+      },
+      {
+        "level": "warning",
+        "text": "[09:41:00] Crew Chief V4 - not configured"
+      },
+      {
+        "level": "warning",
+        "text": "[09:41:00] Trading Paints - not configured"
+      },
+      {
+        "level": "warning",
+        "text": "[09:41:00] SimHub - not configured"
+      },
+      {
+        "level": "warning",
+        "text": "[09:41:00] Garage61 - not configured"
+      },
+      {
+        "level": "warning",
+        "text": "[09:41:00] Elgato Stream Deck - not configured"
+      },
+      {
+        "level": "warning",
+        "text": "[09:41:00] MarvinsAIRA Refactored - not configured"
+      },
+      {
+        "level": "warning",
+        "text": "[09:41:00] iRacing - not configured"
+      },
+      {
+        "level": "warning",
+        "text": "[09:41:00] Assetto Corsa Competizione - not configured"
+      },
+      {
+        "level": "warning",
+        "text": "[09:41:00] Assetto Corsa Evo - not configured"
+      },
+      {
+        "level": "warning",
+        "text": "[09:41:00] Automobilista 2 - not configured"
+      },
+      {
+        "level": "warning",
+        "text": "[09:41:00] rFactor 2 - not configured"
+      }
+    ],
+    "select_all_label": "Select All",
+    "launch_label": "Launch apps (0)",
+    "close_label": "Close all (0)",
+    "launch_enabled": false,
+    "close_enabled": false
+  },
+  "log-full": {
+    "version": "2.3.2",
+    "apps": [
+      {
+        "name": "Fanatec",
+        "status": "stopped",
+        "checked": true,
+        "helper_count": 0
+      },
+      {
+        "name": "Crew Chief V4",
+        "status": "idle",
+        "checked": true,
+        "helper_count": 0
+      },
+      {
+        "name": "Trading Paints",
+        "status": "stopped",
+        "checked": true,
+        "helper_count": 0
+      },
+      {
+        "name": "SimHub",
+        "status": "idle",
+        "checked": false,
+        "helper_count": 0
+      },
+      {
+        "name": "Garage61",
+        "status": "idle",
+        "checked": false,
+        "helper_count": 0
+      },
+      {
+        "name": "Elgato Stream Deck",
+        "status": "idle",
+        "checked": false,
+        "helper_count": 0
+      },
+      {
+        "name": "MarvinsAIRA Refactored",
+        "status": "idle",
+        "checked": false,
+        "helper_count": 0
+      }
+    ],
+    "games": [
+      {
+        "name": "iRacing",
+        "status": "idle"
+      },
+      {
+        "name": "Assetto Corsa Competizione",
+        "status": "idle"
+      },
+      {
+        "name": "Assetto Corsa Evo",
+        "status": "idle"
+      },
+      {
+        "name": "Automobilista 2",
+        "status": "idle"
+      },
+      {
+        "name": "rFactor 2",
+        "status": "idle"
+      }
+    ],
+    "selected_game": "iRacing",
+    "log": [
+      {
+        "level": "divider",
+        "text": "──────────────────────────────────────────────────"
+      },
+      {
+        "level": "info",
+        "text": "[19:19:58] Checking application status..."
+      },
+      {
+        "level": "info",
+        "text": "[19:19:58] Fanatec - configured"
+      },
+      {
+        "level": "info",
+        "text": "[19:19:58] Crew Chief V4 - configured"
+      },
+      {
+        "level": "info",
+        "text": "[19:19:58] Trading Paints - configured"
+      },
+      {
+        "level": "info",
+        "text": "[19:19:58] SimHub - configured"
+      },
+      {
+        "level": "info",
+        "text": "[19:19:58] Garage61 - configured"
+      },
+      {
+        "level": "info",
+        "text": "[19:19:58] Elgato Stream Deck - configured"
+      },
+      {
+        "level": "info",
+        "text": "[19:19:58] MarvinsAIRA Refactored - configured"
+      },
+      {
+        "level": "info",
+        "text": "[19:19:58] iRacing - configured"
+      },
+      {
+        "level": "info",
+        "text": "[19:19:58] Assetto Corsa Competizione - configured"
+      },
+      {
+        "level": "info",
+        "text": "[19:19:58] Assetto Corsa Evo - configured"
+      },
+      {
+        "level": "info",
+        "text": "[19:19:58] Automobilista 2 - configured"
+      },
+      {
+        "level": "info",
+        "text": "[19:19:58] rFactor 2 - configured"
+      },
+      {
+        "level": "divider",
+        "text": "──────────────────────────────────────────────────"
+      },
+      {
+        "level": "launch",
+        "text": "[19:20:05] Starting launch sequence..."
+      },
+      {
+        "level": "info",
+        "text": "[19:20:05] Launching Fanatec..."
+      },
+      {
+        "level": "success",
+        "text": "[19:20:07] Fanatec started successfully"
+      },
+      {
+        "level": "info",
+        "text": "[19:20:07]   helpers: FanatecService.exe"
+      },
+      {
+        "level": "info",
+        "text": "[19:20:07] Launching Crew Chief V4..."
+      },
+      {
+        "level": "error",
+        "text": "[19:20:09] Crew Chief V4 failed to start"
+      },
+      {
+        "level": "warning",
+        "text": "[19:20:09] Try reinstalling Crew Chief V4"
+      },
+      {
+        "level": "info",
+        "text": "[19:20:09] Launching Trading Paints..."
+      },
+      {
+        "level": "success",
+        "text": "[19:20:11] Trading Paints started successfully"
+      },
+      {
+        "level": "success",
+        "text": "[19:20:11] All apps launched!"
+      },
+      {
+        "level": "launch",
+        "text": "[19:20:11] Launching iRacing..."
+      },
+      {
+        "level": "success",
+        "text": "[19:20:14] iRacing started successfully"
+      },
+      {
+        "level": "success",
+        "text": "[19:20:14] Launch sequence complete!"
+      },
+      {
+        "level": "error",
+        "text": "[19:31:40] Invalid file selected. Expected CrewChiefV4.exe, got CrewChiefV4_Setup_4.18.3.exe"
+      },
+      {
+        "level": "divider",
+        "text": "──────────────────────────────────────────────────"
+      },
+      {
+        "level": "close",
+        "text": "[19:45:02] Closing applications..."
+      },
+      {
+        "level": "info",
+        "text": "[19:45:02] Closing Fanatec..."
+      },
+      {
+        "level": "info",
+        "text": "[19:45:02]   helpers to close: FanatecService.exe"
+      },
+      {
+        "level": "success",
+        "text": "[19:45:05] Fanatec closed"
+      },
+      {
+        "level": "info",
+        "text": "[19:45:05] Closing Crew Chief V4..."
+      },
+      {
+        "level": "warning",
+        "text": "[19:45:05] Crew Chief V4 was not running"
+      },
+      {
+        "level": "info",
+        "text": "[19:45:05] Closing Trading Paints..."
+      },
+      {
+        "level": "success",
+        "text": "[19:45:06] Trading Paints closed"
+      },
+      {
+        "level": "success",
+        "text": "[19:45:06] iRacing was closed manually"
+      },
+      {
+        "level": "success",
+        "text": "[19:45:06] All apps closed!"
+      }
+    ],
+    "select_all_label": "Select All",
+    "launch_label": "Launch with iRacing (3)",
+    "close_label": "Close all (3)",
+    "launch_enabled": true,
+    "close_enabled": true
+  }
+}
