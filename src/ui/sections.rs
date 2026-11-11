@@ -650,6 +650,8 @@ fn log(ui: &mut Ui, geom: &Geometry, state: &ViewState) {
         .scope_builder(egui::UiBuilder::new().max_rect(inner.rect()), |ui| {
             ui.visuals_mut().selection.bg_fill = theme::LOG_SELECTION;
             ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+            // Tk's Text widget does not fade its edges when scrolled.
+            ui.spacing_mut().scroll.fade.strength = 0.0;
             area.show(ui, |ui| {
                 // A selectable label, but with each line's baseline where Tk puts it: `ascent`
                 // below the line's top.

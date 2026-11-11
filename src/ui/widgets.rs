@@ -118,7 +118,11 @@ pub fn button(ctx: &egui::Context, painter: &Painter, look: &ButtonLook<'_>) {
     } else {
         look.colors.fill
     };
-    rounded(painter, look.rect.painted(), look.corner_radius, fill);
+    let painted = look.rect.painted();
+    rounded(painter, painted, look.corner_radius, fill);
+    if look.corner_radius >= theme::ACTION_BUTTON_RADIUS && look.rect.w % 2 == 1 {
+        corner_overhang(painter, painted, look.corner_radius, fill);
+    }
     let color = if look.enabled {
         look.colors.text
     } else {
@@ -134,6 +138,30 @@ pub fn button(ctx: &egui::Context, painter: &Painter, look: &ButtonLook<'_>) {
         look.label.x + 1,
         look.label.y + 1,
     );
+}
+
+/// The right-hand corner glyphs' overhang into the unpainted last column of an odd-width canvas,
+/// rasterised by area coverage: a box that thin is below what egui's feathering can draw.
+fn corner_overhang(painter: &Painter, painted: Bounds, corner_radius: f32, fill: Color32) {
+    let x = painted.right();
+    let mut mesh = egui::Mesh::default();
+    for cy in [
+        painted.y as f32 + corner_radius,
+        painted.bottom() as f32 - corner_radius,
+    ] {
+        let (top, bottom) = (
+            cy - theme::ACTION_CORNER_OVERHANG_ABOVE,
+            cy + theme::ACTION_CORNER_OVERHANG_BELOW,
+        );
+        for row in top.floor() as i32..bottom.ceil() as i32 {
+            let covered = (bottom.min(row as f32 + 1.0) - top.max(row as f32)).max(0.0);
+            mesh.add_colored_rect(
+                Bounds::new(x, row, 1, 1).rect(),
+                fill.gamma_multiply(covered * theme::ACTION_CORNER_OVERHANG),
+            );
+        }
+    }
+    painter.add(Shape::mesh(mesh));
 }
 
 /// The log's CTkScrollbar thumb for the visible fraction `start..end` of the content: a pill as

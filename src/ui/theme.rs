@@ -86,6 +86,15 @@ pub const HEADER_RADIUS: f32 = 6.0;
 pub const LOG_RADIUS: f32 = 6.0;
 pub const SMALL_BUTTON_RADIUS: f32 = 6.0;
 pub const ACTION_BUTTON_RADIUS: f32 = 12.0;
+/// CTk draws corners with anti-aliased circle glyphs. The 24 px glyph of a radius-12 corner
+/// overhangs the even-floored canvas on the right by about half a pixel over four rows around
+/// the corner's centre; an odd-width button shows it in its last, unpainted column
+/// (`ui-spec.json` `notes.even_floor_painting`: the 205 px Launch button). Measured there:
+/// 0.545 px wide, from 1.75 px above to 1.9 px below the corner centre. Radius-6 corners show
+/// no overhang.
+pub const ACTION_CORNER_OVERHANG: f32 = 0.545;
+pub const ACTION_CORNER_OVERHANG_ABOVE: f32 = 1.75;
+pub const ACTION_CORNER_OVERHANG_BELOW: f32 = 1.9;
 pub const CHECKBOX_RADIUS: f32 = 6.0;
 pub const CHECKBOX_BORDER_WIDTH: f32 = 3.0;
 pub const RADIO_BORDER_UNCHECKED: f32 = 3.0;

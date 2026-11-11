@@ -139,14 +139,14 @@ def edge_zones(st: dict) -> list[dict]:
     return zones
 
 
-def shape_bbox(img: Image.Image, box, bg) -> tuple | None:
-    """Bounding box (x0, y0, x1, y1 exclusive) of pixels in box that differ from bg."""
+def shape_bbox(img: Image.Image, box, bg, tol: int) -> tuple | None:
+    """Bounding box (x0, y0, x1, y1 exclusive) of pixels in box that differ from bg by more than tol."""
     x0, y0, x1, y1 = box
     px = img.load()
     found = None
     for y in range(y0, y1):
         for x in range(x0, x1):
-            if dist(px[x, y], bg) > INK_THRESHOLD // 2:
+            if dist(px[x, y], bg) > tol:
                 if found is None:
                     found = [x, y, x + 1, y + 1]
                 else:
@@ -172,7 +172,7 @@ def check_zone(zone: dict, ref: Image.Image, new: Image.Image, tol: int) -> dict
             )
             if not edge:
                 non_edge.append((x, y))
-    rb, nb = shape_bbox(ref, box, bg), shape_bbox(new, box, bg)
+    rb, nb = shape_bbox(ref, box, bg, tol), shape_bbox(new, box, bg, tol)
     res = {"name": zone["name"], "box": box, "non_edge": non_edge, "ref_bbox": rb, "new_bbox": nb}
     res["ok"] = not non_edge and rb == nb
     return res
