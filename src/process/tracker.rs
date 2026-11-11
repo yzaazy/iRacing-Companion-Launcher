@@ -18,8 +18,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
 use super::{
-    ProcError, WaitOutcome, create_time, pids_by_exe, proc_kill, proc_wait, shell_open, snapshot,
-    spawn_detached,
+    ProcError, WaitOutcome, create_time, identity, kill_if_same, pids_by_exe, proc_wait,
+    shell_open, snapshot, spawn_detached,
 };
 
 /// Tolerance (seconds) when comparing persisted vs. live creation time. Python
@@ -163,20 +163,10 @@ impl ProcessTracker {
         let targets: Vec<Target> = std::iter::once(root)
             .chain(descendants.iter().map(|c| Target {
                 pid: c.pid,
-                create_time: c.create_time,
+                identity: c.identity,
             }))
             .collect();
-        for t in &targets {
-            terminate(t);
-        }
-
-        // Some descendants (Stream Deck's uiAccess-related helpers) deny
-        // SYNCHRONIZE, so waiting fails; Python then treats nothing as alive and
-        // skips the kill pass entirely. terminate() above already signalled them.
-        let alive = wait_procs(&targets, CLOSE_WAIT).unwrap_or_default();
-        for t in &alive {
-            terminate(t);
-        }
+        close_tree(&targets);
 
         self.drop_key(key);
         true
@@ -204,13 +194,10 @@ impl ProcessTracker {
         };
         let live = u32::try_from(entry.pid)
             .ok()
-            .and_then(|pid| create_time(pid).ok().map(|ct| (pid, ct)));
+            .and_then(|pid| identified(pid).ok().map(|(ident, ct)| (pid, ident, ct)));
         match live {
-            Some((pid, ct)) if (ct - entry.create_time).abs() <= CREATE_TIME_EPSILON => {
-                Some(Target {
-                    pid,
-                    create_time: ct,
-                })
+            Some((pid, identity, ct)) if (ct - entry.create_time).abs() <= CREATE_TIME_EPSILON => {
+                Some(Target { pid, identity })
             }
             // Gone, inaccessible, or the PID now belongs to another process.
             _ => {
@@ -409,18 +396,31 @@ fn basename(path: &str) -> &str {
 // Process tree (psutil semantics)
 // ---------------------------------------------------------------------------
 
-/// A process identified by PID and creation time.
+/// A `psutil.Process` as the Python holds it: the PID and the identity taken
+/// when the object was made (`_ident`, the fast creation time or `None`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Target {
     pid: u32,
-    create_time: f64,
+    identity: Option<f64>,
 }
 
 #[derive(Debug, Clone)]
 struct Descendant {
     pid: u32,
-    create_time: f64,
+    identity: Option<f64>,
     name: String,
+}
+
+/// `psutil.Process(pid)` then `.create_time()`: the identity, and the creation
+/// time, which psutil caches from the identity or reads through the slower
+/// fallback when the fast path was refused.
+fn identified(pid: u32) -> Result<(Option<f64>, f64), ProcError> {
+    let ident = identity(pid)?;
+    let ct = match ident {
+        Some(ct) => ct,
+        None => create_time(pid)?,
+    };
+    Ok((ident, ct))
 }
 
 /// psutil's `Process.children(recursive=True)`: walk a snapshot of parent PIDs
@@ -445,11 +445,11 @@ fn children(root_pid: u32) -> Result<Vec<Descendant>, ProcError> {
         }
         for &i in by_parent.get(&pid).map(Vec::as_slice).unwrap_or_default() {
             let child = &snap[i];
-            match create_time(child.pid) {
-                Ok(ct) if root_ctime <= ct => {
+            match identified(child.pid) {
+                Ok((identity, ct)) if root_ctime <= ct => {
                     out.push(Descendant {
                         pid: child.pid,
-                        create_time: ct,
+                        identity,
                         name: child.name.clone(),
                     });
                     stack.push(child.pid);
@@ -462,13 +462,27 @@ fn children(root_pid: u32) -> Result<Vec<Descendant>, ProcError> {
     Ok(out)
 }
 
-/// psutil's `terminate()`/`kill()` (identical on Windows): skip a PID now owned
-/// by another process, otherwise `TerminateProcess`. Errors are swallowed.
-fn terminate(t: &Target) {
-    if matches!(create_time(t.pid), Ok(ct) if ct != t.create_time) {
-        return;
+/// The terminate, wait and kill passes of `close_tracked`.
+fn close_tree(targets: &[Target]) {
+    for t in targets {
+        terminate(t);
     }
-    let _ = proc_kill(t.pid);
+
+    // Some descendants (Stream Deck's uiAccess-related helpers) deny
+    // SYNCHRONIZE, so waiting fails; Python then treats nothing as alive and
+    // skips the kill pass entirely. terminate() above already signalled them.
+    let alive = wait_procs(targets, CLOSE_WAIT).unwrap_or_default();
+    for t in &alive {
+        terminate(t);
+    }
+}
+
+/// psutil's `terminate()`/`kill()` (identical on Windows): `_raise_if_pid_reused`
+/// compares a fresh identity with the one the object was made with and skips a
+/// PID now owned by another process, otherwise `TerminateProcess`. The check and
+/// the kill go through one handle. Errors are swallowed.
+fn terminate(t: &Target) {
+    let _ = kill_if_same(t.pid, t.identity);
 }
 
 /// psutil's `wait_procs(targets, timeout)`: returns the processes still alive.
@@ -570,5 +584,89 @@ mod tests {
         for v in ["true", "1", "\"a\"", "[0]", "{\"a\": 1}"] {
             assert!(!is_falsy(&serde_json::from_str(v).unwrap()), "{v}");
         }
+    }
+
+    /// A dummy tree the test starts itself, `cmd` running `ping`, so neither
+    /// can be a real app. Members are only ever killed by PID.
+    struct DummyTree {
+        root: std::process::Child,
+        members: Vec<Target>,
+    }
+
+    impl DummyTree {
+        fn spawn() -> Self {
+            let root = std::process::Command::new("cmd")
+                .args(["/c", "ping -n 60 127.0.0.1 >nul"])
+                .stdout(std::process::Stdio::null())
+                .spawn()
+                .unwrap();
+            Self {
+                root,
+                members: Vec::new(),
+            }
+        }
+
+        fn alive(pid: u32) -> bool {
+            proc_wait(pid, Duration::ZERO) == Ok(WaitOutcome::TimedOut)
+        }
+    }
+
+    impl Drop for DummyTree {
+        fn drop(&mut self) {
+            for t in &self.members {
+                let _ = kill_if_same(t.pid, t.identity);
+            }
+            let _ = self.root.kill();
+            let _ = self.root.wait();
+        }
+    }
+
+    #[test]
+    fn close_spares_a_member_whose_identity_no_longer_matches() {
+        let mut tree = DummyTree::spawn();
+        let root_pid = tree.root.id();
+        let start = Instant::now();
+        let ping = loop {
+            let found = children(root_pid)
+                .unwrap()
+                .into_iter()
+                .find(|c| c.name.eq_ignore_ascii_case("ping.exe"));
+            if let Some(ping) = found {
+                break ping;
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "ping never started"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        let (root_ident, _) = identified(root_pid).unwrap();
+        let mut targets = vec![Target {
+            pid: root_pid,
+            identity: root_ident,
+        }];
+        for c in children(root_pid).unwrap() {
+            targets.push(Target {
+                pid: c.pid,
+                identity: c.identity,
+            });
+        }
+        tree.members = targets.clone();
+        assert!(ping.identity.is_some(), "our own child is readable");
+
+        // The ping as an earlier holder of its PID would have recorded it: the
+        // PID changed hands after enumeration, so it is now another process.
+        for t in &mut targets {
+            if t.pid == ping.pid {
+                t.identity = ping.identity.map(|ct| ct - 1.0);
+            }
+        }
+        close_tree(&targets);
+
+        assert!(DummyTree::alive(ping.pid), "a reused PID is never killed");
+        for t in targets.iter().filter(|t| t.pid != ping.pid) {
+            assert!(!DummyTree::alive(t.pid), "tree member {} survived", t.pid);
+        }
+        assert!(tree.root.try_wait().unwrap().is_some());
     }
 }

@@ -65,6 +65,14 @@ fn window_icon(ico: &[u8]) -> Option<egui::IconData> {
     eframe::icon_data::from_png_bytes(best?.1).ok()
 }
 
+/// Fonts and options for the app's egui context.
+fn configure_context(ctx: &egui::Context) {
+    ui::install_fonts(ctx);
+    // egui zooms the window on Ctrl+Plus/Minus/0 by default; the Python app has
+    // no such keys, and a zoomed window breaks the fixed 1200x700 layout.
+    ctx.options_mut(|o| o.zoom_with_keyboard = false);
+}
+
 fn main() -> eframe::Result {
     // iRacingLauncherGUI.__init__: config, tracker, managers, then the startup
     // checks, all before the window first paints.
@@ -95,7 +103,7 @@ fn main() -> eframe::Result {
         WINDOW_TITLE,
         options,
         Box::new(move |cc| {
-            ui::install_fonts(&cc.egui_ctx);
+            configure_context(&cc.egui_ctx);
             let ctx = cc.egui_ctx.clone();
             let sequencer = Sequencer::new(Box::new(managers), startup.game_statuses());
             let worker = Worker::spawn(sequencer, move || ctx.request_repaint());
@@ -108,11 +116,49 @@ fn main() -> eframe::Result {
 
 #[cfg(test)]
 mod tests {
-    use super::{ICON, window_icon};
+    use super::{ICON, configure_context, window_icon};
 
     #[test]
     fn embedded_icon_decodes() {
         let icon = window_icon(ICON).expect("iRCL.ico holds a PNG image");
         assert_eq!((icon.width, icon.height), (256, 256));
+    }
+
+    /// A frame in which Ctrl and `key` are pressed; returns the zoom factor that follows.
+    fn zoom_after(ctx: &egui::Context, key: egui::Key) -> f32 {
+        let input = egui::RawInput {
+            events: vec![egui::Event::Key {
+                key,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::COMMAND,
+            }],
+            ..Default::default()
+        };
+        // A new zoom factor takes effect when the next frame begins.
+        for input in [input, egui::RawInput::default()] {
+            ctx.run_ui(input, |_| {}).textures_delta.clear();
+        }
+        ctx.zoom_factor()
+    }
+
+    #[test]
+    fn keyboard_zoom_is_off() {
+        // Control: an unconfigured context does zoom on Ctrl+=.
+        let default = egui::Context::default();
+        assert_eq!(zoom_after(&default, egui::Key::Equals), 1.1);
+
+        let ctx = egui::Context::default();
+        configure_context(&ctx);
+        assert!(!ctx.options(|o| o.zoom_with_keyboard));
+        for key in [
+            egui::Key::Plus,
+            egui::Key::Equals,
+            egui::Key::Minus,
+            egui::Key::Num0,
+        ] {
+            assert_eq!(zoom_after(&ctx, key), 1.0, "{key:?}");
+        }
     }
 }
