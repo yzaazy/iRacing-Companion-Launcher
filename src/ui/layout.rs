@@ -52,6 +52,11 @@ impl Bounds {
         Self::new(self.x, self.y, self.w & !1, self.h & !1)
     }
 
+    /// Tk unmaps a packed widget whose width or height comes out zero or less.
+    pub fn is_mapped(&self) -> bool {
+        self.w > 0 && self.h > 0
+    }
+
     /// Shrink by `d` on every side.
     pub fn inset(&self, d: i32) -> Self {
         Self::new(self.x + d, self.y + d, self.w - 2 * d, self.h - 2 * d)
@@ -487,7 +492,8 @@ pub struct CardParts {
     pub browse_req: Option<(i32, i32)>,
 }
 
-/// Text widths the heading rows need: the packer serves the left label before the button.
+/// A heading row: the label packed left, then the optional button packed right, which gets
+/// what the label leaves.
 fn heading_row_slaves(heading_w: i32, button: Option<(i32, i32)>) -> Vec<Slave> {
     let mut slaves = vec![Slave::new(Side::Left, heading_w, LABEL_H)];
     if let Some(req) = button {

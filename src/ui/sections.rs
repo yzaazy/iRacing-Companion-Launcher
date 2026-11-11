@@ -10,7 +10,7 @@ use crate::ui::layout::{self, Anchor, Bounds, ButtonRow, CardParts, Layout, LogT
 use crate::ui::text::{self, Run};
 use crate::ui::theme::{self, Font};
 use crate::ui::widgets::{self, ButtonLook};
-use egui::{Color32, CursorIcon, Id, Sense, Ui, Role, WidgetInfo};
+use egui::{Color32, CursorIcon, Id, Role, Sense, Ui, WidgetInfo};
 use std::sync::Arc;
 
 pub const FOOTER_TEXT: &str = "© 2026 Developed & Designed by Tobias Termeczky • Vibed with Claude";
@@ -59,6 +59,9 @@ impl TextGeom {
     }
 
     fn paint(&self, ctx: &egui::Context, painter: &egui::Painter, color: Color32) {
+        if !self.label.is_mapped() {
+            return;
+        }
         text::paint_block(
             ctx, painter, &self.text, &self.font, color, self.left, self.top,
         );
@@ -369,16 +372,12 @@ pub fn geometry(ctx: &egui::Context, state: &ViewState, window: egui::Vec2) -> G
 /// The whole log as one galley: every line in its level's colour, each followed by a newline as
 /// Tk inserts it, wrapped at any character to the Text widget's inner width.
 pub fn log_galley(ctx: &egui::Context, state: &ViewState, inner_width: f32) -> Arc<egui::Galley> {
-    let mut lines: Vec<(String, Color32)> = Vec::with_capacity(state.log.len());
-    for line in &state.log {
-        let color = theme::log_color(&line.level);
-        let text = if line.level == LogLevel::Divider || line.text.ends_with('\n') {
-            format!("{}\n", line.text.trim_end_matches('\n'))
-        } else {
-            format!("{}\n", line.text)
-        };
-        lines.push((text, color));
-    }
+    // ActivityLogger inserts the text plus a newline, so a newline ends every line, the last too.
+    let lines: Vec<(String, Color32)> = state
+        .log
+        .iter()
+        .map(|line| (format!("{}\n", line.text), theme::log_color(&line.level)))
+        .collect();
     let runs: Vec<Run<'_>> = lines
         .iter()
         .map(|(text, color)| Run {
@@ -416,6 +415,9 @@ fn button(
     enabled: bool,
     a11y: &str,
 ) -> bool {
+    if !geom.rect.is_mapped() {
+        return false;
+    }
     let response = clickable(
         ui,
         id,
@@ -464,6 +466,9 @@ fn game_card(
     selected: bool,
     actions: &mut Vec<UiAction>,
 ) {
+    if !geom.card.is_mapped() {
+        return;
+    }
     let painter = ui.painter();
     let found = game.is_none_or(|g| g.status != Status::NotFound);
     let border = if game.is_some() {
@@ -523,6 +528,9 @@ fn game_card(
 }
 
 fn app_card(ui: &Ui, id: Id, geom: &AppCardGeom, app: &AppCard, actions: &mut Vec<UiAction>) {
+    if !geom.card.is_mapped() {
+        return;
+    }
     let painter = ui.painter();
     widgets::bordered(
         painter,
@@ -627,6 +635,7 @@ fn log(ui: &mut Ui, geom: &Geometry, state: &ViewState) {
     // CTkScrollbar does.
     if let Some(bar) = geom.log.scrollbar {
         let response = ui.interact(bar.rect(), id.with("scrollbar"), Sense::click_and_drag());
+        response.widget_info(|| WidgetInfo::labeled(Role::ScrollBar, true, LOG_HEADING));
         if let Some(pointer) = response.interact_pointer_pos()
             && (response.dragged() || response.is_pointer_button_down_on())
         {
@@ -652,6 +661,9 @@ fn log(ui: &mut Ui, geom: &Geometry, state: &ViewState) {
             ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
             // Tk's Text widget does not fade its edges when scrolled.
             ui.spacing_mut().scroll.fade.strength = 0.0;
+            // Nor does it coast or overscroll; momentum would also carry on past a jump to the end.
+            ui.spacing_mut().scroll.kinetic.decay_time = 0.0;
+            ui.spacing_mut().scroll.kinetic.rubber_band = false;
             area.show(ui, |ui| {
                 // A selectable label, but with each line's baseline where Tk puts it: `ascent`
                 // below the line's top.
@@ -659,6 +671,7 @@ fn log(ui: &mut Ui, geom: &Geometry, state: &ViewState) {
                 let shift = font.ascent as f32 - text::baseline_offset(&galley, font);
                 let sense = Sense::click_and_drag() - Sense::FOCUSABLE;
                 let (rect, response) = ui.allocate_exact_size(galley.size(), sense);
+                response.widget_info(|| WidgetInfo::labeled(Role::Label, true, LOG_HEADING));
                 let response = response.on_hover_cursor(CursorIcon::Text);
                 egui::text_selection::LabelSelectionState::label_text_selection(
                     ui,

@@ -87,6 +87,9 @@ const DOT_CENTRE_ABOVE_BASELINE: f32 = 11.5;
 
 /// The status dot, painted as the disk the `●` glyph draws in its label.
 pub fn dot(painter: &Painter, label: Bounds, color: Color32) {
+    if !label.is_mapped() {
+        return;
+    }
     let font = &theme::DOT_FONT;
     let top = label.y + (label.h - font.linespace()) / 2;
     let baseline = (top + font.ascent) as f32;
