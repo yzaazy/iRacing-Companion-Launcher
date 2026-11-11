@@ -21,7 +21,8 @@ The seams between agents. Each agent builds its own module against these and nob
 | `src/ui/theme.rs`, `layout.rs`, `widgets.rs`, `sections.rs`, `mod.rs`, `tests/ui_snapshots.rs` | ui | `ui/sections/`, `ui/widgets/`, `ui/constants.py` |
 | `src/managers.rs`, `src/app.rs`, `src/worker.rs` | controller | `managers/app_manager.py`, `game_manager.py`, `ui/main_window.py` |
 | `build.rs`, `windows installer.iss`, `CLAUDE.md`, `README.md` | packaging | `.spec`, `version.py`, `tools/update_version.py` |
-| `tools/capture_reference.py`, `tools/ui_diff.py`, `docs/rewrite/fixtures.json`, `ui-spec.json`, `reference/` | capture | — |
+| `tools/capture_reference.py`, `docs/rewrite/fixtures.json`, `ui-spec.json`, `reference/` | capture (done, frozen) | — |
+| `tools/ui_diff.py` | ui, from wave 1 | — |
 
 The scaffold created every module file as a compiling stub with the signatures below, so wave 1 agents fill in bodies and add private items. Placeholder fields in `ConfigStore`, `ProcessTracker` and `Layout` are yours to replace if you own the file.
 
@@ -169,7 +170,29 @@ Required states:
 | `all-missing` | Every app and game not found: Browse buttons everywhere |
 | `log-full` | More log lines than fit, every level present, one line long enough to wrap |
 
-The capture agent writes the reference image for each state to `docs/rewrite/reference/<state>.png`. The snapshot tests write `target/ui-snapshots/<state>.png`. `python tools/ui_diff.py` compares the two sets.
+The reference image for each state is `docs/rewrite/reference/<state>.png`. The snapshot tests write `target/ui-snapshots/<state>.png`. `python tools/ui_diff.py` compares the two sets.
+
+Fixtures hold game names unwrapped; the UI applies the 18-character wrap. `mixed` adds a seventh status, `starting`, so every dot colour appears.
+
+### What the measurements showed
+
+`ui-spec.json` is 500 KB: read its `_readme`, `notes`, `layout`, `shapes`, `fonts` and `colors` keys, and query `states` with a short script instead of loading the file whole. The measured window differs from the declared sizes in ways the layout rules must reproduce:
+
+- The sections request 713 px of height in a 700 px window. Tk allocates in packing order, so the button row, packed last, absorbs the 13 px: the action buttons are 47 px tall (46 painted) at y 610–656, and nothing else moves.
+- CustomTkinter rounds painted sizes down to even numbers: cards paint 316x54, the log box 516x444, so the visible gap between cards is 11 px.
+- Buttons grow with their label: Launch is 205 px wide for "Launch with iRacing (5)", and the row re-centres.
+- A long app name squeezes its Browse button (57 px for MarvinsAIRA Refactored).
+- Consolas 14 px lays out at 8 px per character and a 17 px line pitch: 62 characters per log line, 61 with the scrollbar. GDI rounds glyph advances to whole pixels, which egui does not do by default.
+
+### Parity criteria
+
+`ui_diff.py` reports three classes per state, and a state passes when all three hold:
+
+| Class | Covers | Passes when |
+|---|---|---|
+| flat | Everything outside the two classes below | Zero differing pixels |
+| edges | Rounded-corner zones of cards, buttons, the log box, checkboxes and radios, and the status dots | The shape's bounding box equals the spec, and only anti-aliased edge pixels differ |
+| text | Every text element | Left edge and baseline within 1 px of the reference ink box, right edge within 2 px; glyph anti-aliasing is free to differ |
 
 ## Testing rules
 
