@@ -7,6 +7,7 @@
 
 use std::collections::HashSet;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use windows::Win32::Globalization::{GetACP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS, MultiByteToWideChar};
@@ -122,7 +123,7 @@ impl ConfigStore {
         // Python's text mode writes CRLF line endings. UTF-8 is deliberate
         // difference 6 in behaviour.md (Python used the ANSI code page).
         let text = self.render().replace('\n', "\r\n");
-        fs::write(self.dir.join(CONFIG_FILENAME), text).is_ok()
+        replace_atomically(&self.dir.join(CONFIG_FILENAME), text.as_bytes())
     }
 
     /// `ConfigParser.get(section, key)` with `BasicInterpolation`. `Ok(None)`
@@ -155,7 +156,7 @@ impl ConfigStore {
 
     /// `ConfigParser.set`: false where `BasicInterpolation.before_set` raises.
     fn set(&mut self, section: &str, key: &str, value: &str) -> bool {
-        if !value.is_empty() && !valid_for_set(value) {
+        if !configparser_accepts(value) {
             return false;
         }
         let key = key.to_lowercase();
@@ -263,8 +264,31 @@ fn key_ref_len(s: &str) -> Option<usize> {
     (close > 0 && after[close + 1..].starts_with('s')).then_some(2 + close + 2)
 }
 
-/// `BasicInterpolation.before_set`: only `%%` and `%(name)s` may contain `%`.
-fn valid_for_set(value: &str) -> bool {
+/// Writes `bytes` to a temporary file beside `path`, then moves it over `path`,
+/// so a process that ends mid-save leaves the old file whole. Python's
+/// in-place write could not be interrupted there: the window blocked until it
+/// was done. False on any failure, with the temporary file removed.
+fn replace_atomically(path: &Path, bytes: &[u8]) -> bool {
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp");
+    let tmp = PathBuf::from(tmp);
+    let written = fs::File::create(&tmp).and_then(|mut file| {
+        file.write_all(bytes)?;
+        file.sync_all()
+    });
+    // `rename` replaces an existing file (MoveFileExW with MOVEFILE_REPLACE_EXISTING).
+    if written.and_then(|()| fs::rename(&tmp, path)).is_ok() {
+        return true;
+    }
+    let _ = fs::remove_file(&tmp);
+    false
+}
+
+/// `BasicInterpolation.before_set`: after `%%` and `%(name)s` references are
+/// removed, a remaining `%` makes `configparser.set` raise `ValueError`.
+/// [`ConfigStore::set_app_path`] returns false both for such a value and for a
+/// failed save; this tells the two apart.
+pub fn configparser_accepts(value: &str) -> bool {
     let mut rest = value.replace("%%", "");
     let mut remaining = String::new();
     while let Some(p) = rest.find('%') {
@@ -582,11 +606,27 @@ mod tests {
 
     #[test]
     fn before_set_rules() {
-        for ok in ["", "C:\\plain", "100%% sure", "%(base)s\\x", "a%%b%(c)sd"] {
-            assert!(valid_for_set(ok), "{ok:?} should be accepted");
+        for ok in [
+            "",
+            "C:\\plain",
+            "100%% sure",
+            "%(base)s\\x",
+            "a%%b%(c)sd",
+            "C:/100%%/a.exe",
+            "%(home)s/a.exe",
+        ] {
+            assert!(configparser_accepts(ok), "{ok:?} should be accepted");
         }
-        for bad in ["50% off", "%", "%()s", "%(x)", "%%%"] {
-            assert!(!valid_for_set(bad), "{bad:?} should be rejected");
+        for bad in [
+            "50% off",
+            "%",
+            "%()s",
+            "%(x)",
+            "%%%",
+            "C:/100%/a.exe",
+            "%(home)/a.exe",
+        ] {
+            assert!(!configparser_accepts(bad), "{bad:?} should be rejected");
         }
     }
 }
