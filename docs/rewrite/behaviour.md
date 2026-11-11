@@ -13,7 +13,8 @@ These are the only places Rust may differ from Python. Anything else that differ
 5. **`print()` diagnostics are dropped.** They are invisible in the windowed Python build. They never become log lines.
 6. **`config.ini` is written as UTF-8.** See Config below.
 7. **An unset `APPDATA` or `ProgramData` is tolerated.** Python raises there; the case cannot occur on a real Windows session.
-8. **A malformed config value falls back instead of crashing startup.** A non-boolean `*_enabled` value or a broken `%` reference makes Python raise while the window is being built. Rust uses the fallback (`true`, or no saved path). A leading UTF-8 byte-order mark is skipped. A `process_state.json` entry without an integer `pid` is dropped.
+8. **A malformed config value falls back instead of crashing startup.** A non-boolean `*_enabled` value or a broken `%` reference makes Python raise while the window is being built. Rust uses the fallback (`true`, or no saved path). A leading UTF-8 byte-order mark is skipped. A `process_state.json` entry without an integer `pid` is dropped. A detected path containing `%`, which Python cannot save and crashes on, is used unsaved.
+9. **The window opens with the startup log complete.** Python's logger forces a repaint per line, so its window appears during startup and the lines arrive one by one. Rust finishes startup before the window exists.
 
 ## Quirks to port unchanged
 
@@ -58,7 +59,7 @@ These are the only places Rust may differ from Python. Anything else that differ
 
 ## UI behaviour (`ui/`)
 
-- Startup ([main_window.py:140-199](../../iracing_launcher_app/ui/main_window.py)) runs before the window first paints, so the first frame already shows the full startup log. A not-found app gets `<key>_enabled = False` written to config. A found app's checkbox is restored from config.
+- Startup ([main_window.py:140-199](../../iracing_launcher_app/ui/main_window.py)): a not-found app gets `<key>_enabled = False` written to config. A found app's checkbox is restored from config. See deliberate difference 9 for when the window appears.
 - Button labels and enabled state: `_update_button_text`. The count is checked cards only. Both buttons are disabled only when the count is zero and no game is selected.
 - Select All toggles only found apps; its label is "Deselect All" only when every found app is checked.
 - Log lines are `[HH:MM:SS] message` in local time. The divider is 50 `─` characters with no timestamp. The log is read-only, selectable, wraps by character, scrolls to the end on every line, and shows a scrollbar only when needed.
