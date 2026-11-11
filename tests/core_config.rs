@@ -290,6 +290,49 @@ fn missing_directory_loads_empty_and_save_fails() {
 }
 
 #[test]
+fn save_replaces_the_file_and_leaves_no_temporary() {
+    let dir = dir_with("app_written");
+    let mut store = ConfigStore::load(dir.path());
+    store.set_setting("selected_game", "iRacing");
+    assert!(store.save());
+    let names: Vec<_> = fs::read_dir(dir.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert_eq!(names, ["config.ini"]);
+    assert!(
+        String::from_utf8(config_bytes(dir.path()))
+            .unwrap()
+            .contains("selected_game = iRacing\r\n")
+    );
+}
+
+#[test]
+fn failed_save_keeps_the_old_file_and_removes_the_temporary() {
+    let dir = dir_with("app_written");
+    let before = config_bytes(dir.path());
+    let path = dir.path().join("config.ini");
+    let mut store = ConfigStore::load(dir.path());
+    store.set_setting("selected_game", "iRacing");
+
+    // A read-only config.ini cannot be replaced: the save fails after the
+    // temporary file was written.
+    let writable = fs::metadata(&path).unwrap().permissions();
+    let mut read_only = writable.clone();
+    read_only.set_readonly(true);
+    fs::set_permissions(&path, read_only).unwrap();
+    assert!(!store.save());
+    assert_eq!(config_bytes(dir.path()), before);
+    assert!(!dir.path().join("config.ini.tmp").exists());
+    fs::set_permissions(&path, writable).unwrap();
+
+    // A directory in the way of the temporary file: nothing is written.
+    fs::create_dir(dir.path().join("config.ini.tmp")).unwrap();
+    assert!(!store.save());
+    assert_eq!(config_bytes(dir.path()), before);
+}
+
+#[test]
 fn config_keys() {
     assert_eq!(config_key("Fanatec"), "fanatec");
     assert_eq!(config_key("Crew Chief V4"), "crew_chief_v4");

@@ -49,11 +49,22 @@ pub fn is_process_running(exe_name: &str) -> bool {
 }
 
 /// Kills every process with this exe name. True if at least one kill went through.
+///
+/// As `psutil.process_iter` + `Process.kill()`: each listed process's identity
+/// (its creation time) is taken as it is listed, and checked again just before
+/// the kill, so a PID that was reused in between is treated as gone.
 pub fn kill_process(exe_name: &str) -> bool {
     let wanted = exe_name.to_lowercase();
     let mut killed = false;
     for p in snapshot() {
-        if p.name.to_lowercase() == wanted && proc_kill(p.pid).is_ok() {
+        if p.name.to_lowercase() != wanted {
+            continue;
+        }
+        // process_iter skips a process that is gone by the time it is listed.
+        let Ok(identity) = identity(p.pid) else {
+            continue;
+        };
+        if kill_if_same(p.pid, identity).is_ok() {
             killed = true;
         }
     }
@@ -210,10 +221,19 @@ fn filetime_ticks_to_epoch(ticks: u64) -> f64 {
 /// denied, the slower `NtQuerySystemInformation` fallback, which works for every
 /// process. A missing PID is `NoSuchProcess`.
 pub(crate) fn create_time(pid: u32) -> Result<f64, ProcError> {
+    match fast_create_time(pid) {
+        Err(ProcError::AccessDenied) => nt_create_time(pid),
+        other => other,
+    }
+}
+
+/// `create_time(fast_only=True)`: the `GetProcessTimes` path alone, access
+/// denied where it cannot open the process.
+fn fast_create_time(pid: u32) -> Result<f64, ProcError> {
     let h = match open_process(PROCESS_QUERY_LIMITED_INFORMATION, pid) {
         Ok(h) => h,
         Err(e) if is_code(&e, ERROR_INVALID_PARAMETER) => return Err(ProcError::NoSuchProcess),
-        Err(_) => return nt_create_time(pid),
+        Err(_) => return Err(ProcError::AccessDenied),
     };
     let mut code = 0u32;
     // SAFETY: `h` is an open process handle.
@@ -223,6 +243,11 @@ pub(crate) fn create_time(pid: u32) -> Result<f64, ProcError> {
     {
         return Err(ProcError::NoSuchProcess);
     }
+    handle_create_time(&h).ok_or(ProcError::AccessDenied)
+}
+
+/// Creation time through a handle opened with at least query-limited access.
+fn handle_create_time(h: &Handle) -> Option<f64> {
     let (mut created, mut exited, mut kernel, mut user) = (
         FILETIME::default(),
         FILETIME::default(),
@@ -230,11 +255,19 @@ pub(crate) fn create_time(pid: u32) -> Result<f64, ProcError> {
         FILETIME::default(),
     );
     // SAFETY: `h` is open; the four out-pointers are valid.
-    match unsafe { GetProcessTimes(h.0, &mut created, &mut exited, &mut kernel, &mut user) } {
-        Ok(()) => Ok(filetime_ticks_to_epoch(
-            (u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime),
-        )),
-        Err(_) => nt_create_time(pid),
+    unsafe { GetProcessTimes(h.0, &mut created, &mut exited, &mut kernel, &mut user) }.ok()?;
+    Some(filetime_ticks_to_epoch(
+        (u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime),
+    ))
+}
+
+/// psutil's `Process._ident` on Windows: the fast creation time, `None` where
+/// access is denied. `NoSuchProcess` when the PID is gone.
+pub(crate) fn identity(pid: u32) -> Result<Option<f64>, ProcError> {
+    match fast_create_time(pid) {
+        Ok(created) => Ok(Some(created)),
+        Err(ProcError::AccessDenied) => Ok(None),
+        Err(ProcError::NoSuchProcess) => Err(ProcError::NoSuchProcess),
     }
 }
 
@@ -312,6 +345,36 @@ pub(crate) fn proc_kill(pid: u32) -> Result<(), ProcError> {
         Err(e) if is_code(&e, ERROR_INVALID_PARAMETER) => return Err(ProcError::NoSuchProcess),
         Err(_) => return Err(ProcError::AccessDenied),
     };
+    terminate(&h)
+}
+
+/// `Process.kill()` for a process whose identity was taken when it was listed:
+/// psutil's `_raise_if_pid_reused` compares a fresh identity with it and
+/// treats a mismatch as `NoSuchProcess`. Here the check and the kill go
+/// through one handle, so the PID cannot change hands between them.
+pub(crate) fn kill_if_same(pid: u32, identity: Option<f64>) -> Result<(), ProcError> {
+    if pid == 0 {
+        return Err(ProcError::AccessDenied);
+    }
+    match open_process(PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION, pid) {
+        Ok(h) => {
+            if handle_create_time(&h) != identity {
+                return Err(ProcError::NoSuchProcess);
+            }
+            terminate(&h)
+        }
+        Err(e) if is_code(&e, ERROR_INVALID_PARAMETER) => Err(ProcError::NoSuchProcess),
+        // Refused: psutil's fresh identity is then `None` as well, so only a
+        // process that was unreadable when listed matches and gets its kill
+        // attempt (which normally ends in access denied too).
+        Err(_) if identity.is_none() => proc_kill(pid),
+        Err(_) => Err(ProcError::NoSuchProcess),
+    }
+}
+
+/// psutil's `proc_kill` on an open handle: `TerminateProcess(SIGTERM)`, where
+/// access denied counts as success (the process already died).
+fn terminate(h: &Handle) -> Result<(), ProcError> {
     // SAFETY: `h` is an open handle with PROCESS_TERMINATE.
     match unsafe { TerminateProcess(h.0, SIGTERM) } {
         Ok(()) => Ok(()),
@@ -509,6 +572,80 @@ mod tests {
         let fast = create_time(pid).unwrap();
         let slow = nt_create_time(pid).unwrap();
         assert_eq!(fast, slow);
+    }
+
+    /// A dummy child (`ping`), killed by its own PID and never by name.
+    struct Dummy(std::process::Child);
+
+    impl Dummy {
+        fn spawn() -> Self {
+            let child = std::process::Command::new("ping")
+                .args(["-n", "60", "127.0.0.1"])
+                .stdout(std::process::Stdio::null())
+                .spawn()
+                .unwrap();
+            Self(child)
+        }
+
+        fn pid(&self) -> u32 {
+            self.0.id()
+        }
+
+        fn alive(&mut self) -> bool {
+            self.0.try_wait().unwrap().is_none()
+        }
+
+        fn exited_within(&mut self, timeout: Duration) -> bool {
+            let start = std::time::Instant::now();
+            while start.elapsed() < timeout {
+                if !self.alive() {
+                    return true;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            false
+        }
+    }
+
+    impl Drop for Dummy {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    #[test]
+    fn kill_spares_a_pid_that_now_belongs_to_another_process() {
+        let mut dummy = Dummy::spawn();
+        let listed = identity(dummy.pid()).unwrap();
+        assert!(listed.is_some(), "our own child is readable");
+
+        // The identity of an earlier holder of this PID: what kill_process
+        // holds when the listed process exited and the PID was handed on.
+        let earlier = listed.map(|t| t - 1.0);
+        assert_eq!(
+            kill_if_same(dummy.pid(), earlier),
+            Err(ProcError::NoSuchProcess)
+        );
+        // Unreadable when listed, readable now: psutil's identities differ too.
+        assert_eq!(
+            kill_if_same(dummy.pid(), None),
+            Err(ProcError::NoSuchProcess)
+        );
+        std::thread::sleep(Duration::from_millis(200));
+        assert!(dummy.alive(), "a reused PID is never terminated");
+
+        assert_eq!(kill_if_same(dummy.pid(), listed), Ok(()));
+        assert!(dummy.exited_within(Duration::from_secs(5)));
+    }
+
+    #[test]
+    fn kill_of_a_pid_that_is_gone_is_no_such_process() {
+        assert_eq!(
+            kill_if_same(0xFFFF_FFF1, Some(1.0)),
+            Err(ProcError::NoSuchProcess)
+        );
+        assert_eq!(identity(0xFFFF_FFF1), Err(ProcError::NoSuchProcess));
     }
 
     #[test]

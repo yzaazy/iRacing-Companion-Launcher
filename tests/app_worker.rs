@@ -17,16 +17,34 @@ use iracing_companion_launcher::core::definitions;
 use iracing_companion_launcher::managers::Backend;
 use iracing_companion_launcher::worker::{Sequencer, Worker};
 use serde_json::{Value, json};
+use windows::Win32::Foundation::S_FALSE;
+use windows::Win32::System::Com::{
+    APTTYPE, APTTYPE_MAINSTA, APTTYPE_STA, APTTYPEQUALIFIER, COINIT_APARTMENTTHREADED,
+    CoGetApartmentType, CoInitializeEx, CoUninitialize,
+};
+
+/// Runs `on_launch` on the worker thread before every `launch_app`.
+struct HookedBackend {
+    inner: FakeBackend,
+    on_launch: Box<dyn FnMut() + Send>,
+}
 
 /// Holds the first `launch_app` until the test opens the gate, so later
 /// presses land while a sequence is running.
-struct GatedBackend {
-    inner: FakeBackend,
-    gate: Receiver<()>,
-    opened: bool,
+fn gated(inner: FakeBackend, gate: Receiver<()>) -> HookedBackend {
+    let mut opened = false;
+    HookedBackend {
+        inner,
+        on_launch: Box::new(move || {
+            if !opened {
+                gate.recv().unwrap();
+                opened = true;
+            }
+        }),
+    }
 }
 
-impl Backend for GatedBackend {
+impl Backend for HookedBackend {
     fn app_list(&self) -> Vec<String> {
         self.inner.app_list()
     }
@@ -43,10 +61,7 @@ impl Backend for GatedBackend {
         self.inner.get_child_names(app)
     }
     fn launch_app(&mut self, app: &str, path: &str) -> bool {
-        if !self.opened {
-            self.gate.recv().unwrap();
-            self.opened = true;
-        }
+        (self.on_launch)();
         self.inner.launch_app(app, path)
     }
     fn close_app(&mut self, app: &str) -> bool {
@@ -98,11 +113,7 @@ fn commands_queue_in_order_with_their_own_selection() {
         "close_app": every_app(json!(true)),
     });
     let (open_gate, gate) = channel();
-    let mut backend = GatedBackend {
-        inner: FakeBackend::new(script, rec.clone()),
-        gate,
-        opened: false,
-    };
+    let mut backend = gated(FakeBackend::new(script, rec.clone()), gate);
     let startup = Controller::startup(&mut backend, Box::new(config), "3.0.0", None);
     let repaints = Arc::new(AtomicUsize::new(0));
     let counter = repaints.clone();
@@ -179,4 +190,49 @@ fn commands_queue_in_order_with_their_own_selection() {
         repaints.load(Ordering::SeqCst) > 0,
         "events request a repaint"
     );
+}
+
+/// `ShellExecuteW` runs on the worker thread, so the thread must be a
+/// single-threaded COM apartment while sequences run, as the Tk thread was.
+#[test]
+fn worker_thread_is_a_com_apartment() {
+    let dir = tempfile::tempdir().unwrap();
+    let rec = Recorder::default();
+    let config = Arc::new(Mutex::new(ConfigStore::load(dir.path())));
+    let script = json!({
+        "find_app_path": every_app(json!("C:/fake/app.exe")),
+        "find_game_path": {},
+        "launch_app": every_app(json!(true)),
+    });
+    let (probe_tx, probe_rx) = channel();
+    let mut backend = HookedBackend {
+        inner: FakeBackend::new(script, rec.clone()),
+        on_launch: Box::new(move || {
+            let (mut kind, mut qualifier) = (APTTYPE::default(), APTTYPEQUALIFIER::default());
+            // SAFETY: both out-pointers are valid locals.
+            let current = unsafe { CoGetApartmentType(&mut kind, &mut qualifier) }.map(|()| kind);
+            // What detect::shortcuts' per-call guard does on this thread: it
+            // nests (S_FALSE) and its balancing uninit leaves the apartment.
+            // SAFETY: balanced by the CoUninitialize just below.
+            let nested = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+            // SAFETY: balances the successful nested init above.
+            unsafe { CoUninitialize() };
+            // SAFETY: as above.
+            let after = unsafe { CoGetApartmentType(&mut kind, &mut qualifier) }.map(|()| kind);
+            let _ = probe_tx.send((current, nested, after));
+        }),
+    };
+    let startup = Controller::startup(&mut backend, Box::new(config), "3.0.0", None);
+    let sequencer = Sequencer::new(Box::new(backend), startup.game_statuses());
+    let mut controller = startup.attach(Box::new(Worker::spawn(sequencer, || {})));
+    let mut dialog = FakeDialog::new([], rec);
+
+    controller.handle(UiAction::Launch, &mut dialog);
+    let (current, nested, after) = probe_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    // The first single-threaded apartment in a process is reported as the main one.
+    let single_threaded = [Ok(APTTYPE_STA), Ok(APTTYPE_MAINSTA)];
+    assert!(single_threaded.contains(&current), "{current:?}");
+    assert_eq!(nested, S_FALSE, "the worker's apartment is already there");
+    assert_eq!(after, current);
+    wait_until(&mut controller, |c| c.state().launch_enabled);
 }

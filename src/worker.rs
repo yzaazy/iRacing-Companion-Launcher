@@ -15,6 +15,8 @@
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender};
 
+use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoUninitialize};
+
 use crate::contract::{Command, Event, LogLevel, Status};
 use crate::core::log;
 use crate::managers::Backend;
@@ -254,6 +256,7 @@ impl Worker {
         let (command_tx, command_rx) = mpsc::channel::<Command>();
         let (event_tx, event_rx) = mpsc::channel();
         std::thread::spawn(move || {
+            let _com = ComApartment::enter();
             for command in command_rx {
                 sequencer.run(command, &mut |event| {
                     // The window is gone when sending fails; finish the sequence anyway.
@@ -265,6 +268,41 @@ impl Worker {
         Self {
             commands: command_tx,
             events: event_rx,
+        }
+    }
+}
+
+/// A single-threaded COM apartment for the current thread while it lives: the
+/// worker thread from its start to its end, and the UI thread around the file
+/// dialog.
+///
+/// `shell_open` calls `ShellExecuteW` here, which may hand the target to shell
+/// extensions that need COM. Python made those calls on the Tk thread, which
+/// importing `winshell` (through `pythoncom`) had already made an apartment.
+/// The per-call guard in `detect::shortcuts` on this thread then nests inside
+/// this one: its `CoInitializeEx` returns `S_FALSE` and its drop balances it.
+pub(crate) struct ComApartment {
+    owns_init: bool,
+}
+
+impl ComApartment {
+    pub(crate) fn enter() -> Self {
+        // The flags pythoncom uses. S_FALSE (already an apartment) still counts
+        // and is balanced; RPC_E_CHANGED_MODE (already multithreaded) is an
+        // error that leaves the thread as it was, and is tolerated.
+        // SAFETY: plain call on the current thread; balanced in Drop when it succeeds.
+        let hr = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+        Self {
+            owns_init: hr.is_ok(),
+        }
+    }
+}
+
+impl Drop for ComApartment {
+    fn drop(&mut self) {
+        if self.owns_init {
+            // SAFETY: balances the successful CoInitializeEx in `enter`, on the same thread.
+            unsafe { CoUninitialize() };
         }
     }
 }
