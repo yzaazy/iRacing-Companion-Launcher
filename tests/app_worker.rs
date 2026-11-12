@@ -6,6 +6,7 @@
 
 mod app_support;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, channel};
@@ -16,8 +17,8 @@ use iracing_companion_launcher::app::Controller;
 use iracing_companion_launcher::core::config::{ConfigStore, SharedConfig};
 use iracing_companion_launcher::core::definitions;
 use iracing_companion_launcher::managers::Backend;
-use iracing_companion_launcher::model::UiAction;
-use iracing_companion_launcher::worker::{Inline, Sequencer, Worker};
+use iracing_companion_launcher::model::{Status, UiAction};
+use iracing_companion_launcher::worker::{Command, Dispatch, Event, Inline, Sequencer, Worker};
 use serde_json::{Value, json};
 use windows::Win32::Foundation::S_FALSE;
 use windows::Win32::System::Com::{
@@ -319,6 +320,44 @@ fn close_warns_once_about_the_selected_game() {
     let warnings: Vec<&String> = log.iter().filter(|l| l.starts_with('⚠')).collect();
     assert_eq!(warnings, [&still_running("iRacing")]);
     assert!(!log.contains(&"iRacing was closed manually".to_owned()));
+}
+
+/// A running app with no detected path is closed once, and its card goes back
+/// to not found whether or not that close found it (#7).
+#[test]
+fn close_without_a_path_closes_a_running_app_once() {
+    for (closed, line) in [(true, "SimHub closed"), (false, "SimHub was not running")] {
+        let rec = Recorder::default();
+        let script = json!({
+            "is_app_running": { "SimHub": [true] },
+            "close_app": { "SimHub": [closed] },
+        });
+        let backend = FakeBackend::new(script, rec.clone());
+        let sequencer = Sequencer::new(Box::new(backend), HashMap::new());
+        let mut inline = Inline::new(sequencer, Box::new(|_| {}));
+        inline.send(Command::Close {
+            apps: vec!["SimHub".to_owned()],
+            game: None,
+        });
+
+        let closes = rec.take().iter().filter(|c| c[1] == "close_app").count();
+        assert_eq!(closes, 1);
+        let events = inline.poll();
+        let log: Vec<&str> = events
+            .iter()
+            .filter_map(|e| match e {
+                Event::Log(l) => l.text.get(11..),
+                _ => None,
+            })
+            .collect();
+        assert!(log.contains(&"Closing SimHub..."), "{log:?}");
+        assert!(log.contains(&line), "{log:?}");
+        let last_status = events.iter().rev().find_map(|e| match e {
+            Event::AppStatus { status, .. } => Some(*status),
+            _ => None,
+        });
+        assert_eq!(last_status, Some(Status::NotFound));
+    }
 }
 
 /// `ShellExecuteW` runs on the worker thread, so the thread must be a
