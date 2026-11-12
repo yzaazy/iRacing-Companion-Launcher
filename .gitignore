@@ -1,24 +1,3 @@
-# Python cache
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-
-# Distribution / packaging
-dist/
-build/
-*.egg-info/
-*.egg
-
-# PyInstaller
-version_info.txt
-
-# Virtual environments
-venv/
-env/
-ENV/
-config.ini
-
 # IDE
 .vscode/
 .idea/
