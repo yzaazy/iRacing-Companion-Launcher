@@ -334,15 +334,23 @@ fn app_found_nowhere_writes_nothing() {
     assert_eq!(f.config(), None);
 }
 
-/// v2.3.2 crashed saving a detected `%` path; Rust uses it unsaved (`docs/behaviour.md`,
-/// "Changes from v2.3.2": "Malformed files no longer stop startup").
+/// v2.3.2 crashed saving a detected `%` path; Rust saves it with the `%` escaped
+/// (`docs/behaviour.md`, "Changes from v2.3.2", change 11) and finds it there next time.
 #[test]
-fn detected_path_with_a_percent_is_used_unsaved() {
+fn detected_path_with_a_percent_is_saved_escaped() {
     let f = Fixture::new("app-percent");
     let common = f.tree.target(r"100%\app.exe");
     let mut m = f.app_managers(vec![f.app("app", vec![s(&common)], false)], vec![]);
     assert_eq!(m.find_app_path(APP), Some(s(&common)));
-    assert_eq!(f.config(), None);
+    let escaped = s(&common).replace('%', "%%");
+    assert_eq!(f.config().unwrap(), saved("dummy_app", &escaped));
+
+    let mut again = f.app_managers(vec![f.app("app", vec![], false)], vec![]);
+    assert_eq!(
+        again.find_app_path(APP),
+        Some(s(&common)),
+        "from the saved path"
+    );
 }
 
 // ---------------------------------------------------------------------------
