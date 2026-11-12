@@ -146,10 +146,6 @@ pub struct Controller {
 pub struct Startup(Controller);
 
 impl Startup {
-    pub fn state(&self) -> &ViewState {
-        &self.0.state
-    }
-
     /// Every game card's status, to seed the worker's mirror.
     pub fn game_statuses(&self) -> HashMap<String, Status> {
         self.0

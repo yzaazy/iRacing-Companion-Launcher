@@ -120,10 +120,6 @@ impl ConfigStore {
         }
     }
 
-    pub fn config_dir(&self) -> &Path {
-        &self.dir
-    }
-
     /// Only if it exists on disk.
     pub fn app_path(&self, key: &str) -> Option<String> {
         // Python raises on a broken interpolation here; the port treats it as unsaved.

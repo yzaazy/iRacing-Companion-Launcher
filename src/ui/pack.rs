@@ -4,7 +4,7 @@
 //! Each container is described as the list of slaves Python packs into it, with the same options;
 //! [`pack`] places them in the master's cavity and [`pack_req`] is the size the master requests.
 
-use egui::{Pos2, Rect, pos2, vec2};
+use egui::{Rect, pos2, vec2};
 
 /// A rectangle in whole window pixels, the way Tk reports widget geometry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -33,10 +33,6 @@ impl Bounds {
             pos2(self.x as f32, self.y as f32),
             vec2(self.w as f32, self.h as f32),
         )
-    }
-
-    pub fn min(&self) -> Pos2 {
-        pos2(self.x as f32, self.y as f32)
     }
 
     /// What CustomTkinter actually paints for a widget of this size: its draw engine floors the

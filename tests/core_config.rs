@@ -109,7 +109,6 @@ fn settings_read_like_configparser() {
 fn file_as_the_app_writes_it() {
     let dir = dir_with("app_written");
     let store = ConfigStore::load(dir.path());
-    assert_eq!(store.config_dir(), dir.path());
     assert!(store.bool_setting("fanatec_enabled", false));
     assert!(!store.bool_setting("simhub_enabled", true));
     assert!(!store.bool_setting("garage61_enabled", true));

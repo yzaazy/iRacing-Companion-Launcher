@@ -103,8 +103,6 @@ pub const CHECKBOX_RADIUS: f32 = 6.0;
 pub(super) const CHECKBOX_BORDER_WIDTH: f32 = 3.0;
 pub(super) const RADIO_BORDER_UNCHECKED: f32 = 3.0;
 pub(super) const RADIO_BORDER_CHECKED: f32 = 6.0;
-/// CTkScrollbar width; the thumb is a pill of half this radius.
-pub const SCROLLBAR_WIDTH: f32 = 8.0;
 
 /// `STATUS_COLORS`; `stopping` has no entry in Python and falls back to idle grey.
 pub fn status_color(status: Status) -> Color32 {

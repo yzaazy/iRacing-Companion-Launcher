@@ -115,7 +115,6 @@ pub fn resolve_config_dir() -> PathBuf;
 pub fn config_key(name: &str) -> String;
 impl ConfigStore {
     pub fn load(dir: &Path) -> Self;
-    pub fn config_dir(&self) -> &Path;
     pub fn app_path(&self, key: &str) -> Option<String>;      // only if it exists on disk
     pub fn set_app_path(&mut self, key: &str, path: &str) -> Result<(), SetPathError>; // saves
     pub fn setting(&self, key: &str) -> Option<String>;
