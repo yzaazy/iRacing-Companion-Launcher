@@ -12,9 +12,9 @@ Follow the `ui-parity` skill (`.claude/skills/ui-parity/SKILL.md`) to compare ag
 
 ## How to build it
 
-- `draw(ctx, &ViewState) -> Vec<UiAction>` is pure: everything shown comes from `ViewState`, every interaction leaves as a `UiAction`.
-- Geometry lives in `layout.rs` as rules (margins, card height, gaps, column shares, minimum sizes) evaluated for a window size. Colours, radii and font sizes live in `theme.rs`. Widgets and sections read from those two and hold no numbers of their own.
-- Paint with egui's painter at exact rects from `layout`; use egui widgets only for interaction (`ui.interact`, the selectable log text, the scroll area).
+- `draw(ui, &ViewState) -> Vec<UiAction>` is pure: everything shown comes from `ViewState`, every interaction leaves as a `UiAction`.
+- Geometry is rules evaluated for a window size: `pack.rs` is the port of Tk's packer, `layout.rs` holds the launcher's rules built on it (margins, card height, gaps, column shares, minimum sizes), and `geometry.rs` resolves the whole window. Colours, radii and font sizes live in `theme.rs`. Widgets and sections read from those and hold no numbers of their own.
+- Paint with egui's painter at exact rects from the resolved geometry; the UI keeps its own focus, hit areas and log selection (`input.rs`, `log.rs`) rather than egui's.
 - Take widget colours from the Python source and CustomTkinter's theme file (`customtkinter/assets/themes/blue.json`, dark values), including hover and disabled states.
 - Card lists follow `state.apps` and `state.games` at any length.
 - A test asserts `layout` at 1200x700 equals `ui-spec.json`. A snapshot test renders every fixture state.

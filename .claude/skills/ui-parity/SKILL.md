@@ -10,7 +10,7 @@ The reference images in `docs/rewrite/reference/<state>.png` were captured from 
 2. **Look.** Open the diff image and the two source images for every state that fails, and for at least one passing state per session. Numbers say how much differs; only looking says what. A text element shifted by a pixel or two sits inside its text region's margin, so check text position by eye as well as by the ink-box report.
 
 3. **Classify each differing region.**
-   - *Geometry*: an edge, gap or size is off. Fix the rule in `layout.rs`.
+   - *Geometry*: an edge, gap or size is off. Fix the rule in `layout.rs` (or the packer in `pack.rs` when the rule is right and its evaluation is not).
    - *Colour*: a fill, border or text colour is off. Fix the token in `theme.rs`.
    - *Shape*: a corner radius, ring width, dot size or checkmark is off. Fix the painter call.
    - *Text position*: an ink box is off. Fix the baseline, inset or letter spacing.
