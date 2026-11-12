@@ -9,6 +9,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] functions; a panic there fails the test
 
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::OnceLock;
@@ -304,12 +305,30 @@ fn process_that_exits_by_itself_is_dropped() {
     assert!(!t.close_tracked(KEY));
 }
 
+thread_local! {
+    /// The exe name [`until_awaited_exits`] waits for, per test thread.
+    static AWAITED: RefCell<String> = const { RefCell::new(String::new()) };
+}
+
+/// A launch wait that ends when no process named [`AWAITED`] is left, instead
+/// of after a fixed time: a dummy that exits as soon as it starts can take
+/// longer than any fixed wait to get that far on a loaded machine.
+fn until_awaited_exits(_: Duration) {
+    AWAITED.with_borrow(|name| {
+        assert!(
+            wait_until(Duration::from_secs(60), || !is_process_running(name)),
+            "{name} never exited"
+        );
+    });
+}
+
 #[test]
 fn launch_that_dies_during_the_wait_fails() {
     let mut d = Dummies::new();
     let exe = d.exe("dies");
     d.stop("dies"); // the dummy exits as soon as it starts
-    let mut t = ProcessTracker::new(d.state_file());
+    AWAITED.set(d.name("dies"));
+    let mut t = ProcessTracker::with_sleep(d.state_file(), until_awaited_exits);
     assert!(!t.launch_and_track(KEY, &exe, WAIT, LaunchMethod::Direct));
     assert!(!t.is_tracked(KEY));
 }
@@ -391,13 +410,14 @@ fn shell_launch_finds_the_new_pid() {
 #[test]
 fn shell_launch_without_a_new_process_fails() {
     let mut d = Dummies::new();
-    let mut t = ProcessTracker::new(d.state_file());
+    let mut t = ProcessTracker::with_sleep(d.state_file(), until_awaited_exits);
     let missing = d.dir.path().join("missing.exe");
     assert!(!t.launch_and_track(KEY, &missing.to_string_lossy(), WAIT, LaunchMethod::Shell));
 
     // Starts, but exits before the wait ends: no new PID is found.
     let exe = d.exe("brief");
     d.stop("brief");
+    AWAITED.set(d.name("brief"));
     assert!(!t.launch_and_track(KEY, &exe, WAIT, LaunchMethod::Shell));
     assert!(!t.is_tracked(KEY));
 }
