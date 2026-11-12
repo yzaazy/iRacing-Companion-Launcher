@@ -314,6 +314,15 @@ pub struct LogGeom<'a> {
     pub text: &'a LogText,
 }
 
+/// How far the log scrolls this frame.
+#[derive(Clone, Copy)]
+struct Extent {
+    line_h: f32,
+    content_h: f32,
+    view_h: f32,
+    max_offset: f32,
+}
+
 /// Paint the log box, its visible lines, the selection and the scrollbar, and handle the
 /// pointer, the wheel, copying and (when the log has focus) the keyboard.
 pub fn show(ui: &mut Ui, controls: &mut Controls, geom: LogGeom<'_>, state: &ViewState) {
@@ -339,13 +348,54 @@ pub fn show(ui: &mut Ui, controls: &mut Controls, geom: LogGeom<'_>, state: &Vie
     let lh = line_height();
     let content_h = (wrap.total() + 1) as f32 * lh;
     let view_h = inner.h as f32;
-    let max_offset = (content_h - view_h).max(0.0);
+    let extent = Extent {
+        line_h: lh,
+        content_h,
+        view_h,
+        max_offset: (content_h - view_h).max(0.0),
+    };
 
-    // ActivityLogger calls see("end") after every line.
+    follow(&mut memory, state, extent);
+    wheel(ui, geom.log_box, extent, &mut memory);
+    keyboard(ui, controls, id, extent, &mut memory);
+    if let Some(bar) = geom.text.scrollbar {
+        drag_scrollbar(ui, id, bar, extent, &mut memory);
+    }
+    let (response, pointer) = sense_text(ui, id, geom.text, extent, &mut memory);
+
+    memory.offset = memory.offset.clamp(0.0, extent.max_offset).round();
+    let view = View {
+        ctx: ctx.clone(),
+        log: &state.log,
+        inner,
+        offset: memory.offset,
+        starts: &wrap.starts,
+    };
+
+    select(ui, &view, &response, pointer, &mut memory);
+    let selection = memory.selection.map(|s| s.span()).filter(|(a, b)| a != b);
+    if let Some(span) = selection
+        && ui.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Copy)))
+    {
+        ctx.copy_text(selected_text(&state.log, span));
+    }
+
+    paint_lines(ui, &view, selection);
+    if let Some(bar) = geom.text.scrollbar {
+        paint_scrollbar(ui, controls, id, bar, geom.log_box, extent, memory.offset);
+    }
+
+    drop(cache);
+    ctx.data_mut(|d| d.insert_temp(memory_id, memory));
+}
+
+/// ActivityLogger calls see("end") after every line; a selection past the end of a shorter log
+/// is dropped.
+fn follow(memory: &mut Memory, state: &ViewState, extent: Extent) {
     let seen = Some((state.log.len(), last_line_hash(state)));
     if memory.seen != seen {
         memory.seen = seen;
-        memory.offset = max_offset;
+        memory.offset = extent.max_offset;
     }
     if memory
         .selection
@@ -353,9 +403,11 @@ pub fn show(ui: &mut Ui, controls: &mut Controls, geom: LogGeom<'_>, state: &Vie
     {
         memory.selection = None;
     }
+}
 
-    // The wheel, over the text or the scrollbar.
-    let log_rect = geom.log_box.rect();
+/// The wheel, over the text or the scrollbar.
+fn wheel(ui: &Ui, log_box: Bounds, extent: Extent, memory: &mut Memory) {
+    let log_rect = log_box.rect();
     if ui.rect_contains_pointer(log_rect) {
         let delta: f32 = ui.input(|i| {
             i.events
@@ -373,7 +425,7 @@ pub fn show(ui: &mut Ui, controls: &mut Controls, geom: LogGeom<'_>, state: &Vie
                                 d.signum() * (d.abs() / WHEEL_DIVISOR).ceil()
                             }
                             egui::MouseWheelUnit::Point => delta.y,
-                            egui::MouseWheelUnit::Page => delta.y * view_h,
+                            egui::MouseWheelUnit::Page => delta.y * extent.view_h,
                         })
                     }
                     _ => None,
@@ -382,8 +434,16 @@ pub fn show(ui: &mut Ui, controls: &mut Controls, geom: LogGeom<'_>, state: &Vie
         });
         memory.offset -= delta;
     }
+}
 
-    // The keyboard, while the log is the focused tab stop and can scroll.
+/// The keyboard, while the log is the focused tab stop and can scroll.
+fn keyboard(ui: &Ui, controls: &Controls, id: Id, extent: Extent, memory: &mut Memory) {
+    let Extent {
+        line_h: lh,
+        content_h,
+        view_h,
+        ..
+    } = extent;
     if controls.focused() == Some(id) {
         let page = (view_h - lh).max(lh);
         ui.input(|i| {
@@ -401,32 +461,44 @@ pub fn show(ui: &mut Ui, controls: &mut Controls, geom: LogGeom<'_>, state: &Vie
             }
         });
     }
+}
 
-    // The scrollbar: press or drag anywhere on it to centre the thumb on the pointer, as
-    // CTkScrollbar does.
-    if let Some(bar) = geom.text.scrollbar {
-        let response = ui.interact(bar.rect(), id.with("scrollbar"), Sense::CLICK | Sense::DRAG);
-        response.widget_info(|| WidgetInfo::labeled(Role::ScrollBar, true, "Activity Log"));
-        if let Some(pointer) = response.interact_pointer_pos()
-            && (response.dragged() || response.is_pointer_button_down_on())
-        {
-            let canvas = bar.painted();
-            let len = (view_h / content_h).min(1.0);
-            let value = (pointer.y - canvas.y as f32) / canvas.h as f32;
-            let start = (value - len / 2.0).clamp(0.0, 1.0 - len);
-            memory.offset = start * content_h;
-        }
+/// The scrollbar: press or drag anywhere on it to centre the thumb on the pointer, as
+/// CTkScrollbar does.
+fn drag_scrollbar(ui: &Ui, id: Id, bar: Bounds, extent: Extent, memory: &mut Memory) {
+    let Extent {
+        content_h, view_h, ..
+    } = extent;
+    let response = ui.interact(bar.rect(), id.with("scrollbar"), Sense::CLICK | Sense::DRAG);
+    response.widget_info(|| WidgetInfo::labeled(Role::ScrollBar, true, "Activity Log"));
+    if let Some(pointer) = response.interact_pointer_pos()
+        && (response.dragged() || response.is_pointer_button_down_on())
+    {
+        let canvas = bar.painted();
+        let len = (view_h / content_h).min(1.0);
+        let value = (pointer.y - canvas.y as f32) / canvas.h as f32;
+        let start = (value - len / 2.0).clamp(0.0, 1.0 - len);
+        memory.offset = start * content_h;
     }
+}
 
-    // Selecting: press, drag, double-click a word, triple-click a line, anywhere on the Text
-    // widget. The I-beam shows over all of it, as Tk's `xterm` cursor does.
-    let text_rect = geom.text.text.rect();
+/// The pointer on the Text widget: selecting happens anywhere on it, and the I-beam shows over
+/// all of it, as Tk's `xterm` cursor does. Returns its response and the pointer.
+fn sense_text(
+    ui: &Ui,
+    id: Id,
+    text: &LogText,
+    extent: Extent,
+    memory: &mut Memory,
+) -> (egui::Response, Option<egui::Pos2>) {
+    let (inner, lh) = (text.inner, extent.line_h);
+    let text_rect = text.text.rect();
     let response = ui.interact(text_rect, id.with("text"), Sense::CLICK | Sense::DRAG);
     response.widget_info(|| WidgetInfo::labeled(Role::Label, true, "Activity Log"));
     let pointer = ui.input(|i| i.pointer.interact_pos());
     let dragging = memory.selection.is_some_and(|s| s.dragging);
     if response.hovered() || dragging {
-        ctx.set_cursor_icon(CursorIcon::Text);
+        ui.ctx().set_cursor_icon(CursorIcon::Text);
     }
     // Tk scans while a drag is held above or below the text.
     if dragging && let Some(p) = pointer {
@@ -435,18 +507,19 @@ pub fn show(ui: &mut Ui, controls: &mut Controls, geom: LogGeom<'_>, state: &Vie
         } else if p.y > inner.bottom() as f32 {
             memory.offset += lh;
         }
-        ctx.request_repaint_after_secs(0.05);
+        ui.ctx().request_repaint_after_secs(0.05);
     }
+    (response, pointer)
+}
 
-    memory.offset = memory.offset.clamp(0.0, max_offset).round();
-    let view = View {
-        ctx: ctx.clone(),
-        log: &state.log,
-        inner,
-        offset: memory.offset,
-        starts: &wrap.starts,
-    };
-
+/// Selecting: press, drag, double-click a word, triple-click a line.
+fn select(
+    ui: &Ui,
+    view: &View<'_>,
+    response: &egui::Response,
+    pointer: Option<egui::Pos2>,
+    memory: &mut Memory,
+) {
     let (pressed, down, clicks) = ui.input(|i| {
         let clicks = if i.pointer.button_triple_clicked(PointerButton::Primary) {
             3
@@ -498,25 +571,21 @@ pub fn show(ui: &mut Ui, controls: &mut Controls, geom: LogGeom<'_>, state: &Vie
     if !down && let Some(sel) = &mut memory.selection {
         sel.dragging = false;
     }
+}
 
-    let selection = memory.selection.map(|s| s.span()).filter(|(a, b)| a != b);
-    if let Some(span) = selection
-        && ui.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Copy)))
-    {
-        ctx.copy_text(selected_text(&state.log, span));
-    }
-
-    // The visible lines.
+/// The visible lines, with the selection behind them.
+fn paint_lines(ui: &Ui, view: &View<'_>, selection: Option<(At, At)>) {
+    let (inner, lh) = (view.inner, line_height());
     let painter = ui
         .painter()
         .with_clip_rect(inner.rect().intersect(ui.clip_rect()));
-    let first_row = (memory.offset / lh).floor() as u32;
-    let first = wrap
+    let first_row = (view.offset / lh).floor() as u32;
+    let first = view
         .starts
         .partition_point(|&s| s <= first_row)
         .saturating_sub(1);
     let font = &theme::LOG_FONT;
-    for line in first..state.log.len() {
+    for line in first..view.log.len() {
         let top = view.line_top(line);
         if top >= inner.bottom() as f32 {
             break;
@@ -526,7 +595,7 @@ pub fn show(ui: &mut Ui, controls: &mut Controls, geom: LogGeom<'_>, state: &Vie
             && a.line <= line
             && line <= b.line
         {
-            paint_selection(&painter, &view, &galley, line, (a, b), top);
+            paint_selection(&painter, view, &galley, line, (a, b), top);
         }
         let shift = font.ascent as f32 - text::baseline_offset(&galley, font);
         painter.galley(
@@ -535,28 +604,36 @@ pub fn show(ui: &mut Ui, controls: &mut Controls, geom: LogGeom<'_>, state: &Vie
             Color32::PLACEHOLDER,
         );
     }
+}
 
-    if let Some(bar) = geom.text.scrollbar {
-        let start = (memory.offset / content_h).clamp(0.0, 1.0);
-        let end = ((memory.offset + view_h) / content_h).clamp(0.0, 1.0);
-        let color = if ui.rect_contains_pointer(bar.rect()) {
-            theme::SCROLL_THUMB_HOVER
-        } else {
-            theme::SCROLL_THUMB
-        };
-        crate::ui::widgets::scrollbar_thumb(ui.painter(), bar, start, end, color);
-        // Something to scroll: the log is a tab stop for the keyboard.
-        controls.stop(
-            id,
-            Ring::Rounded {
-                rect: geom.log_box.painted(),
-                radius: theme::LOG_RADIUS,
-            },
-        );
-    }
-
-    drop(cache);
-    ctx.data_mut(|d| d.insert_temp(memory_id, memory));
+/// The scrollbar thumb; with something to scroll, the log is a tab stop for the keyboard.
+fn paint_scrollbar(
+    ui: &Ui,
+    controls: &mut Controls,
+    id: Id,
+    bar: Bounds,
+    log_box: Bounds,
+    extent: Extent,
+    offset: f32,
+) {
+    let Extent {
+        content_h, view_h, ..
+    } = extent;
+    let start = (offset / content_h).clamp(0.0, 1.0);
+    let end = ((offset + view_h) / content_h).clamp(0.0, 1.0);
+    let color = if ui.rect_contains_pointer(bar.rect()) {
+        theme::SCROLL_THUMB_HOVER
+    } else {
+        theme::SCROLL_THUMB
+    };
+    crate::ui::widgets::scrollbar_thumb(ui.painter(), bar, start, end, color);
+    controls.stop(
+        id,
+        Ring::Rounded {
+            rect: log_box.painted(),
+            radius: theme::LOG_RADIUS,
+        },
+    );
 }
 
 /// Tk's selection highlight on one line: behind the selected glyphs of each row, and on to the
