@@ -5,21 +5,41 @@ use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const FIXTURES: [&str; 8] = [
-    "app_written",
-    "cp1252",
-    "comments",
-    "interpolation",
-    "parse_error",
-    "lf_only",
-    "empty",
-    "missing",
-];
-
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/core")
         .join(name)
+}
+
+/// Every fixture in tests/fixtures/core, named by its `.expected.json`, so a new
+/// file cannot go untested. Each has a `.saved.ini`, every `.ini` input has an
+/// expectation, and only `missing` has no input.
+fn fixtures() -> Vec<String> {
+    let (mut names, mut saved, mut inputs) = (Vec::new(), Vec::new(), Vec::new());
+    for entry in fs::read_dir(fixture("")).unwrap() {
+        let file = entry.unwrap().file_name().into_string().unwrap();
+        if let Some(name) = file.strip_suffix(".expected.json") {
+            names.push(name.to_owned());
+        } else if let Some(name) = file.strip_suffix(".saved.ini") {
+            saved.push(name.to_owned());
+        } else if let Some(name) = file.strip_suffix(".ini") {
+            inputs.push(name.to_owned());
+        }
+    }
+    names.sort();
+    saved.sort();
+    assert!(names.len() >= 8, "fixtures not found: {names:?}");
+    assert_eq!(saved, names, "a .saved.ini per fixture");
+    for input in &inputs {
+        assert!(names.contains(input), "{input}.ini has no expectation");
+    }
+    for name in &names {
+        assert!(
+            inputs.contains(name) == (name != "missing"),
+            "{name}: only `missing` has no .ini"
+        );
+    }
+    names
 }
 
 /// A temp dir holding the fixture as `config.ini` (nothing for `missing`).
@@ -38,7 +58,7 @@ fn config_bytes(dir: &Path) -> Vec<u8> {
 
 #[test]
 fn load_then_save_writes_what_configmanager_writes() {
-    for name in FIXTURES {
+    for name in &fixtures() {
         let dir = dir_with(name);
         let store = ConfigStore::load(dir.path());
         assert!(store.save(), "{name}: save");
@@ -52,7 +72,7 @@ fn load_then_save_writes_what_configmanager_writes() {
 
 #[test]
 fn settings_read_like_configparser() {
-    for name in FIXTURES {
+    for name in &fixtures() {
         let dir = dir_with(name);
         let store = ConfigStore::load(dir.path());
         let exp: Value = serde_json::from_str(

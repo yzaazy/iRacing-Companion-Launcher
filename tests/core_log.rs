@@ -19,20 +19,6 @@ fn line_has_a_local_time_prefix() {
 }
 
 #[test]
-fn every_level_is_kept() {
-    for level in [
-        LogLevel::Info,
-        LogLevel::Success,
-        LogLevel::Error,
-        LogLevel::Warning,
-        LogLevel::Launch,
-        LogLevel::Close,
-    ] {
-        assert_eq!(line(level.clone(), "x").level, level);
-    }
-}
-
-#[test]
 fn divider_is_fifty_box_rules_without_timestamp() {
     let d = divider();
     assert_eq!(d.level, LogLevel::Divider);

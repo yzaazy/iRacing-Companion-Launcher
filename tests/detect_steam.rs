@@ -50,14 +50,34 @@ impl Drop for TempKey {
 
 #[test]
 fn present_key_means_installed() {
-    let key = TempKey::new("present");
-    key.create("Steam App 266410");
+    let path = {
+        let key = TempKey::new("present");
+        key.create("Steam App 266410");
 
-    assert!(check_steam_game_installed_in(
+        assert!(check_steam_game_installed_in(
+            HKEY_CURRENT_USER,
+            &key.0,
+            "266410"
+        ));
+        key.0.clone()
+    };
+    // No test leaves a key behind in the developer's registry.
+    assert!(!check_steam_game_installed_in(
         HKEY_CURRENT_USER,
-        &key.0,
+        &path,
         "266410"
     ));
+    let mut handle = HKEY::default();
+    let opened = unsafe {
+        RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            &HSTRING::from(path),
+            Some(0),
+            KEY_READ,
+            &mut handle,
+        )
+    };
+    assert_ne!(opened, ERROR_SUCCESS);
 }
 
 #[test]
@@ -85,31 +105,6 @@ fn absent_or_different_key_means_not_installed() {
         r"Software\ircl-no-such-key-7f3a",
         "805550"
     ));
-}
-
-#[test]
-fn temp_key_is_removed_after_the_test() {
-    let path = {
-        let key = TempKey::new("cleanup");
-        key.create("Steam App 1");
-        assert!(check_steam_game_installed_in(
-            HKEY_CURRENT_USER,
-            &key.0,
-            "1"
-        ));
-        key.0.clone()
-    };
-    let mut handle = HKEY::default();
-    let opened = unsafe {
-        RegOpenKeyExW(
-            HKEY_CURRENT_USER,
-            &HSTRING::from(path),
-            Some(0),
-            KEY_READ,
-            &mut handle,
-        )
-    };
-    assert_ne!(opened, ERROR_SUCCESS);
 }
 
 #[test]

@@ -269,3 +269,70 @@ fn real_start_menu_search_does_not_fail() {
         None
     );
 }
+
+#[test]
+fn mixed_tree_matches_python_answers() {
+    // The answers are Python's `find_shortcut_target` on this same tree, with
+    // %APPDATA% and %ProgramData% pointed into it (v2.3.2, before the Python
+    // app was removed). They pin the walk order across both roots, name
+    // priority, missing and corrupt targets, and game mode in one place.
+    let tree = Tree::with_prefix("ircl-crosscheck-ü-");
+    let suffix = r"Microsoft\Windows\Start Menu\Programs";
+    let user = tree.dir.path().join("appdata").join(suffix);
+    let common = tree.dir.path().join("programdata").join(suffix);
+    let roots = vec![user.clone(), common.clone()];
+
+    let a = tree.target("a.exe");
+    let b = tree.target(r"Prögrâm\b.exe");
+    let gone = tree.target("gone.exe");
+    let c = tree.target("c.exe");
+    tree.lnk(&user, r"A\X\Fanatec.lnk", &a);
+    tree.lnk(&user, r"B\Y\Fanatec.lnk", &b);
+    tree.lnk(&user, r"B\Fanatec Control Panel.lnk", &a);
+    tree.lnk(&user, r"Z\Crew Chief V4.lnk", &gone);
+    tree.lnk(&common, r"Britton\CrewChiefV4.lnk", &c);
+    tree.lnk(&common, r"Deep\Er\Still\CREWCHIEFV4.LNK", &a);
+    std::fs::create_dir_all(user.join("Junk")).unwrap();
+    std::fs::write(user.join(r"Junk\SimHub.lnk"), b"corrupt").unwrap();
+    tree.lnk(&common, r"Sim\SimHub.lnk", &c);
+    std::fs::remove_file(&gone).unwrap();
+
+    // (names, app answer, game answer), relative to the tree.
+    let user_rel = format!(r"appdata\{suffix}");
+    let cases: [(&[&str], Option<String>, Option<String>); 5] = [
+        (
+            &["Fanatec.lnk", "Fanatec Control Panel.lnk"],
+            Some(r"targets\Prögrâm\b.exe".into()),
+            Some(format!(r"{user_rel}\B\Y\Fanatec.lnk")),
+        ),
+        (
+            &["Fanatec Control Panel.lnk", "Fanatec.lnk"],
+            Some(r"targets\a.exe".into()),
+            Some(format!(r"{user_rel}\B\Fanatec Control Panel.lnk")),
+        ),
+        (
+            &["Crew Chief V4.lnk", "CrewChiefV4.lnk"],
+            Some(r"targets\c.exe".into()),
+            Some(format!(r"{user_rel}\Z\Crew Chief V4.lnk")),
+        ),
+        (
+            &["SimHub.lnk"],
+            Some(r"targets\c.exe".into()),
+            Some(format!(r"{user_rel}\Junk\SimHub.lnk")),
+        ),
+        (&["Nothing.lnk"], None, None),
+    ];
+    for (names, app, game) in cases {
+        let rel = |found: Option<String>| found.map(|f| s(&tree.dir.path().join(f)));
+        assert_eq!(
+            find_shortcut_target_in(&roots, names, false),
+            rel(app),
+            "{names:?}"
+        );
+        assert_eq!(
+            find_shortcut_target_in(&roots, names, true),
+            rel(game),
+            "{names:?} as a game"
+        );
+    }
+}

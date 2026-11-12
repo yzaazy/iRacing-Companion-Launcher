@@ -475,19 +475,39 @@ mod tests {
     use super::*;
     use serde_json::Value;
 
-    const FIXTURES: [&str; 8] = [
-        "app_written",
-        "cp1252",
-        "comments",
-        "interpolation",
-        "parse_error",
-        "lf_only",
-        "empty",
-        "missing",
-    ];
-
     fn fixture_dir() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/core")
+    }
+
+    /// Every fixture in tests/fixtures/core, named by its `.expected.json`, so a new
+    /// file cannot go untested. Each has a `.saved.ini`, every `.ini` input has an
+    /// expectation, and only `missing` has no input.
+    fn fixtures() -> Vec<String> {
+        let (mut names, mut saved, mut inputs) = (Vec::new(), Vec::new(), Vec::new());
+        for entry in fs::read_dir(fixture_dir()).unwrap() {
+            let file = entry.unwrap().file_name().into_string().unwrap();
+            if let Some(name) = file.strip_suffix(".expected.json") {
+                names.push(name.to_owned());
+            } else if let Some(name) = file.strip_suffix(".saved.ini") {
+                saved.push(name.to_owned());
+            } else if let Some(name) = file.strip_suffix(".ini") {
+                inputs.push(name.to_owned());
+            }
+        }
+        names.sort();
+        saved.sort();
+        assert!(names.len() >= 8, "fixtures not found: {names:?}");
+        assert_eq!(saved, names, "a .saved.ini per fixture");
+        for input in &inputs {
+            assert!(names.contains(input), "{input}.ini has no expectation");
+        }
+        for name in &names {
+            assert!(
+                inputs.contains(name) == (name != "missing"),
+                "{name}: only `missing` has no .ini"
+            );
+        }
+        names
     }
 
     fn load_fixture(name: &str) -> (ConfigStore, tempfile::TempDir) {
@@ -522,7 +542,7 @@ mod tests {
     /// The parsed state equals what configparser itself parsed, section by section.
     #[test]
     fn parse_matches_configparser() {
-        for name in FIXTURES {
+        for name in &fixtures() {
             let (store, _dir) = load_fixture(name);
             let exp = expected(name);
             assert_eq!(store.defaults, pairs(&exp["defaults"]), "{name}: defaults");
@@ -539,7 +559,7 @@ mod tests {
     /// `get` and `getboolean` give configparser's result, or fail where it raises.
     #[test]
     fn get_and_getboolean_match_configparser() {
-        for name in FIXTURES {
+        for name in &fixtures() {
             let (store, _dir) = load_fixture(name);
             let exp = expected(name);
             for (ident, want) in exp["get"].as_object().unwrap() {

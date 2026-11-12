@@ -1,0 +1,6 @@
+# The gate (tools/gate.ps1) runs on exactly this toolchain, so a `rustup update`
+# cannot turn it red. Move the pin on purpose and rerun the gate.
+[toolchain]
+channel = "1.99.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

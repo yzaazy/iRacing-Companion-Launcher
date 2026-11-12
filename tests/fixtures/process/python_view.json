@@ -1,0 +1,21 @@
+{
+  "prefix": "ircl-fixture-ba82d115",
+  "names": [
+    "ircl-fixture-ba82d115-child.exe",
+    "ircl-fixture-ba82d115-grandchild.exe"
+  ],
+  "running": [
+    true,
+    2
+  ],
+  "entries": {
+    "Dümmy Gone 😀": [
+      26100,
+      "1794442996.5256221"
+    ],
+    "Dummy App": [
+      20188,
+      "1794442997.5783331"
+    ]
+  }
+}
