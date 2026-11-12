@@ -6,6 +6,7 @@
 
 mod app_support;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, channel};
@@ -16,8 +17,8 @@ use iracing_companion_launcher::app::Controller;
 use iracing_companion_launcher::core::config::{ConfigStore, SharedConfig};
 use iracing_companion_launcher::core::definitions;
 use iracing_companion_launcher::managers::Backend;
-use iracing_companion_launcher::model::{LogLevel, UiAction};
-use iracing_companion_launcher::worker::{Inline, Sequencer, Worker};
+use iracing_companion_launcher::model::{LogLevel, Status, UiAction};
+use iracing_companion_launcher::worker::{Command, Dispatch, Event, Inline, Sequencer, Worker};
 use serde_json::{Value, json};
 use windows::Win32::Foundation::S_FALSE;
 use windows::Win32::System::Com::{
@@ -201,6 +202,50 @@ fn commands_queue_in_order_with_their_own_selection() {
     );
 }
 
+/// The end of a sequence applies the button rule: with nothing selected any
+/// more, Launch and Close stay disabled (#11; Python enabled them).
+#[test]
+fn buttons_stay_disabled_after_sequences_when_nothing_is_selected() {
+    let dir = tempfile::tempdir().unwrap();
+    let rec = Recorder::default();
+    let config = SharedConfig::new(ConfigStore::load(dir.path()));
+    let script = json!({
+        "find_app_path": every_app(json!("C:/fake/app.exe")),
+        "find_game_path": {},
+        "launch_app": every_app(json!(true)),
+        "close_app": every_app(json!(true)),
+    });
+    let (open_gate, gate) = channel();
+    let mut backend = gated(FakeBackend::new(script, rec.clone()), gate);
+    let startup = Controller::startup(&mut backend, Box::new(config), "3.0.0", None);
+    let sequencer = Sequencer::new(Box::new(backend), startup.game_statuses());
+    let mut controller = startup.attach(Box::new(Worker::spawn(sequencer, || {})));
+    let mut dialog = FakeDialog::new([], rec);
+
+    controller.handle(UiAction::Launch, &mut dialog);
+    controller.handle(UiAction::Close, &mut dialog);
+    controller.handle(UiAction::ToggleSelectAll, &mut dialog);
+    assert!(controller.state().apps.iter().all(|c| !c.checked));
+    assert_eq!(controller.state().selected_game, None);
+
+    open_gate.send(()).unwrap();
+    wait_until(&mut controller, |c| {
+        c.state()
+            .log
+            .last()
+            .is_some_and(|l| l.text.ends_with("All apps closed!"))
+    });
+    // `CloseFinished` follows the last log line.
+    std::thread::sleep(Duration::from_millis(50));
+    controller.pump();
+
+    let state = controller.state();
+    assert_eq!(state.launch_label, "Launch apps (0)");
+    assert_eq!(state.close_label, "Close all (0)");
+    assert!(!state.launch_enabled, "Launch stays disabled");
+    assert!(!state.close_enabled, "Close stays disabled");
+}
+
 /// The log lines without their timestamps.
 fn log_texts(controller: &Controller) -> Vec<String> {
     controller
@@ -349,6 +394,44 @@ fn close_warns_once_about_the_selected_game() {
     let warnings: Vec<&String> = log.iter().filter(|l| l.starts_with('⚠')).collect();
     assert_eq!(warnings, [&still_running("iRacing")]);
     assert!(!log.contains(&"iRacing was closed manually".to_owned()));
+}
+
+/// A running app with no detected path is closed once, and its card goes back
+/// to not found whether or not that close found it (#7).
+#[test]
+fn close_without_a_path_closes_a_running_app_once() {
+    for (closed, line) in [(true, "SimHub closed"), (false, "SimHub was not running")] {
+        let rec = Recorder::default();
+        let script = json!({
+            "is_app_running": { "SimHub": [true] },
+            "close_app": { "SimHub": [closed] },
+        });
+        let backend = FakeBackend::new(script, rec.clone());
+        let sequencer = Sequencer::new(Box::new(backend), HashMap::new());
+        let mut inline = Inline::new(sequencer, Box::new(|_| {}));
+        inline.send(Command::Close {
+            apps: vec!["SimHub".to_owned()],
+            game: None,
+        });
+
+        let closes = rec.take().iter().filter(|c| c[1] == "close_app").count();
+        assert_eq!(closes, 1);
+        let events = inline.poll();
+        let log: Vec<&str> = events
+            .iter()
+            .filter_map(|e| match e {
+                Event::Log(l) => l.text.get(11..),
+                _ => None,
+            })
+            .collect();
+        assert!(log.contains(&"Closing SimHub..."), "{log:?}");
+        assert!(log.contains(&line), "{log:?}");
+        let last_status = events.iter().rev().find_map(|e| match e {
+            Event::AppStatus { status, .. } => Some(*status),
+            _ => None,
+        });
+        assert_eq!(last_status, Some(Status::NotFound));
+    }
 }
 
 /// `ShellExecuteW` runs on the worker thread, so the thread must be a
