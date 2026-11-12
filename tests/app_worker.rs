@@ -16,7 +16,7 @@ use iracing_companion_launcher::app::Controller;
 use iracing_companion_launcher::core::config::{ConfigStore, SharedConfig};
 use iracing_companion_launcher::core::definitions;
 use iracing_companion_launcher::managers::Backend;
-use iracing_companion_launcher::model::UiAction;
+use iracing_companion_launcher::model::{LogLevel, UiAction};
 use iracing_companion_launcher::worker::{Inline, Sequencer, Worker};
 use serde_json::{Value, json};
 use windows::Win32::Foundation::S_FALSE;
@@ -25,10 +25,12 @@ use windows::Win32::System::Com::{
     CoGetApartmentType, CoInitializeEx, CoUninitialize,
 };
 
-/// Runs `on_launch` on the worker thread before every `launch_app`.
+/// Runs `on_launch` on the worker thread before every `launch_app`, and
+/// `on_close` before every `close_app`.
 struct HookedBackend {
     inner: FakeBackend,
     on_launch: Box<dyn FnMut() + Send>,
+    on_close: Box<dyn FnMut() + Send>,
 }
 
 /// Holds the first `launch_app` until the test opens the gate, so later
@@ -43,6 +45,7 @@ fn gated(inner: FakeBackend, gate: Receiver<()>) -> HookedBackend {
                 opened = true;
             }
         }),
+        on_close: Box::new(|| {}),
     }
 }
 
@@ -70,6 +73,7 @@ impl Backend for HookedBackend {
         self.inner.launch_app(app, path)
     }
     fn close_app(&mut self, app: &str) -> bool {
+        (self.on_close)();
         self.inner.close_app(app)
     }
     fn game_list(&self) -> Vec<String> {
@@ -197,6 +201,76 @@ fn commands_queue_in_order_with_their_own_selection() {
     );
 }
 
+/// The log lines without their timestamps.
+fn log_texts(controller: &Controller) -> Vec<String> {
+    controller
+        .state()
+        .log
+        .iter()
+        .map(|l| l.text.get(11..).unwrap_or(&l.text).to_owned())
+        .collect()
+}
+
+/// A panic in a sequence is caught on the worker thread: the log ends with an
+/// error line, both buttons work again, and the next command runs (issue #5).
+#[test]
+fn a_panic_in_a_sequence_is_logged_and_the_worker_carries_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let rec = Recorder::default();
+    let config = SharedConfig::new(ConfigStore::load(dir.path()));
+    let script = json!({
+        "find_app_path": every_app(json!("C:/fake/app.exe")),
+        "find_game_path": {},
+        "launch_app": every_app(json!(true)),
+        "close_app": every_app(json!(true)),
+    });
+    let (mut launches, mut closes) = (0, 0);
+    let mut backend = HookedBackend {
+        inner: FakeBackend::new(script, rec.clone()),
+        on_launch: Box::new(move || {
+            launches += 1;
+            if launches == 1 {
+                panic!("injected launch panic");
+            }
+        }),
+        on_close: Box::new(move || {
+            closes += 1;
+            if closes == 1 {
+                panic!("injected close panic");
+            }
+        }),
+    };
+    let startup = Controller::startup(&mut backend, Box::new(config), "3.0.0", None);
+    let sequencer = Sequencer::new(Box::new(backend), startup.game_statuses());
+    let mut controller = startup.attach(Box::new(Worker::spawn(sequencer, || {})));
+    let mut dialog = FakeDialog::new([], rec);
+    let idle = |c: &Controller| c.state().launch_enabled && c.state().close_enabled;
+
+    for (action, error, done) in [
+        (
+            UiAction::Launch,
+            "Launch sequence stopped by an internal error: injected launch panic",
+            "Launch sequence complete!",
+        ),
+        (
+            UiAction::Close,
+            "Close sequence stopped by an internal error: injected close panic",
+            "All apps closed!",
+        ),
+    ] {
+        controller.handle(action.clone(), &mut dialog);
+        wait_until(&mut controller, idle);
+        let last = controller.state().log.last().unwrap();
+        assert_eq!(last.level, LogLevel::Error);
+        assert_eq!(log_texts(&controller).last().unwrap(), error);
+
+        // The worker is still there: the same command runs to the end.
+        controller.handle(action, &mut dialog);
+        wait_until(&mut controller, idle);
+        assert_eq!(log_texts(&controller).last().unwrap(), done);
+    }
+}
+
 /// Runs one Close with every app found and checked, inline, and returns the
 /// log lines after "Closing applications..." without their timestamps.
 /// `config` is the test's `config.ini`.
@@ -311,6 +385,7 @@ fn worker_thread_is_a_com_apartment() {
                 unsafe { CoGetApartmentType(&raw mut kind, &raw mut qualifier) }.map(|()| kind);
             let _ = probe_tx.send((current, nested, after));
         }),
+        on_close: Box::new(|| {}),
     };
     let startup = Controller::startup(&mut backend, Box::new(config), "3.0.0", None);
     let sequencer = Sequencer::new(Box::new(backend), startup.game_statuses());

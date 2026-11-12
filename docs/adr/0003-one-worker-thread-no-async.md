@@ -17,5 +17,5 @@ A launch sequence blocks: 2 s after each app launch, 3 s after a Steam launch, u
 
 - The window stays responsive. A button pressed mid-sequence queues its command; a button stays disabled while a command of its kind is queued or running.
 - The sequence logic (`Sequencer`) is plain synchronous code. Tests run it inline (`worker::Inline`) for deterministic transcripts, or on the real thread (`tests/app_worker.rs`).
-- A panic on the worker thread aborts the app (release builds use `panic = "abort"`); catching it is issue #5.
+- A panic in a sequence is caught on the worker thread, logged, and ends that command like a normal end; release builds therefore use `panic = "unwind"` (issue #5).
 - Running sequences in parallel would need a different design; nothing asks for it.

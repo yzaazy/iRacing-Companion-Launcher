@@ -14,7 +14,9 @@
 //! into `idle` and so never changes the one question asked of it, "is it
 //! `running`?".
 
+use std::any::Any;
 use std::collections::HashMap;
+use std::panic::{self, AssertUnwindSafe};
 use std::sync::mpsc::{self, Receiver, Sender};
 
 use serde::{Deserialize, Serialize};
@@ -73,19 +75,51 @@ impl Sequencer {
     }
 
     /// Runs one command to completion; the last event is `LaunchFinished` or `CloseFinished`.
+    ///
+    /// A panic in the sequence stops it there: it is logged as one error line and the
+    /// finished event still follows, so the button works again (`docs/behaviour.md`,
+    /// "Changes from v2.3.2"). The backend carries on in whatever state the panic left it.
     fn run(&mut self, command: Command, emit: &mut dyn FnMut(Event)) {
+        let (kind, finished) = match command {
+            Command::Launch { .. } => ("Launch", Event::LaunchFinished),
+            Command::Close { .. } => ("Close", Event::CloseFinished),
+        };
         let mut out = Out {
             emit,
             game_status: &mut self.game_status,
         };
-        match command {
+        let backend = self.backend.as_mut();
+        // Nothing relies on an invariant a panic could break: the next sequence asks the
+        // backend afresh, and the game status mirror only follows events already emitted.
+        let result = panic::catch_unwind(AssertUnwindSafe(|| match command {
             Command::Launch { apps, game } => {
-                launch_apps(self.backend.as_mut(), &mut out, &apps, game.as_deref());
+                launch_apps(backend, &mut out, &apps, game.as_deref());
             }
             Command::Close { apps, game } => {
-                close_apps(self.backend.as_mut(), &mut out, &apps, game.as_deref());
+                close_apps(backend, &mut out, &apps, game.as_deref());
             }
+        }));
+        if let Err(payload) = result {
+            out.log(
+                LogLevel::Error,
+                &format!(
+                    "{kind} sequence stopped by an internal error: {}",
+                    panic_message(payload.as_ref())
+                ),
+            );
         }
+        (out.emit)(finished);
+    }
+}
+
+/// The message a panic was raised with; `panic!` passes a `&str` or a `String`.
+fn panic_message(payload: &(dyn Any + Send)) -> &str {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        message
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message
+    } else {
+        "unknown"
     }
 }
 
@@ -178,7 +212,6 @@ fn launch_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: 
     }
 
     out.log(LogLevel::Success, "Launch sequence complete!");
-    (out.emit)(Event::LaunchFinished);
 }
 
 /// Launches the selected game at the end of the launch sequence, unless it is not found or
@@ -288,7 +321,6 @@ fn close_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: O
     }
 
     out.log(LogLevel::Success, "All apps closed!");
-    (out.emit)(Event::CloseFinished);
 }
 
 /// Where the controller sends commands and collects events.
@@ -331,7 +363,8 @@ impl Worker {
 
 impl Dispatch for Worker {
     fn send(&mut self, command: Command) {
-        // Fails only if the thread panicked; there is nothing left to run it.
+        // Fails only if the thread died, which a panic inside a sequence no longer causes
+        // (`Sequencer::run`); there is nothing left to run it.
         let _ = self.commands.send(command);
     }
 
