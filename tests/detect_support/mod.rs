@@ -62,13 +62,21 @@ impl Tree {
 /// Writes a `.lnk` through the same shell interfaces the detection reads.
 pub fn create_lnk(lnk: &Path, target: &Path) {
     // The test thread may or may not have COM yet; either answer is fine.
+    // SAFETY: CoInitializeEx takes no pointers (the reserved one is null) and
+    // affects only the current test thread.
     let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+    // SAFETY: COM is initialised on this thread; `ShellLink` is a static CLSID,
+    // there is no outer object, and the result is an owned interface.
     let link: IShellLinkW =
         unsafe { CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER) }.unwrap();
     let target = wide(target);
+    // SAFETY: `link` is live; `target` is a NUL-terminated UTF-16 string alive
+    // across the call, which copies it.
     unsafe { link.SetPath(PCWSTR(target.as_ptr())) }.unwrap();
     let file: IPersistFile = link.cast().unwrap();
     let lnk = wide(lnk);
+    // SAFETY: `file` is live; `lnk` is a NUL-terminated UTF-16 string alive
+    // across the call.
     unsafe { file.Save(PCWSTR(lnk.as_ptr()), true) }.unwrap();
 }
 

@@ -255,14 +255,18 @@ fn works_on_threads_with_and_without_com() {
                 .collect::<Vec<_>>()
         });
         let sta = scope.spawn(|| {
+            // SAFETY: CoInitializeEx takes no pointers (the reserved one is null)
+            // and affects only this short-lived thread, whose apartment ends with it.
             let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
             find_shortcut_target_in(roots, NAMES, ShortcutLookup::Target)
         });
         let mta = scope.spawn(|| {
+            // SAFETY: as for the STA thread: no pointers, this thread only.
             let _ = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
             let found = find_shortcut_target_in(roots, NAMES, ShortcutLookup::Target);
             // The thread must still be multithreaded afterwards: another MTA
             // init succeeds, where a leftover STA would refuse it.
+            // SAFETY: no pointers; this thread only, as above.
             assert!(unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok());
             found
         });

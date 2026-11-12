@@ -50,7 +50,10 @@ impl ComApartment {
     /// is `None`: a shortcut read then gives up, while the worker thread and
     /// the dialog carry on without COM of their own.
     pub(crate) fn enter() -> Option<Self> {
-        // SAFETY: plain call on the current thread; balanced in Drop when it succeeds.
+        // SAFETY: CoInitializeEx takes no pointers (the reserved one is null) and
+        // affects only the current thread. A success is balanced by
+        // CoUninitialize in Drop; every caller holds the guard as a local that
+        // is dropped on the thread that entered it.
         let hr = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
         if hr == RPC_E_CHANGED_MODE {
             Some(Self { owns_init: false })

@@ -18,7 +18,7 @@ fn override_wins_then_debug_builds_use_target_dev_config() {
     assert!(dir.is_dir(), "created if missing");
 
     // An empty value counts as unset.
-    // SAFETY: as above.
+    // SAFETY: still the only thread of the only test in this binary.
     unsafe { std::env::set_var("IRCL_CONFIG_DIR", "") };
     let dev = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("target")
@@ -26,7 +26,7 @@ fn override_wins_then_debug_builds_use_target_dev_config() {
     assert_eq!(resolve_config_dir(), dev);
     assert!(dev.is_dir());
 
-    // SAFETY: as above.
+    // SAFETY: still the only thread of the only test in this binary.
     unsafe { std::env::remove_var("IRCL_CONFIG_DIR") };
     assert_eq!(resolve_config_dir(), dev);
 }

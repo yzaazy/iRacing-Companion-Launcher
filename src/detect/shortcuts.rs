@@ -122,7 +122,10 @@ fn rglob_literal<T>(
 fn subdirectories(dir: &Path) -> Vec<PathBuf> {
     let pattern = wide(dir.join("*"));
     let mut data = WIN32_FIND_DATAW::default();
-    let Ok(handle) = (unsafe { FindFirstFileW(PCWSTR(pattern.as_ptr()), &mut data) }) else {
+    // SAFETY: `pattern` is a NUL-terminated UTF-16 string and `data` a live,
+    // writable WIN32_FIND_DATAW, both alive across the call; a returned handle
+    // is owned by `FindHandle` right after, which closes it once.
+    let Ok(handle) = (unsafe { FindFirstFileW(PCWSTR(pattern.as_ptr()), &raw mut data) }) else {
         return Vec::new();
     };
     let find = FindHandle(handle);
@@ -144,7 +147,9 @@ fn subdirectories(dir: &Path) -> Vec<PathBuf> {
         {
             dirs.push(dir.join(name));
         }
-        if unsafe { FindNextFileW(find.0, &mut data) }.is_err() {
+        // SAFETY: `find` holds the open search handle; `data` is the same live,
+        // writable WIN32_FIND_DATAW.
+        if unsafe { FindNextFileW(find.0, &raw mut data) }.is_err() {
             break;
         }
     }
@@ -162,6 +167,9 @@ fn shortcut_path(lnk: &Path) -> Option<String> {
         return Some(text.into_owned());
     }
     let _com = ComApartment::enter()?;
+    // SAFETY: COM is initialised on this thread while `_com` lives; `ShellLink`
+    // is a static CLSID, there is no outer object, and the result is returned
+    // as an owned interface.
     let link: IShellLinkW =
         unsafe { CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER) }.ok()?;
     // winshell only loads when the file exists; an unloaded link has an
@@ -169,9 +177,13 @@ fn shortcut_path(lnk: &Path) -> Option<String> {
     if lnk.exists() {
         let file: IPersistFile = link.cast().ok()?;
         let path = wide(lnk);
+        // SAFETY: `file` is a live interface; `path` is a NUL-terminated UTF-16
+        // string alive across the call.
         unsafe { file.Load(PCWSTR(path.as_ptr()), STGM_READ) }.ok()?;
     }
     let mut buffer = [0u16; MAX_PATH];
+    // SAFETY: `link` is a live interface; the buffer is passed as a slice with
+    // its length, and a null find-data pointer is allowed.
     unsafe { link.GetPath(&mut buffer, std::ptr::null_mut(), SLGP_UNCPRIORITY.0 as u32) }.ok()?;
     let len = buffer.iter().position(|&c| c == 0).unwrap_or(MAX_PATH);
     Some(String::from_utf16_lossy(&buffer[..len]))

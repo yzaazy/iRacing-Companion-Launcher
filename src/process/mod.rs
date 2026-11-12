@@ -62,7 +62,8 @@ pub fn launch_process(exe_path: &str, wait: Duration) -> bool {
 /// "open"), no parameters, no working directory, `SW_SHOWNORMAL`.
 pub fn shell_open(target: &str) -> std::io::Result<()> {
     let file = wide(target);
-    // SAFETY: `file` is NUL-terminated and outlives the call.
+    // SAFETY: `file` is a NUL-terminated UTF-16 string alive for the whole
+    // call; the other string arguments are null, which the call allows.
     let rc = unsafe {
         ShellExecuteW(
             None,

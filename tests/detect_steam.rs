@@ -24,6 +24,9 @@ impl TempKey {
     fn create(&self, sub: &str) {
         let path = HSTRING::from(format!(r"{}\{sub}", self.0));
         let mut key = HKEY::default();
+        // SAFETY: `path` is a NUL-terminated HSTRING alive across the call, the
+        // optional pointers are null, and `key` is a live HKEY for the result,
+        // closed once below.
         let made = unsafe {
             RegCreateKeyExW(
                 HKEY_CURRENT_USER,
@@ -33,17 +36,20 @@ impl TempKey {
                 REG_OPTION_VOLATILE,
                 KEY_WRITE,
                 None,
-                &mut key,
+                &raw mut key,
                 None,
             )
         };
         assert_eq!(made, ERROR_SUCCESS);
+        // SAFETY: `key` was opened by the successful call above and is closed once.
         let _ = unsafe { RegCloseKey(key) };
     }
 }
 
 impl Drop for TempKey {
     fn drop(&mut self) {
+        // SAFETY: the subkey name is a NUL-terminated HSTRING alive across the
+        // call; it names only this test's own volatile key.
         let _ = unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, &HSTRING::from(&self.0)) };
     }
 }
@@ -68,13 +74,15 @@ fn present_key_means_installed() {
         "266410"
     ));
     let mut handle = HKEY::default();
+    // SAFETY: the subkey name is a NUL-terminated HSTRING alive across the call
+    // and `handle` a live HKEY for the result; the call is expected to fail.
     let opened = unsafe {
         RegOpenKeyExW(
             HKEY_CURRENT_USER,
             &HSTRING::from(path),
             Some(0),
             KEY_READ,
-            &mut handle,
+            &raw mut handle,
         )
     };
     assert_ne!(opened, ERROR_SUCCESS);

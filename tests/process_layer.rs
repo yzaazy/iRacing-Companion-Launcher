@@ -401,10 +401,11 @@ fn shell_launch_without_a_new_process_fails() {
 }
 
 fn can_open(pid: u64, access: PROCESS_ACCESS_RIGHTS) -> bool {
-    // SAFETY: plain call; a returned handle is closed at once.
+    // SAFETY: OpenProcess takes only values and returns a new handle or an
+    // error; a returned handle is closed at once, below.
     match unsafe { OpenProcess(access, false, pid as u32) } {
         Ok(h) => {
-            // SAFETY: `h` was just opened.
+            // SAFETY: `h` was just opened by this function and is closed exactly once.
             let _ = unsafe { CloseHandle(h) };
             true
         }

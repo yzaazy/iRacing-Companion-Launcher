@@ -209,16 +209,21 @@ fn worker_thread_is_a_com_apartment() {
         inner: FakeBackend::new(script, rec.clone()),
         on_launch: Box::new(move || {
             let (mut kind, mut qualifier) = (APTTYPE::default(), APTTYPEQUALIFIER::default());
-            // SAFETY: both out-pointers are valid locals.
-            let current = unsafe { CoGetApartmentType(&mut kind, &mut qualifier) }.map(|()| kind);
+            // SAFETY: both out-pointers point to live, writable locals.
+            let current =
+                unsafe { CoGetApartmentType(&raw mut kind, &raw mut qualifier) }.map(|()| kind);
             // What detect::shortcuts' per-call guard does on this thread: it
             // nests (S_FALSE) and its balancing uninit leaves the apartment.
-            // SAFETY: balanced by the CoUninitialize just below.
+            // SAFETY: CoInitializeEx takes no pointers (the reserved one is null)
+            // and affects only this thread; it is balanced just below.
             let nested = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
-            // SAFETY: balances the successful nested init above.
+            // SAFETY: balances the nested init above, on the same thread; the
+            // worker thread already has an apartment, so that init returned
+            // S_FALSE (asserted below) and this leaves the apartment as it was.
             unsafe { CoUninitialize() };
-            // SAFETY: as above.
-            let after = unsafe { CoGetApartmentType(&mut kind, &mut qualifier) }.map(|()| kind);
+            // SAFETY: both out-pointers point to the same live, writable locals.
+            let after =
+                unsafe { CoGetApartmentType(&raw mut kind, &raw mut qualifier) }.map(|()| kind);
             let _ = probe_tx.send((current, nested, after));
         }),
     };

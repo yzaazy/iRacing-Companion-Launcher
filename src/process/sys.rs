@@ -57,7 +57,8 @@ pub(crate) struct ProcEntry {
 }
 
 fn open_process(access: PROCESS_ACCESS_RIGHTS, pid: u32) -> windows::core::Result<Handle> {
-    // SAFETY: plain call; the returned handle is wrapped immediately.
+    // SAFETY: OpenProcess takes only values and returns a new handle or an
+    // error; a returned handle is owned by `Handle`, which closes it once.
     unsafe { OpenProcess(access, false, pid) }.map(Handle)
 }
 
@@ -68,7 +69,8 @@ fn is_code(err: &windows::core::Error, code: windows::Win32::Foundation::WIN32_E
 /// Every running process with its parent PID and exe name (Toolhelp, as psutil's `ppid_map`).
 pub(crate) fn snapshot() -> Vec<ProcEntry> {
     let mut out = Vec::new();
-    // SAFETY: plain call; the handle is wrapped immediately.
+    // SAFETY: CreateToolhelp32Snapshot takes only values and returns a new
+    // handle or an error; a returned handle is owned by `Handle`, which closes it once.
     let Ok(snap) = (unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) }).map(Handle) else {
         return out;
     };
@@ -76,8 +78,9 @@ pub(crate) fn snapshot() -> Vec<ProcEntry> {
         dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
         ..Default::default()
     };
-    // SAFETY: `entry` is a valid PROCESSENTRY32W with dwSize set.
-    let mut ok = unsafe { Process32FirstW(snap.0, &mut entry) }.is_ok();
+    // SAFETY: `snap` is an open snapshot handle; `entry` is a live, writable
+    // PROCESSENTRY32W whose dwSize is its size, as the call requires.
+    let mut ok = unsafe { Process32FirstW(snap.0, &raw mut entry) }.is_ok();
     while ok {
         let len = entry
             .szExeFile
@@ -89,8 +92,9 @@ pub(crate) fn snapshot() -> Vec<ProcEntry> {
             ppid: entry.th32ParentProcessID,
             name: String::from_utf16_lossy(&entry.szExeFile[..len]),
         });
-        // SAFETY: as above.
-        ok = unsafe { Process32NextW(snap.0, &mut entry) }.is_ok();
+        // SAFETY: `snap` is still open; `entry` is the same live PROCESSENTRY32W,
+        // its dwSize left as the call requires.
+        ok = unsafe { Process32NextW(snap.0, &raw mut entry) }.is_ok();
     }
     out
 }
@@ -101,8 +105,9 @@ fn pid_in_pids(pid: u32) -> bool {
     loop {
         let mut needed = 0u32;
         let bytes = (buf.len() * 4) as u32;
-        // SAFETY: `buf` holds `bytes` bytes.
-        if unsafe { EnumProcesses(buf.as_mut_ptr(), bytes, &mut needed) }.is_err() {
+        // SAFETY: `buf` is a live, writable buffer of `bytes` bytes and `needed`
+        // a live u32; the call writes within both.
+        if unsafe { EnumProcesses(buf.as_mut_ptr(), bytes, &raw mut needed) }.is_err() {
             return false;
         }
         if needed < bytes {
@@ -137,8 +142,9 @@ fn fast_create_time(pid: u32) -> Result<f64, ProcError> {
         Err(_) => return Err(ProcError::AccessDenied),
     };
     let mut code = 0u32;
-    // SAFETY: `h` is an open process handle.
-    if unsafe { GetExitCodeProcess(h.0, &mut code) }.is_ok()
+    // SAFETY: `h` is an open process handle with query-limited access, which
+    // the call needs; `code` is a live u32 for the result.
+    if unsafe { GetExitCodeProcess(h.0, &raw mut code) }.is_ok()
         && code != STILL_ACTIVE
         && !pid_in_pids(pid)
     {
@@ -155,8 +161,18 @@ fn handle_create_time(h: &Handle) -> Option<f64> {
         FILETIME::default(),
         FILETIME::default(),
     );
-    // SAFETY: `h` is open; the four out-pointers are valid.
-    unsafe { GetProcessTimes(h.0, &mut created, &mut exited, &mut kernel, &mut user) }.ok()?;
+    // SAFETY: `h` is an open process handle with at least query-limited access;
+    // the four out-pointers point to live, writable FILETIMEs.
+    unsafe {
+        GetProcessTimes(
+            h.0,
+            &raw mut created,
+            &raw mut exited,
+            &raw mut kernel,
+            &raw mut user,
+        )
+    }
+    .ok()?;
     Some(filetime_ticks_to_epoch(
         (u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime),
     ))
@@ -199,13 +215,15 @@ fn nt_create_time(pid: u32) -> Result<f64, ProcError> {
     loop {
         let bytes = (buf.len() * 8) as u32;
         let mut needed = 0u32;
-        // SAFETY: `buf` holds `bytes` bytes, 8-byte aligned.
+        // SAFETY: `buf` is a live, writable buffer of `bytes` bytes, 8-byte
+        // aligned as SYSTEM_PROCESS_INFORMATION needs, and `needed` a live u32;
+        // the kernel writes within both.
         let status = unsafe {
             NtQuerySystemInformation(
                 SystemProcessInformation,
                 buf.as_mut_ptr().cast::<c_void>(),
                 bytes,
-                &mut needed,
+                &raw mut needed,
             )
         };
         // The process list grew; retry larger.
@@ -279,7 +297,8 @@ pub(crate) fn kill_if_same(pid: u32, identity: Option<f64>) -> Result<(), ProcEr
 /// psutil's `proc_kill` on an open handle: `TerminateProcess(SIGTERM)`, where
 /// access denied counts as success (the process already died).
 fn terminate(h: &Handle) -> Result<(), ProcError> {
-    // SAFETY: `h` is an open handle with PROCESS_TERMINATE.
+    // SAFETY: `h` is an open process handle, opened with PROCESS_TERMINATE by
+    // both callers; the call takes only values besides it.
     match unsafe { TerminateProcess(h.0, SIGTERM) } {
         Ok(()) => Ok(()),
         Err(e) if is_code(&e, ERROR_ACCESS_DENIED) => Ok(()),
@@ -304,7 +323,8 @@ pub(crate) fn proc_wait(pid: u32, timeout: Duration) -> Result<WaitOutcome, Proc
         Err(_) => return Err(ProcError::AccessDenied),
     };
     let ms = u32::try_from(timeout.as_millis()).unwrap_or(u32::MAX - 1);
-    // SAFETY: `h` is an open handle with SYNCHRONIZE.
+    // SAFETY: `h` is an open process handle with SYNCHRONIZE, which the wait
+    // needs; the call takes only values besides it.
     let r = unsafe { WaitForSingleObject(h.0, ms) };
     if r == WAIT_OBJECT_0 || r == WAIT_ABANDONED {
         Ok(WaitOutcome::Exited)
@@ -357,13 +377,16 @@ impl AttributeList {
     /// Sizes and initialises a list with room for `count` attributes.
     fn new(count: u32) -> std::io::Result<Self> {
         let mut size = 0usize;
-        // SAFETY: size query; fails by design with ERROR_INSUFFICIENT_BUFFER.
-        let _ = unsafe { InitializeProcThreadAttributeList(None, count, None, &mut size) };
+        // SAFETY: a size query: with no list the call only writes the required
+        // size to `size`, a live usize. It fails by design with
+        // ERROR_INSUFFICIENT_BUFFER.
+        let _ = unsafe { InitializeProcThreadAttributeList(None, count, None, &raw mut size) };
         // At least one element, so the pointer below is never dangling.
         let mut buf = vec![0u64; size.div_ceil(8).max(1)];
         let list = LPPROC_THREAD_ATTRIBUTE_LIST(buf.as_mut_ptr().cast());
-        // SAFETY: `buf` holds at least `size` bytes and outlives the call.
-        unsafe { InitializeProcThreadAttributeList(Some(list), count, None, &mut size) }?;
+        // SAFETY: `list` points into `buf`, which holds at least `size` bytes,
+        // is 8-byte aligned and outlives the call; `size` is a live usize.
+        unsafe { InitializeProcThreadAttributeList(Some(list), count, None, &raw mut size) }?;
         Ok(Self { buf })
     }
 
@@ -374,7 +397,8 @@ impl AttributeList {
 
 impl Drop for AttributeList {
     fn drop(&mut self) {
-        // SAFETY: the list was initialised by InitializeProcThreadAttributeList.
+        // SAFETY: a value exists only once InitializeProcThreadAttributeList
+        // succeeded on `buf`, which is still alive; the list is deleted once, here.
         unsafe { DeleteProcThreadAttributeList(self.ptr()) };
     }
 }
@@ -391,13 +415,15 @@ pub(crate) fn spawn_detached(exe_path: &str) -> std::io::Result<u32> {
         bInheritHandle: true.into(),
     };
     let nul_name = wide("NUL");
-    // SAFETY: `nul_name` is NUL-terminated and `sa` outlives the call.
+    // SAFETY: `nul_name` is a NUL-terminated UTF-16 string and `sa` a live
+    // SECURITY_ATTRIBUTES with nLength set, both alive for the whole call; a
+    // returned handle is owned by `Handle`, which closes it once.
     let nul = unsafe {
         CreateFileW(
             PCWSTR(nul_name.as_ptr()),
             (GENERIC_READ | GENERIC_WRITE).0,
             FILE_SHARE_READ | FILE_SHARE_WRITE,
-            Some(&sa),
+            Some(&raw const sa),
             OPEN_EXISTING,
             FILE_ATTRIBUTE_NORMAL,
             None,
@@ -407,7 +433,9 @@ pub(crate) fn spawn_detached(exe_path: &str) -> std::io::Result<u32> {
 
     let mut list = AttributeList::new(1)?;
     let handles = [nul.0];
-    // SAFETY: `handles` outlives CreateProcessW below; the list is initialised.
+    // SAFETY: the list is initialised (an `AttributeList` exists only then);
+    // the attribute keeps a pointer to `handles`, `size_of_val(&handles)` bytes,
+    // which stays alive until after CreateProcessW below has read it.
     unsafe {
         UpdateProcThreadAttribute(
             list.ptr(),
@@ -430,8 +458,12 @@ pub(crate) fn spawn_detached(exe_path: &str) -> std::io::Result<u32> {
 
     let mut cmdline = wide(list2cmdline(exe_path));
     let mut pi = PROCESS_INFORMATION::default();
-    // SAFETY: every pointer is valid for the duration of the call; `cmdline` is
-    // writable as CreateProcessW requires.
+    // SAFETY: `cmdline` is a live, writable, NUL-terminated UTF-16 buffer, as
+    // CreateProcessW requires; `si` is a live STARTUPINFOEXW with cb set to
+    // its size and a live attribute list and NUL handle, passed through its
+    // first field as EXTENDED_STARTUPINFO_PRESENT expects; `pi` is a live
+    // PROCESS_INFORMATION for the result, whose two handles `Handle` closes
+    // right after.
     unsafe {
         CreateProcessW(
             PCWSTR::null(),
@@ -445,8 +477,8 @@ pub(crate) fn spawn_detached(exe_path: &str) -> std::io::Result<u32> {
                 | CREATE_UNICODE_ENVIRONMENT,
             None,
             PCWSTR::null(),
-            &si.StartupInfo,
-            &mut pi,
+            &raw const si.StartupInfo,
+            &raw mut pi,
         )
     }?;
     drop(Handle(pi.hThread));
