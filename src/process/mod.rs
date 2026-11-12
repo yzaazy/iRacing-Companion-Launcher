@@ -5,6 +5,7 @@
 //! such process" and which as "access denied"), because those details decide
 //! what the launcher sees.
 
+mod state_file;
 mod sys;
 pub mod tracker;
 
