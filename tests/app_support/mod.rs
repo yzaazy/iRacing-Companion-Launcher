@@ -39,7 +39,8 @@ impl Recorder {
             .clone()
     }
 
-    /// Records what the Python `StatusCard`/`GameCard`/`ActivityLogger` wrappers record.
+    /// Records what the transcript recorder took from the Python app's cards and logger:
+    /// app and game status changes and log lines.
     pub(crate) fn event(&self, event: &Event) {
         match event {
             Event::Log(line) => {
@@ -81,7 +82,7 @@ fn strip_timestamp(text: &str) -> &str {
 
 /// Scripted answers: `script[method][name]` is a list consumed in order, the
 /// last value sticky; a missing entry gives the method's default. Defaults
-/// match the Python fakes.
+/// match the fakes the transcripts were recorded with (see `tests/fixtures/README.md`).
 pub(crate) struct FakeBackend {
     script: Value,
     counters: HashMap<(String, String), usize>,
