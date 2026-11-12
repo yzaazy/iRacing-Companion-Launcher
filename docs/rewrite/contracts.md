@@ -115,12 +115,13 @@ impl ConfigStore {
     pub fn load(dir: &Path) -> Self;
     pub fn config_dir(&self) -> &Path;
     pub fn app_path(&self, key: &str) -> Option<String>;      // only if it exists on disk
-    pub fn set_app_path(&mut self, key: &str, path: &str) -> bool; // saves
+    pub fn set_app_path(&mut self, key: &str, path: &str) -> Result<(), SetPathError>; // saves
     pub fn setting(&self, key: &str) -> Option<String>;
     pub fn bool_setting(&self, key: &str, fallback: bool) -> bool;
     pub fn set_setting(&mut self, key: &str, value: &str);     // does not save
-    pub fn save(&self) -> bool;
+    pub fn save(&self) -> io::Result<()>;
 }
+pub enum SetPathError { Refused, Save(io::Error) } // configparser refuses the value; the write failed
 pub struct SharedConfig; // one ConfigStore shared by the controller and the managers
 impl SharedConfig {
     pub fn new(store: ConfigStore) -> Self;

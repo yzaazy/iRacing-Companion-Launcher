@@ -7,7 +7,7 @@
 
 use std::collections::HashSet;
 use std::fs;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
@@ -22,6 +22,26 @@ const APP_DIR_NAME: &str = "iRacingCompanionLauncher";
 
 /// Key/value pairs in file order, values raw (not interpolated).
 type Items = Vec<(String, String)>;
+
+/// Why [`ConfigStore::set_app_path`] did not store and save a path.
+#[derive(Debug)]
+pub enum SetPathError {
+    /// `configparser` refuses the value (a `%` that is neither `%%` nor a
+    /// `%(name)s` reference). Python raises `ValueError` before saving:
+    /// nothing is stored or written.
+    Refused,
+    /// The value is stored, but writing `config.ini` failed.
+    Save(io::Error),
+}
+
+/// Where `ConfigParser.get` or `getboolean` raises.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReadError {
+    /// `InterpolationError`: a malformed `%`, a missing reference or too deep a chain.
+    Interpolation,
+    /// `getboolean`'s `ValueError`: not a boolean word.
+    NotABoolean,
+}
 
 /// `ConfigManager`: the parsed `config.ini` plus the directory it lives in.
 #[derive(Debug, Clone, PartialEq)]
@@ -66,7 +86,7 @@ pub fn resolve_config_dir() -> PathBuf {
             .and_then(|exe| exe.parent().map(Path::to_path_buf))
             .unwrap_or_default()
     };
-    // A failure here surfaces later as save() returning false, as in Python.
+    // A failure here surfaces later as save() failing, as in Python.
     let _ = fs::create_dir_all(&dir);
     dir
 }
@@ -112,12 +132,12 @@ impl ConfigStore {
     }
 
     /// Saves.
-    pub fn set_app_path(&mut self, key: &str, path: &str) -> bool {
+    pub fn set_app_path(&mut self, key: &str, path: &str) -> Result<(), SetPathError> {
         // Python raises ValueError before saving; nothing is stored or written.
         if !self.set(APP_PATHS, key, path) {
-            return false;
+            return Err(SetPathError::Refused);
         }
-        self.save()
+        self.save().map_err(SetPathError::Save)
     }
 
     pub fn setting(&self, key: &str) -> Option<String> {
@@ -138,7 +158,7 @@ impl ConfigStore {
         self.set(SETTINGS, key, value);
     }
 
-    pub fn save(&self) -> bool {
+    pub fn save(&self) -> io::Result<()> {
         // Python's text mode writes CRLF line endings. UTF-8 is deliberate
         // difference 6 in behaviour.md (Python used the ANSI code page).
         let text = self.render().replace('\n', "\r\n");
@@ -148,7 +168,7 @@ impl ConfigStore {
     /// `ConfigParser.get(section, key)` with `BasicInterpolation`. `Ok(None)`
     /// when the key is absent from the section and from `[DEFAULT]`, `Err` where
     /// Python raises an interpolation error.
-    fn get(&self, section: &str, key: &str) -> Result<Option<String>, ()> {
+    fn get(&self, section: &str, key: &str) -> Result<Option<String>, ReadError> {
         let Some(items) = self.section(section) else {
             return Ok(None);
         };
@@ -162,14 +182,14 @@ impl ConfigStore {
     }
 
     /// `ConfigParser.getboolean`; `Err` where Python raises.
-    fn get_boolean(&self, section: &str, key: &str) -> Result<Option<bool>, ()> {
+    fn get_boolean(&self, section: &str, key: &str) -> Result<Option<bool>, ReadError> {
         let Some(value) = self.get(section, key)? else {
             return Ok(None);
         };
         match value.to_lowercase().as_str() {
             "1" | "yes" | "true" | "on" => Ok(Some(true)),
             "0" | "no" | "false" | "off" => Ok(Some(false)),
-            _ => Err(()),
+            _ => Err(ReadError::NotABoolean),
         }
     }
 
@@ -209,9 +229,9 @@ impl ConfigStore {
         mut rest: &str,
         depth: usize,
         out: &mut String,
-    ) -> Result<(), ()> {
+    ) -> Result<(), ReadError> {
         if depth > MAX_INTERPOLATION_DEPTH {
-            return Err(());
+            return Err(ReadError::Interpolation);
         }
         while !rest.is_empty() {
             let Some(p) = rest.find('%') else {
@@ -226,17 +246,17 @@ impl ConfigStore {
                     rest = &rest[2..];
                 }
                 Some('(') => {
-                    let len = key_ref_len(rest).ok_or(())?;
+                    let len = key_ref_len(rest).ok_or(ReadError::Interpolation)?;
                     let var = rest[2..len - 2].to_lowercase();
                     rest = &rest[len..];
-                    let value = self.lookup(items, &var).ok_or(())?;
+                    let value = self.lookup(items, &var).ok_or(ReadError::Interpolation)?;
                     if value.contains('%') {
                         self.interpolate(items, value, depth + 1, out)?;
                     } else {
                         out.push_str(value);
                     }
                 }
-                _ => return Err(()),
+                _ => return Err(ReadError::Interpolation),
             }
         }
         Ok(())
@@ -286,8 +306,8 @@ fn key_ref_len(s: &str) -> Option<usize> {
 /// Writes `bytes` to a temporary file beside `path`, then moves it over `path`,
 /// so a process that ends mid-save leaves the old file whole. Python's
 /// in-place write could not be interrupted there: the window blocked until it
-/// was done. False on any failure, with the temporary file removed.
-fn replace_atomically(path: &Path, bytes: &[u8]) -> bool {
+/// was done. On any failure the temporary file is removed.
+fn replace_atomically(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let mut tmp = path.as_os_str().to_owned();
     tmp.push(".tmp");
     let tmp = PathBuf::from(tmp);
@@ -296,18 +316,16 @@ fn replace_atomically(path: &Path, bytes: &[u8]) -> bool {
         file.sync_all()
     });
     // `rename` replaces an existing file (MoveFileExW with MOVEFILE_REPLACE_EXISTING).
-    if written.and_then(|()| fs::rename(&tmp, path)).is_ok() {
-        return true;
+    let replaced = written.and_then(|()| fs::rename(&tmp, path));
+    if replaced.is_err() {
+        let _ = fs::remove_file(&tmp);
     }
-    let _ = fs::remove_file(&tmp);
-    false
+    replaced
 }
 
 /// `BasicInterpolation.before_set`: after `%%` and `%(name)s` references are
 /// removed, a remaining `%` makes `configparser.set` raise `ValueError`.
-/// [`ConfigStore::set_app_path`] returns false both for such a value and for a
-/// failed save; this tells the two apart.
-pub fn configparser_accepts(value: &str) -> bool {
+fn configparser_accepts(value: &str) -> bool {
     let mut rest = value.replace("%%", "");
     let mut remaining = String::new();
     while let Some(p) = rest.find('%') {
@@ -589,7 +607,7 @@ mod tests {
                     Value::String(s) => {
                         assert_eq!(got, Ok(Some(s.clone())), "{name}: get {ident}")
                     }
-                    _ => assert_eq!(got, Err(()), "{name}: get {ident}"),
+                    _ => assert_eq!(got, Err(ReadError::Interpolation), "{name}: get {ident}"),
                 }
             }
             for (ident, want) in exp["getboolean"].as_object().unwrap() {
@@ -598,7 +616,7 @@ mod tests {
                 match want {
                     Value::Null => assert_eq!(got, Ok(None), "{name}: getboolean {ident}"),
                     Value::Bool(b) => assert_eq!(got, Ok(Some(*b)), "{name}: getboolean {ident}"),
-                    _ => assert_eq!(got, Err(()), "{name}: getboolean {ident}"),
+                    _ => assert!(got.is_err(), "{name}: getboolean {ident}"),
                 }
             }
         }

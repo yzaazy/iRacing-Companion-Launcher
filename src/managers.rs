@@ -79,11 +79,13 @@ impl AppManager {
         if let Some(target) = find_shortcut_target(info.shortcut_names, false) {
             // Python raises here if configparser refuses the value (a `%` in
             // the path) and startup crashes; the port keeps the path unsaved.
-            self.config.lock().set_app_path(&key, &target);
+            // A failed save is ignored, as in Python.
+            let _ = self.config.lock().set_app_path(&key, &target);
             return Some(target);
         }
         if let Some(found) = find_path_in_list(&info.paths) {
-            self.config.lock().set_app_path(&key, &found);
+            // Refused or unsaved, the path is still used, as above.
+            let _ = self.config.lock().set_app_path(&key, &found);
             return Some(found);
         }
         None
@@ -175,7 +177,8 @@ impl GameManager {
         }
         if !appid.is_empty() && check_steam_game_installed(appid) {
             let url = format!("steam://rungameid/{appid}");
-            self.config.lock().set_app_path(&key, &url);
+            // A steam:// URL is always accepted; a failed save is ignored, as in Python.
+            let _ = self.config.lock().set_app_path(&key, &url);
             return Some(url);
         }
         None
