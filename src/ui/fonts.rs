@@ -329,11 +329,29 @@ pub mod cmap {
         fn bytes(&mut self, offset: u64, len: usize) -> Option<Vec<u8>>;
     }
 
-    impl Source for File {
+    /// A font file and its size. Every length comes from the file itself, so a request is checked
+    /// against the size before its buffer is allocated: a corrupt header cannot ask for gigabytes.
+    struct FileSource {
+        file: File,
+        len: u64,
+    }
+
+    impl FileSource {
+        fn open(path: &Path) -> Option<Self> {
+            let file = File::open(path).ok()?;
+            let len = file.metadata().ok()?.len();
+            Some(Self { file, len })
+        }
+    }
+
+    impl Source for FileSource {
         fn bytes(&mut self, offset: u64, len: usize) -> Option<Vec<u8>> {
-            self.seek(SeekFrom::Start(offset)).ok()?;
+            if offset.checked_add(u64::try_from(len).ok()?)? > self.len {
+                return None;
+            }
+            self.file.seek(SeekFrom::Start(offset)).ok()?;
             let mut buf = vec![0; len];
-            self.read_exact(&mut buf).ok()?;
+            self.file.read_exact(&mut buf).ok()?;
             Some(buf)
         }
     }
@@ -374,7 +392,7 @@ pub mod cmap {
             probed
                 .entry(path.to_path_buf())
                 .or_insert_with(|| {
-                    let mut file = File::open(path).ok()?;
+                    let mut file = FileSource::open(path)?;
                     read_faces(&mut file).map(Arc::new)
                 })
                 .clone()?
@@ -505,7 +523,7 @@ pub mod cmap {
                     (u32_at(sub, g)?, u32_at(sub, g + 4)?, u32_at(sub, g + 8)?);
                 // Glyph 0 is .notdef: a group starting there does not cover its first code.
                 Some(if glyph == 0 {
-                    (start + 1, end)
+                    (start.saturating_add(1), end)
                 } else {
                     (start, end)
                 })
@@ -555,5 +573,110 @@ pub mod cmap {
             }
         }
         Some(out)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        /// A one-face font whose only table is a `cmap` of `cmap_len` bytes (as the directory
+        /// states it) holding one format 12 subtable with `groups`.
+        fn font(groups: &[(u32, u32, u32)], cmap_len: Option<u32>) -> Vec<u8> {
+            let mut sub = Vec::new();
+            sub.extend(12u16.to_be_bytes());
+            sub.extend(0u16.to_be_bytes());
+            sub.extend((16 + 12 * groups.len() as u32).to_be_bytes());
+            sub.extend(0u32.to_be_bytes());
+            sub.extend((groups.len() as u32).to_be_bytes());
+            for (start, end, glyph) in groups {
+                sub.extend(start.to_be_bytes());
+                sub.extend(end.to_be_bytes());
+                sub.extend(glyph.to_be_bytes());
+            }
+            let mut cmap = Vec::new();
+            cmap.extend(0u16.to_be_bytes());
+            cmap.extend(1u16.to_be_bytes());
+            cmap.extend(3u16.to_be_bytes());
+            cmap.extend(10u16.to_be_bytes());
+            cmap.extend(12u32.to_be_bytes());
+            cmap.extend(sub);
+
+            let mut out = Vec::new();
+            out.extend(0x0001_0000u32.to_be_bytes());
+            out.extend(1u16.to_be_bytes());
+            out.extend([0; 6]);
+            out.extend(*b"cmap");
+            out.extend(0u32.to_be_bytes());
+            out.extend(28u32.to_be_bytes());
+            out.extend(cmap_len.unwrap_or(cmap.len() as u32).to_be_bytes());
+            out.extend(cmap);
+            out
+        }
+
+        /// Writes `bytes` to a file of its own and reads it the way `probe_file` does.
+        fn read_file(name: &str, bytes: &[u8]) -> Option<Faces> {
+            let path =
+                std::env::temp_dir().join(format!("ircl-cmap-{name}-{}.ttf", std::process::id()));
+            std::fs::write(&path, bytes).unwrap();
+            let faces = read_faces(&mut FileSource::open(&path).unwrap());
+            let _ = std::fs::remove_file(&path);
+            faces
+        }
+
+        #[test]
+        fn well_formed_font_reads_from_memory_and_file() {
+            let bytes = font(&[(0x41, 0x41, 5)], None);
+            assert!(covers(&bytes, 0, 'A'));
+            assert!(!covers(&bytes, 0, 'B'));
+            let faces = read_file("good", &bytes).unwrap();
+            assert_eq!(faces.faces.len(), 1);
+            assert_eq!(faces.faces[0].1, [(0x41, 0x41)]);
+        }
+
+        #[test]
+        fn ttc_header_claiming_millions_of_faces_is_refused() {
+            for n in [5_000_000u32, u32::MAX] {
+                let mut bytes = b"ttcf\0\x01\0\0".to_vec();
+                bytes.extend(n.to_be_bytes());
+                bytes.extend(12u32.to_be_bytes());
+                assert!(read_file("ttc", &bytes).is_none());
+                assert!(!covers(&bytes, 0, 'A'));
+            }
+        }
+
+        #[test]
+        fn table_directory_lengths_beyond_the_file_are_refused() {
+            // A cmap length of almost 4 GB.
+            let bytes = font(&[(0x41, 0x41, 5)], Some(0xFFFF_FFF0));
+            assert!(read_file("cmap-len", &bytes).is_none());
+            assert!(!covers(&bytes, 0, 'A'));
+            // 65535 table records in a 12-byte file.
+            let mut bytes = 0x0001_0000u32.to_be_bytes().to_vec();
+            bytes.extend(0xFFFFu16.to_be_bytes());
+            bytes.extend([0; 6]);
+            assert!(read_file("records", &bytes).is_none());
+            // An offset past the end of the file.
+            let mut bytes = font(&[(0x41, 0x41, 5)], None);
+            bytes[20..24].copy_from_slice(&u32::MAX.to_be_bytes());
+            assert!(read_file("cmap-at", &bytes).is_none());
+        }
+
+        #[test]
+        fn cmap_group_at_u32_max_does_not_overflow() {
+            let bytes = font(&[(u32::MAX, u32::MAX, 0), (0x41, 0x41, 5)], None);
+            assert!(covers(&bytes, 0, 'A'));
+            let faces = read_file("max", &bytes).unwrap();
+            assert_eq!(faces.faces[0].1, [(u32::MAX, u32::MAX), (0x41, 0x41)]);
+        }
+
+        #[test]
+        fn lying_group_count_yields_empty_coverage() {
+            let mut bytes = font(&[(0x41, 0x41, 5)], None);
+            // numGroups sits 12 bytes into the subtable, which starts at 28 + 12.
+            bytes[52..56].copy_from_slice(&u32::MAX.to_be_bytes());
+            let faces = read_file("groups", &bytes).unwrap();
+            assert!(faces.faces[0].1.is_empty());
+            assert!(!covers(&bytes, 0, 'A'));
+        }
     }
 }

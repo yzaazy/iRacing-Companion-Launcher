@@ -442,12 +442,27 @@ fn list2cmdline(arg: &str) -> String {
     out
 }
 
-/// Owns an initialised `PROC_THREAD_ATTRIBUTE_LIST`.
+/// Owns an initialised `PROC_THREAD_ATTRIBUTE_LIST`. A value exists only once
+/// `InitializeProcThreadAttributeList` has succeeded, so `Drop` never deletes a
+/// list that was not initialised.
 struct AttributeList {
     buf: Vec<u64>,
 }
 
 impl AttributeList {
+    /// Sizes and initialises a list with room for `count` attributes.
+    fn new(count: u32) -> std::io::Result<Self> {
+        let mut size = 0usize;
+        // SAFETY: size query; fails by design with ERROR_INSUFFICIENT_BUFFER.
+        let _ = unsafe { InitializeProcThreadAttributeList(None, count, None, &mut size) };
+        // At least one element, so the pointer below is never dangling.
+        let mut buf = vec![0u64; size.div_ceil(8).max(1)];
+        let list = LPPROC_THREAD_ATTRIBUTE_LIST(buf.as_mut_ptr().cast());
+        // SAFETY: `buf` holds at least `size` bytes and outlives the call.
+        unsafe { InitializeProcThreadAttributeList(Some(list), count, None, &mut size) }?;
+        Ok(Self { buf })
+    }
+
     fn ptr(&mut self) -> LPPROC_THREAD_ATTRIBUTE_LIST {
         LPPROC_THREAD_ATTRIBUTE_LIST(self.buf.as_mut_ptr().cast())
     }
@@ -486,14 +501,7 @@ pub(crate) fn spawn_detached(exe_path: &str) -> std::io::Result<u32> {
     }
     .map(Handle)?;
 
-    let mut size = 0usize;
-    // SAFETY: size query; fails by design with ERROR_INSUFFICIENT_BUFFER.
-    let _ = unsafe { InitializeProcThreadAttributeList(None, 1, None, &mut size) };
-    let mut list = AttributeList {
-        buf: vec![0; size.div_ceil(8)],
-    };
-    // SAFETY: `list.buf` holds `size` bytes.
-    unsafe { InitializeProcThreadAttributeList(Some(list.ptr()), 1, None, &mut size) }?;
+    let mut list = AttributeList::new(1)?;
     let handles = [nul.0];
     // SAFETY: `handles` outlives CreateProcessW below; the list is initialised.
     unsafe {
@@ -545,6 +553,18 @@ pub(crate) fn spawn_detached(exe_path: &str) -> std::io::Result<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn attribute_list_exists_only_when_initialised() {
+        // The size spawn_detached asks for: initialised, then deleted on drop.
+        let mut list = AttributeList::new(1).unwrap();
+        assert!(!list.buf.is_empty());
+        assert!(!list.ptr().0.is_null());
+        drop(list);
+        // A count the API refuses: the second call fails, no value is built,
+        // so there is nothing for Drop to delete.
+        assert!(AttributeList::new(u32::MAX).is_err());
+    }
 
     #[test]
     fn list2cmdline_matches_python() {

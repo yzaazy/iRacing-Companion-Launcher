@@ -229,12 +229,21 @@ impl ProcessTracker {
 
     /// Writes `<file>.tmp` then replaces the state file. Errors are swallowed.
     fn save(&self) {
-        let mut tmp = OsString::from(self.state_file.as_os_str());
-        tmp.push(".tmp");
-        let tmp = PathBuf::from(tmp);
-        if std::fs::write(&tmp, to_python_json(&self.state)).is_ok() {
-            let _ = std::fs::rename(&tmp, &self.state_file);
-        }
+        write_state(&self.state_file, to_python_json(&self.state));
+    }
+}
+
+/// The write half of `save`. A failed serialisation writes nothing: the file on disk keeps the
+/// last good state rather than being replaced by an empty object.
+fn write_state(state_file: &std::path::Path, json: serde_json::Result<String>) {
+    let Ok(json) = json else {
+        return;
+    };
+    let mut tmp = OsString::from(state_file.as_os_str());
+    tmp.push(".tmp");
+    let tmp = PathBuf::from(tmp);
+    if std::fs::write(&tmp, json).is_ok() {
+        let _ = std::fs::rename(&tmp, state_file);
     }
 }
 
@@ -369,8 +378,8 @@ fn is_falsy(v: &Value) -> bool {
 
 /// The bytes Python's `json.dump(state, f, indent=2)` writes through a text-mode
 /// file on Windows: non-ASCII escaped (`ensure_ascii`), CRLF line endings.
-fn to_python_json(state: &State) -> String {
-    let pretty = serde_json::to_string_pretty(state).unwrap_or_else(|_| "{}".to_owned());
+fn to_python_json(state: &impl Serialize) -> serde_json::Result<String> {
+    let pretty = serde_json::to_string_pretty(state)?;
     let mut out = String::with_capacity(pretty.len() + 64);
     for c in pretty.chars() {
         match c {
@@ -384,7 +393,7 @@ fn to_python_json(state: &State) -> String {
             }
         }
     }
-    out
+    Ok(out)
 }
 
 /// `ntpath.basename`.
@@ -533,18 +542,52 @@ mod tests {
             r#"{"Crew Chief": {"pid": 1234, "create_time": 1762851234.5678234, "exe_path": "C:\\Caf\u00e9\\a.exe"}}"#,
         );
         assert_eq!(
-            to_python_json(&state),
+            to_python_json(&state).unwrap(),
             "{\r\n  \"Crew Chief\": {\r\n    \"pid\": 1234,\r\n    \"create_time\": 1762851234.5678234,\r\n    \"exe_path\": \"C:\\\\Caf\\u00e9\\\\a.exe\"\r\n  }\r\n}"
         );
-        assert_eq!(to_python_json(&State::default()), "{}");
+        assert_eq!(to_python_json(&State::default()).unwrap(), "{}");
     }
 
     #[test]
     fn escapes_astral_and_del_like_python() {
         let state = parse(r#"{"k": {"pid": 1, "create_time": 2.0, "exe_path": "\u007f😀"}}"#);
-        let out = to_python_json(&state);
+        let out = to_python_json(&state).unwrap();
         assert!(out.contains(r#""exe_path": "\u007f\ud83d\ude00""#), "{out}");
         assert!(out.contains(r#""create_time": 2.0"#), "{out}");
+    }
+
+    /// A value whose serialisation always fails.
+    struct Unserialisable;
+
+    impl Serialize for Unserialisable {
+        fn serialize<S: Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+            Err(serde::ser::Error::custom("refused"))
+        }
+    }
+
+    #[test]
+    fn failed_serialisation_skips_the_save() {
+        let dir = std::env::temp_dir().join(format!("ircl-tracker-skip-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("process_state.json");
+        let tmp = dir.join("process_state.json.tmp");
+        let _ = std::fs::remove_file(&tmp);
+        let good = "{
+  \"a\": 1
+}";
+        std::fs::write(&file, good).unwrap();
+
+        let json = to_python_json(&Unserialisable);
+        assert!(json.is_err());
+        write_state(&file, json);
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), good);
+        assert!(!tmp.exists());
+
+        // A successful serialisation still replaces the file through the temp file.
+        write_state(&file, to_python_json(&State::default()));
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "{}");
+        assert!(!tmp.exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
