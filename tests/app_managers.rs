@@ -4,7 +4,7 @@
 //! apps, so they are covered by the transcript tests through the fake backend.
 
 use iracing_companion_launcher::core::config::{ConfigStore, SharedConfig};
-use iracing_companion_launcher::managers::{AppManager, Backend, GameManager, Managers};
+use iracing_companion_launcher::managers::{Backend, Managers};
 use iracing_companion_launcher::process::tracker::ProcessTracker;
 
 fn config_in(dir: &std::path::Path, text: &str) -> SharedConfig {
@@ -23,10 +23,10 @@ fn saved_app_path_wins_without_a_save() {
     std::fs::write(&exe, b"").unwrap();
     let text = format!("[AppPaths]\nfanatec = {}\n\n[Settings]\n\n", exe.display());
     let config = config_in(dir.path(), &text);
-    let mut apps = AppManager::new(config, tracker_in(dir.path()));
+    let mut managers = Managers::new(config, tracker_in(dir.path()));
 
     assert_eq!(
-        apps.find_app_path("Fanatec"),
+        managers.find_app_path("Fanatec"),
         Some(exe.display().to_string())
     );
     let after = std::fs::read_to_string(dir.path().join("config.ini")).unwrap();
@@ -45,9 +45,9 @@ fn saved_game_path_wins_before_steam() {
         "[AppPaths]\ngame_iracing = {}\n\n[Settings]\n\n",
         lnk.display()
     );
-    let mut games = GameManager::new(config_in(dir.path(), &text));
+    let mut managers = Managers::new(config_in(dir.path(), &text), tracker_in(dir.path()));
     assert_eq!(
-        games.find_game_path("iRacing"),
+        managers.find_game_path("iRacing"),
         Some(lnk.display().to_string())
     );
 }

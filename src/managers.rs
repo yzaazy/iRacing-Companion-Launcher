@@ -39,38 +39,49 @@ pub trait Backend: Send {
     fn launch_game(&mut self, game: &str, path: &str) -> bool;
 }
 
-/// `AppManager`: companion app detection, launch and close.
-pub struct AppManager {
+/// The real managers behind the [`Backend`] seam: Python's `AppManager`
+/// (companion app detection, launch and close) and `GameManager` (racing game
+/// detection and launch) in one value.
+pub struct Managers {
     config: SharedConfig,
     apps: Vec<AppDef>,
+    games: Vec<GameDef>,
     tracker: ProcessTracker,
 }
 
-impl AppManager {
+impl Managers {
+    /// Apps and games share `config`, as both Python managers share one `ConfigManager`.
     pub fn new(config: SharedConfig, tracker: ProcessTracker) -> Self {
         Self {
             config,
             apps: definitions::apps(),
+            games: definitions::games(),
             tracker,
         }
     }
 
-    fn def(&self, app: &str) -> Option<&AppDef> {
+    fn app_def(&self, app: &str) -> Option<&AppDef> {
         self.apps.iter().find(|a| a.name == app)
     }
 
-    pub fn get_app_list(&self) -> Vec<String> {
+    fn game_def(&self, game: &str) -> Option<&GameDef> {
+        self.games.iter().find(|g| g.name == game)
+    }
+}
+
+impl Backend for Managers {
+    fn app_list(&self) -> Vec<String> {
         self.apps.iter().map(|a| a.name.to_owned()).collect()
     }
 
-    pub fn get_app_exe(&self, app: &str) -> Option<String> {
-        self.def(app).map(|a| a.exe.to_owned())
+    fn app_exe(&self, app: &str) -> Option<String> {
+        self.app_def(app).map(|a| a.exe.to_owned())
     }
 
     /// Saved path, then Start Menu shortcut, then common paths. A detected
     /// path is saved to config before it is returned.
-    pub fn find_app_path(&mut self, app: &str) -> Option<String> {
-        let info = self.def(app)?;
+    fn find_app_path(&mut self, app: &str) -> Option<String> {
+        let info = self.app_def(app)?;
         let key = config_key(app);
 
         if let Some(saved) = self.config.lock().app_path(&key) {
@@ -93,8 +104,8 @@ impl AppManager {
 
     /// Tracked and alive, otherwise any process with the exe name, so an app
     /// started outside the launcher still shows as running.
-    pub fn is_app_running(&mut self, app: &str) -> bool {
-        let Some(exe) = self.get_app_exe(app) else {
+    fn is_app_running(&mut self, app: &str) -> bool {
+        let Some(exe) = self.app_exe(app) else {
             return false;
         };
         // A dead tracked entry is dropped by the check and falls through.
@@ -104,15 +115,15 @@ impl AppManager {
         is_process_running(&exe)
     }
 
-    pub fn get_child_names(&mut self, app: &str) -> Vec<String> {
-        if self.def(app).is_none() {
+    fn get_child_names(&mut self, app: &str) -> Vec<String> {
+        if self.app_def(app).is_none() {
             return Vec::new();
         }
         self.tracker.get_child_names(app)
     }
 
-    pub fn launch_app(&mut self, app: &str, path: &str) -> bool {
-        let Some(needs_shell_launch) = self.def(app).map(|a| a.needs_shell_launch) else {
+    fn launch_app(&mut self, app: &str, path: &str) -> bool {
+        let Some(needs_shell_launch) = self.app_def(app).map(|a| a.needs_shell_launch) else {
             return false;
         };
         let method = if needs_shell_launch {
@@ -126,8 +137,8 @@ impl AppManager {
 
     /// Tracked close when tracked; otherwise (or when the tracked process was
     /// already gone) kill by exe name so Close works on apps started by hand.
-    pub fn close_app(&mut self, app: &str) -> bool {
-        let Some(exe) = self.get_app_exe(app) else {
+    fn close_app(&mut self, app: &str) -> bool {
+        let Some(exe) = self.app_exe(app) else {
             return false;
         };
         if self.tracker.is_tracked(app) && self.tracker.close_tracked(app) {
@@ -135,39 +146,20 @@ impl AppManager {
         }
         kill_process(&exe)
     }
-}
 
-/// `GameManager`: racing game detection and launch.
-pub struct GameManager {
-    config: SharedConfig,
-    games: Vec<GameDef>,
-}
-
-impl GameManager {
-    pub fn new(config: SharedConfig) -> Self {
-        Self {
-            config,
-            games: definitions::games(),
-        }
-    }
-
-    fn def(&self, game: &str) -> Option<&GameDef> {
-        self.games.iter().find(|g| g.name == game)
-    }
-
-    pub fn get_game_list(&self) -> Vec<String> {
+    fn game_list(&self) -> Vec<String> {
         self.games.iter().map(|g| g.name.to_owned()).collect()
     }
 
-    pub fn get_game_exe(&self, game: &str) -> Option<String> {
-        self.def(game).map(|g| g.exe.to_owned())
+    fn game_exe(&self, game: &str) -> Option<String> {
+        self.game_def(game).map(|g| g.exe.to_owned())
     }
 
     /// Saved path, then the Steam registry. `shortcut_names` and `paths` are
     /// never consulted, as in Python. A saved `steam://` URL never exists on
     /// disk, so a Steam game is re-detected and re-saved on every lookup.
-    pub fn find_game_path(&mut self, game: &str) -> Option<String> {
-        let appid = self.def(game)?.steam_appid;
+    fn find_game_path(&mut self, game: &str) -> Option<String> {
+        let appid = self.game_def(game)?.steam_appid;
         let key = format!("game_{}", config_key(game));
 
         if let Some(saved) = self.config.lock().app_path(&key) {
@@ -182,14 +174,15 @@ impl GameManager {
         None
     }
 
-    pub fn is_game_running(&self, game: &str) -> bool {
-        self.def(game).is_some_and(|g| is_process_running(g.exe))
+    fn is_game_running(&mut self, game: &str) -> bool {
+        self.game_def(game)
+            .is_some_and(|g| is_process_running(g.exe))
     }
 
     /// `steam://` and `.lnk` go through the shell, an `.exe` is started
     /// detached and untracked. Success is "the game's exe is running afterwards".
-    pub fn launch_game(&mut self, game: &str, path: &str) -> bool {
-        let Some(exe) = self.get_game_exe(game) else {
+    fn launch_game(&mut self, game: &str, path: &str) -> bool {
+        let Some(exe) = self.game_exe(game) else {
             return false;
         };
         if path.starts_with("steam://") {
@@ -207,60 +200,5 @@ impl GameManager {
             return false;
         }
         is_process_running(&exe)
-    }
-}
-
-/// The real managers behind the [`Backend`] seam.
-pub struct Managers {
-    pub apps: AppManager,
-    pub games: GameManager,
-}
-
-impl Managers {
-    /// Both managers share `config`, as both Python managers share one `ConfigManager`.
-    pub fn new(config: SharedConfig, tracker: ProcessTracker) -> Self {
-        Self {
-            apps: AppManager::new(config.clone(), tracker),
-            games: GameManager::new(config),
-        }
-    }
-}
-
-impl Backend for Managers {
-    fn app_list(&self) -> Vec<String> {
-        self.apps.get_app_list()
-    }
-    fn app_exe(&self, app: &str) -> Option<String> {
-        self.apps.get_app_exe(app)
-    }
-    fn find_app_path(&mut self, app: &str) -> Option<String> {
-        self.apps.find_app_path(app)
-    }
-    fn is_app_running(&mut self, app: &str) -> bool {
-        self.apps.is_app_running(app)
-    }
-    fn get_child_names(&mut self, app: &str) -> Vec<String> {
-        self.apps.get_child_names(app)
-    }
-    fn launch_app(&mut self, app: &str, path: &str) -> bool {
-        self.apps.launch_app(app, path)
-    }
-    fn close_app(&mut self, app: &str) -> bool {
-        self.apps.close_app(app)
-    }
-    fn game_list(&self) -> Vec<String> {
-        self.games.get_game_list()
-    }
-    fn game_exe(&self, game: &str) -> Option<String> {
-        self.games.get_game_exe(game)
-    }
-    fn find_game_path(&mut self, game: &str) -> Option<String> {
-        self.games.find_game_path(game)
-    }
-    fn is_game_running(&mut self, game: &str) -> bool {
-        self.games.is_game_running(game)
-    }
-    fn launch_game(&mut self, game: &str, path: &str) -> bool {
-        self.games.launch_game(game, path)
     }
 }
