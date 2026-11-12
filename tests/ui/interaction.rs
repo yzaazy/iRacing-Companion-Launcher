@@ -2,55 +2,14 @@
 //! CustomTkinter binds `<Button-1>`; disabled controls produce nothing; hover colours, the click
 //! flash and the redraw after a toggle match CustomTkinter's; the log wheel jumps as Tk's does.
 
+use crate::support::{
+    Probe, button_event, fixture, geometry, harness, live, pixel_now as pixel, wheel,
+};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
-use iracing_companion_launcher::contract::{UiAction, ViewState};
-use iracing_companion_launcher::ui::{self, sections, theme};
-use std::collections::BTreeMap;
-use std::path::Path;
-
-const WINDOW: egui::Vec2 = egui::vec2(1200.0, 700.0);
-
-/// The headless wgpu adapter crashes when two threads create devices at once; tests in this
-/// binary take turns.
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-}
-
-fn fixture(name: &str) -> ViewState {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/rewrite/fixtures.json");
-    let all: BTreeMap<String, ViewState> =
-        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-    all[name].clone()
-}
-
-struct Probe {
-    state: ViewState,
-    actions: Vec<UiAction>,
-}
-
-fn harness(state: ViewState) -> Harness<'static, Probe> {
-    let mut h = Harness::builder()
-        .with_size(WINDOW)
-        .with_pixels_per_point(1.0)
-        .with_render_cursor(false)
-        .with_context_setup(ui::install_fonts)
-        .build_ui_state(
-            |ui, probe: &mut Probe| {
-                let actions = ui::draw(ui, &probe.state);
-                probe.actions.extend(actions);
-            },
-            Probe {
-                state,
-                actions: Vec::new(),
-            },
-        );
-    h.run();
-    h
-}
+use iracing_companion_launcher::contract::{LogLevel, LogLine, UiAction};
+use iracing_companion_launcher::ui::layout::Bounds;
+use iracing_companion_launcher::ui::theme;
 
 /// Click the widget labelled `label` and return the actions that click produced.
 fn click(state: &str, label: &str) -> Vec<UiAction> {
@@ -62,7 +21,6 @@ fn click(state: &str, label: &str) -> Vec<UiAction> {
 
 #[test]
 fn checkbox_toggles_its_app() {
-    let _gpu = gpu();
     assert_eq!(
         click("idle", "Fanatec"),
         vec![UiAction::ToggleApp {
@@ -81,13 +39,11 @@ fn checkbox_toggles_its_app() {
 
 #[test]
 fn checkbox_of_a_missing_app_does_nothing() {
-    let _gpu = gpu();
     assert_eq!(click("mixed", "Elgato Stream Deck"), vec![]);
 }
 
 #[test]
 fn select_all_toggles() {
-    let _gpu = gpu();
     assert_eq!(
         click("idle", "Deselect All"),
         vec![UiAction::ToggleSelectAll]
@@ -100,7 +56,6 @@ fn select_all_toggles() {
 
 #[test]
 fn radio_selects_a_game_or_none() {
-    let _gpu = gpu();
     assert_eq!(
         click("idle", "Automobilista 2"),
         vec![UiAction::SelectGame(Some("Automobilista 2".into()))]
@@ -110,7 +65,6 @@ fn radio_selects_a_game_or_none() {
 
 #[test]
 fn radio_already_selected_or_missing_does_nothing() {
-    let _gpu = gpu();
     assert_eq!(click("mixed", "iRacing"), vec![]);
     assert_eq!(click("idle", "None"), vec![]);
     assert_eq!(click("mixed", "Assetto Corsa Competizione"), vec![]);
@@ -118,7 +72,6 @@ fn radio_already_selected_or_missing_does_nothing() {
 
 #[test]
 fn browse_buttons_name_their_card() {
-    let _gpu = gpu();
     assert_eq!(
         click("mixed", "Browse for Elgato Stream Deck"),
         vec![UiAction::BrowseApp("Elgato Stream Deck".into())]
@@ -136,7 +89,6 @@ fn browse_buttons_name_their_card() {
 
 #[test]
 fn action_buttons_launch_and_close() {
-    let _gpu = gpu();
     assert_eq!(
         click("mixed", "Launch with iRacing (5)"),
         vec![UiAction::Launch]
@@ -146,14 +98,12 @@ fn action_buttons_launch_and_close() {
 
 #[test]
 fn disabled_action_buttons_do_nothing() {
-    let _gpu = gpu();
     assert_eq!(click("none-selected", "Launch apps (0)"), vec![]);
     assert_eq!(click("none-selected", "Close all (0)"), vec![]);
 }
 
 #[test]
 fn every_found_widget_is_reachable() {
-    let _gpu = gpu();
     let h = harness(fixture("mixed"));
     for label in [
         "Fanatec",
@@ -178,30 +128,13 @@ fn pixel_after_hover(state: &str, hover: egui::Pos2, sample: egui::Pos2) -> egui
     let mut h = harness(fixture(state));
     h.hover_at(hover);
     h.run();
-    let image = h.render().expect("headless render");
-    let p = image.get_pixel(sample.x as u32, sample.y as u32);
-    egui::Color32::from_rgb(p[0], p[1], p[2])
-}
-
-fn geometry(state: &str) -> sections::Geometry {
-    let state = fixture(state);
-    let ctx = egui::Context::default();
-    ui::install_fonts(&ctx);
-    let mut geom = None;
-    let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
-        geom = Some(sections::geometry(ui.ctx(), &state, WINDOW));
-    });
-    output.textures_delta.clear();
-    geom.unwrap()
+    pixel(&mut h, sample)
 }
 
 #[test]
 fn hover_colours_match_customtkinter() {
-    let _gpu = gpu();
-    let idle = geometry("idle");
-    let corner_free = |b: iracing_companion_launcher::ui::layout::Bounds| {
-        egui::pos2(b.x as f32 + 14.0, b.y as f32 + b.h as f32 / 2.0)
-    };
+    let idle = geometry(&fixture("idle"));
+    let corner_free = |b: Bounds| egui::pos2(b.x as f32 + 14.0, b.y as f32 + b.h as f32 / 2.0);
 
     // Buttons fill with their hover colour.
     let launch = corner_free(idle.launch.rect);
@@ -221,7 +154,7 @@ fn hover_colours_match_customtkinter() {
     );
 
     // A disabled button keeps its fill.
-    let none = geometry("none-selected");
+    let none = geometry(&fixture("none-selected"));
     let disabled = corner_free(none.launch.rect);
     assert_eq!(
         pixel_after_hover("none-selected", disabled, disabled),
@@ -251,7 +184,7 @@ fn hover_colours_match_customtkinter() {
     assert_eq!(pixel_after_hover("idle", centre, ring), theme::RADIO_HOVER);
 
     // A Browse button.
-    let mixed = geometry("mixed");
+    let mixed = geometry(&fixture("mixed"));
     let browse = mixed.apps[5].browse.as_ref().unwrap().rect;
     let inside = corner_free(browse);
     assert_eq!(
@@ -262,96 +195,49 @@ fn hover_colours_match_customtkinter() {
 
 #[test]
 fn new_log_line_scrolls_to_the_end() {
-    let _gpu = gpu();
+    let pointer = egui::pos2(900.0, 300.0);
     let mut state = fixture("log-full");
     let mut h = harness(state.clone());
-    // Scroll up with the wheel, then add a line: the log must jump back to the end.
-    h.hover_at(egui::pos2(900.0, 300.0));
-    h.event(egui::Event::MouseWheel {
-        unit: egui::MouseWheelUnit::Line,
-        delta: egui::vec2(0.0, 10.0),
-        modifiers: egui::Modifiers::default(),
-        phase: egui::TouchPhase::Move,
-        source: egui::MouseWheelSource::Wheel,
-    });
+    h.hover_at(pointer);
     h.run();
-    let scrolled = h.render().unwrap();
-    state
-        .log
-        .push(iracing_companion_launcher::contract::LogLine {
-            level: iracing_companion_launcher::contract::LogLevel::Info,
-            text: "[19:45:07] One more line".into(),
-        });
-    h.state_mut().state = state;
+    let at_start = h.render().unwrap();
+    wheel(&h, 10.0);
     h.run();
-    let after = h.render().unwrap();
-    assert_ne!(scrolled, after, "scrolling had no effect");
-    // The new line is the last one shown: 17 px above the final empty line at the bottom.
-    let log_bottom = 131 + 429;
-    let y = (log_bottom - 2 * 17 + 10) as u32;
-    let row_has_ink = (680..900).any(|x| {
-        let p = after.get_pixel(x, y);
-        p[0] > 150
+    assert_ne!(
+        h.render().unwrap(),
+        at_start,
+        "the wheel did not scroll the log up"
+    );
+
+    // A new line arrives while the log is scrolled up.
+    state.log.push(LogLine {
+        level: LogLevel::Info,
+        text: "[19:45:07] One more line".into(),
     });
-    assert!(row_has_ink, "the new line is not at the end of the log");
+    h.state_mut().state = state.clone();
+    h.run();
+
+    // The end of the same log: a window on it scrolled down as far as the wheel goes.
+    let mut end = harness(state);
+    end.hover_at(pointer);
+    end.run();
+    for _ in 0..10 {
+        wheel(&end, -10.0);
+        end.run();
+    }
+    assert_eq!(
+        h.render().unwrap(),
+        end.render().unwrap(),
+        "the log did not jump to its end on a new line"
+    );
 }
+
 // ---------------------------------------------------------------------------------------------
 // Press, flash and the redraw after a toggle.
 
-/// A harness whose state follows the actions, as the controller would, with frames 25 ms apart.
-fn live(state: ViewState) -> Harness<'static, Probe> {
-    let mut h = Harness::builder()
-        .with_size(WINDOW)
-        .with_pixels_per_point(1.0)
-        .with_render_cursor(false)
-        .with_step_dt(0.025)
-        .with_context_setup(ui::install_fonts)
-        .build_ui_state(
-            |ui, probe: &mut Probe| {
-                let actions = ui::draw(ui, &probe.state);
-                for action in &actions {
-                    match action {
-                        UiAction::ToggleApp { name, checked } => {
-                            for app in &mut probe.state.apps {
-                                if &app.name == name {
-                                    app.checked = *checked;
-                                }
-                            }
-                        }
-                        UiAction::SelectGame(game) => probe.state.selected_game = game.clone(),
-                        _ => {}
-                    }
-                }
-                probe.actions.extend(actions);
-            },
-            Probe {
-                state,
-                actions: Vec::new(),
-            },
-        );
-    h.run();
-    h
-}
-
-fn button_event(h: &Harness<'static, Probe>, pos: egui::Pos2, pressed: bool) {
-    h.event(egui::Event::PointerButton {
-        pos,
-        button: egui::PointerButton::Primary,
-        pressed,
-        modifiers: egui::Modifiers::NONE,
-    });
-}
-
-fn pixel(h: &mut Harness<'static, Probe>, p: egui::Pos2) -> egui::Color32 {
-    let image = h.render().expect("headless render");
-    let q = image.get_pixel(p.x as u32, p.y as u32);
-    egui::Color32::from_rgb(q[0], q[1], q[2])
-}
-
 #[test]
 fn a_press_acts_before_the_release() {
-    let _gpu = gpu();
-    let geom = geometry("mixed");
+    let geom = geometry(&fixture("mixed"));
     let launch = geom.launch.rect.rect().center();
     let mut h = live(fixture("mixed"));
     h.hover_at(launch);
@@ -372,8 +258,7 @@ fn a_press_acts_before_the_release() {
 
 #[test]
 fn a_pressed_button_flashes_its_normal_colour() {
-    let _gpu = gpu();
-    let geom = geometry("idle");
+    let geom = geometry(&fixture("idle"));
     let b = geom.select_all.rect;
     let inside = egui::pos2(b.x as f32 + 14.0, b.y as f32 + b.h as f32 / 2.0);
     let mut h = live(fixture("idle"));
@@ -401,8 +286,7 @@ fn a_pressed_button_flashes_its_normal_colour() {
 
 #[test]
 fn a_toggle_redraws_without_hover_until_the_pointer_comes_back() {
-    let _gpu = gpu();
-    let geom = geometry("idle");
+    let geom = geometry(&fixture("idle"));
     let away = egui::pos2(500.0, 400.0);
 
     // Unchecking: the box shows the card colour, not the hover blue, under the pointer.
@@ -444,8 +328,7 @@ fn a_toggle_redraws_without_hover_until_the_pointer_comes_back() {
 
 #[test]
 fn the_gap_beside_a_checkbox_is_dead() {
-    let _gpu = gpu();
-    let geom = geometry("none-selected");
+    let geom = geometry(&fixture("none-selected"));
     let b = geom.apps[0].parts.toggle_box;
     let centre = egui::pos2(b.x as f32 + 12.0, b.y as f32 + 12.0);
     let gap = egui::pos2(b.right() as f32 + 3.0, b.y as f32 + 12.0);
@@ -465,8 +348,7 @@ fn the_gap_beside_a_checkbox_is_dead() {
 
 #[test]
 fn the_text_cursor_shows_over_the_whole_log() {
-    let _gpu = gpu();
-    let geom = geometry("idle");
+    let geom = geometry(&fixture("idle"));
     let text = geom.log.text;
     // Below the last line of text, and on the Text widget's padding.
     for p in [
@@ -486,20 +368,13 @@ fn the_text_cursor_shows_over_the_whole_log() {
 
 #[test]
 fn a_wheel_notch_jumps_40_px_at_once() {
-    let _gpu = gpu();
-    let geom = geometry("log-full");
+    let geom = geometry(&fixture("log-full"));
     let inner = geom.log.inner;
     let mut h = live(fixture("log-full"));
     h.hover_at(egui::pos2(900.0, 300.0));
     h.run();
     let before = h.render().unwrap();
-    h.event(egui::Event::MouseWheel {
-        unit: egui::MouseWheelUnit::Line,
-        delta: egui::vec2(0.0, 1.0),
-        modifiers: egui::Modifiers::default(),
-        phase: egui::TouchPhase::Move,
-        source: egui::MouseWheelSource::Wheel,
-    });
+    wheel(&h, 1.0);
     h.step();
     let after = h.render().unwrap();
     h.run_steps(10);
@@ -533,9 +408,8 @@ fn copied(h: &mut Harness<'static, Probe>) -> Option<String> {
 
 #[test]
 fn log_selection_copies_across_lines_and_survives_scrolling() {
-    let _gpu = gpu();
     let state = fixture("log-full");
-    let geom = geometry("log-full");
+    let geom = geometry(&fixture("log-full"));
     let inner = geom.log.inner;
     let n = state.log.len();
     let (a, b) = (&state.log[n - 3].text, &state.log[n - 2].text);
@@ -563,13 +437,7 @@ fn log_selection_copies_across_lines_and_survives_scrolling() {
     // Scrolled until both lines are out of view, the selection is still there to copy.
     h.hover_at(egui::pos2(900.0, 300.0));
     for _ in 0..4 {
-        h.event(egui::Event::MouseWheel {
-            unit: egui::MouseWheelUnit::Line,
-            delta: egui::vec2(0.0, 1.0),
-            modifiers: egui::Modifiers::default(),
-            phase: egui::TouchPhase::Move,
-            source: egui::MouseWheelSource::Wheel,
-        });
+        wheel(&h, 1.0);
         h.step();
     }
     assert_eq!(copied(&mut h).as_deref(), Some(want.as_str()));

@@ -4,24 +4,13 @@
 //! The harness panics on any glyph no font has (egui_kittest's `MissingGlyphPolicy::Panic`), so
 //! rendering a line is the test that it has no box in it.
 
+use crate::support::{WINDOW, builder, fixtures};
 use egui::epaint::text::{FontFamily, FontId, MissingGlyphPolicy};
-use egui_kittest::Harness;
 use iracing_companion_launcher::contract::{
     AppCard, GameCard, LogLevel, LogLine, Status, ViewState,
 };
 use iracing_companion_launcher::ui::{self, fonts, theme};
 use std::path::Path;
-
-const WINDOW: egui::Vec2 = egui::vec2(1200.0, 700.0);
-
-/// The headless wgpu adapter crashes when two threads create devices at once; tests in this
-/// binary take turns.
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-}
 
 /// Lines with characters none of Segoe UI and Consolas has, or that only some Windows fonts do.
 const RARE: &[&str] = &[
@@ -100,10 +89,7 @@ fn frame(ctx: &egui::Context, state: &ViewState) {
 #[test]
 fn startup_reads_no_fallback_font() {
     let ctx = strict_ctx();
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/rewrite/fixtures.json");
-    let states: std::collections::BTreeMap<String, ViewState> =
-        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-    for state in states.values() {
+    for state in fixtures().values() {
         frame(&ctx, state);
         frame(&ctx, state);
     }
@@ -156,21 +142,22 @@ read: {loaded:?}"
     assert!(!loaded.is_empty());
 }
 
+/// The harness, like the app, lays out every line and card: a glyph no font has panics it.
 #[test]
-fn rare_characters_render_without_a_missing_glyph() {
-    let _gpu = gpu();
+fn rare_characters_lay_out_without_a_missing_glyph() {
     let state = rare_state();
-    let mut h = Harness::builder()
-        .with_size(WINDOW)
-        .with_pixels_per_point(1.0)
-        .wgpu()
-        .with_context_setup(ui::install_fonts)
-        .build_ui(|ui| {
-            ui::draw(ui, &state);
-        });
+    let mut h = builder().build_ui(|ui| {
+        ui::draw(ui, &state);
+    });
     h.run();
-    let image = h.render().expect("headless render");
-    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/ui-snapshots/other");
+}
+
+/// The same window rendered, for a look: `target/ui-snapshots/other/rare-glyphs.png`.
+#[test]
+#[ignore = "visual inspection"]
+fn render_rare_characters() {
+    let image = crate::support::render(&rare_state());
+    let out = crate::support::repo_path("target/ui-snapshots/other");
     std::fs::create_dir_all(&out).unwrap();
     image.save(out.join("rare-glyphs.png")).unwrap();
 }
@@ -181,8 +168,8 @@ fn cmap_probe_reads_coverage() {
         .join("Fonts");
     let segoe = dir.join("segoeui.ttf");
     let symbol = dir.join("seguisym.ttf");
-    if !segoe.exists() || !symbol.exists() {
-        return;
+    for file in [&segoe, &symbol] {
+        assert!(file.exists(), "{} is part of every Windows", file.display());
     }
     assert_eq!(
         fonts::cmap::probe_file(&segoe, "Segoe UI", 'A'),
@@ -198,12 +185,15 @@ fn cmap_probe_reads_coverage() {
     );
     // A collection: the face is found by name.
     let yahei = dir.join("msyh.ttc");
-    if yahei.exists() {
-        let (index, has) = fonts::cmap::probe_file(&yahei, "Microsoft YaHei UI", '张').unwrap();
-        assert!(has);
-        assert_eq!(
-            index, 1,
-            "Microsoft YaHei UI is the second face of msyh.ttc"
-        );
-    }
+    assert!(
+        yahei.exists(),
+        "{} is part of every Windows",
+        yahei.display()
+    );
+    let (index, has) = fonts::cmap::probe_file(&yahei, "Microsoft YaHei UI", '张').unwrap();
+    assert!(has);
+    assert_eq!(
+        index, 1,
+        "Microsoft YaHei UI is the second face of msyh.ttc"
+    );
 }

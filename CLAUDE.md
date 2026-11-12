@@ -8,7 +8,7 @@ The app is being ported to Rust (egui/eframe) for release as v3.0.0. Until then 
 
 - **Spec**: the Python source. Port behaviour 1:1, known quirks included. [docs/rewrite/behaviour.md](docs/rewrite/behaviour.md) lists the parity traps that reading the code alone misses, and the only deliberate differences.
 - **Contract**: [docs/rewrite/contracts.md](docs/rewrite/contracts.md) fixes module layout, file ownership and the shared types. Read it before writing Rust. Changing a shared type is the orchestrator's call: stop and report.
-- **UI numbers**: `docs/rewrite/ui-spec.json` and `docs/rewrite/reference/*.png` are measured from the running Python app. Layout rules reproduce them at 1200x700.
+- **UI numbers**: `docs/rewrite/ui-spec.json` and `docs/rewrite/reference/*.png` are measured from the running Python app. Layout rules reproduce them at 1200x700, and `cargo test` fails when a fixture state stops matching its reference (`tests/ui/parity.rs`).
 - **Gate**: `pwsh tools/gate.ps1` runs format, clippy with warnings as errors, and tests. Rust work is done when it prints `GATE GREEN`.
 - **Run**: `cargo run`. When `cargo` is not found, prepend `$env:USERPROFILE\.cargo\bin` to PATH.
 

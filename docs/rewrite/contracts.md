@@ -18,11 +18,11 @@ The seams between agents. Each agent builds its own module against these and nob
 | `src/core/definitions.rs`, `config.rs`, `log.rs` | core | `core/*.py` |
 | `src/process/mod.rs`, `tracker.rs` | process | `managers/process_manager.py`, `process_tracker.py` |
 | `src/detect/shortcuts.rs`, `steam.rs`, `paths.rs` | detect | `utils/*.py` |
-| `src/ui/theme.rs`, `layout.rs`, `widgets.rs`, `sections.rs`, `mod.rs`, `tests/ui_snapshots.rs` | ui | `ui/sections/`, `ui/widgets/`, `ui/constants.py` |
+| `src/ui/theme.rs`, `layout.rs`, `widgets.rs`, `sections.rs`, `mod.rs`, `tests/ui/` | ui | `ui/sections/`, `ui/widgets/`, `ui/constants.py` |
 | `src/managers.rs`, `src/app.rs`, `src/worker.rs` | controller | `managers/app_manager.py`, `game_manager.py`, `ui/main_window.py` |
 | `build.rs`, `windows installer.iss`, `[package.metadata.winresource]` in `Cargo.toml`, the Rust section of `CLAUDE.md` | packaging (done) | `.spec`, `version.py`, `tools/update_version.py` |
 | `tools/capture_reference.py`, `docs/rewrite/fixtures.json`, `ui-spec.json`, `reference/` | capture (done, frozen) | — |
-| `tools/ui_diff.py` | ui, from wave 1 | — |
+| `tests/snapshots/` (golden renders) | ui | — |
 
 The scaffold created every module file as a compiling stub with the signatures below, so wave 1 agents fill in bodies and add private items. Placeholder fields in `ConfigStore`, `ProcessTracker` and `Layout` are yours to replace if you own the file.
 
@@ -155,7 +155,7 @@ pub fn check_steam_game_installed(appid: &str) -> bool;
 - **Config**: checkbox keys are `config_key(name) + "_enabled"`, game path keys `"game_" + config_key(name)`. Booleans are written as `True` / `False`. `set_setting` does not save. `setting("selected_game")` is `Some("")` for None and `None` when missing; both mean no game. `ConfigStore` has no interior locking.
 - **Process**: `launch_and_track`, `close_tracked` and `launch_process` block for their waits, so they run on the worker thread. `is_tracked_running` and `get_child_names` each take a full process snapshot. The exe-name fallbacks in `is_app_running` and `close_app` belong to the manager, as in Python.
 - **Detection**: synchronous, safe from any thread, writes nothing. Saving a detected path is the manager's job.
-- **Tests that render** take turns behind the mutex in `tests/ui_snapshots.rs`'s pattern: two headless GPU devices created at once crash intermittently.
+- **Tests that render** build their harness with `tests/ui/support.rs`, which gives every harness a renderer on one wgpu device for the whole process: two headless GPU devices created at once crash intermittently, one device shared by several threads does not.
 
 `managers.rs`, `app.rs` and `worker.rs` belong to one agent and have no cross-agent seam beyond the types above. In eframe 0.37 the app implements `App::ui(&mut self, ui, frame)`, with `logic(ctx, frame)` available for work that is not drawing.
 
@@ -180,7 +180,7 @@ Required states:
 | `all-missing` | Every app and game not found: Browse buttons everywhere |
 | `log-full` | More log lines than fit, every level present, one line long enough to wrap |
 
-The reference image for each state is `docs/rewrite/reference/<state>.png`. The snapshot tests write `target/ui-snapshots/<state>.png`. `python tools/ui_diff.py` compares the two sets.
+The reference image for each state is `docs/rewrite/reference/<state>.png`. The parity tests (`tests/ui/parity.rs`, part of `cargo test`) render each state in memory, write it to `target/ui-snapshots/<state>.png`, compare it with the reference and fail per class and element, writing `target/ui-diff/<state>.png` when a state fails. They also compare it with its golden render in `tests/snapshots/<state>.png`.
 
 Fixtures hold game names unwrapped; the UI applies the 18-character wrap. `mixed` adds a seventh status, `starting`, so every dot colour appears.
 
@@ -196,7 +196,7 @@ Fixtures hold game names unwrapped; the UI applies the 18-character wrap. `mixed
 
 ### Parity criteria
 
-`ui_diff.py` reports three classes per state, and a state passes when all three hold:
+The parity check (`tests/ui/parity_check.rs`, which documents each class in full) reports three classes per state, and a state passes when all three hold:
 
 | Class | Covers | Passes when |
 |---|---|---|

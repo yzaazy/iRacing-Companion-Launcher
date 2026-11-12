@@ -5,14 +5,13 @@
 //! report come from the ignored benchmark, in a release build:
 //!
 //! ```text
-//! cargo test --release --test ui_log_perf -- --ignored --nocapture
+//! cargo test --release --test ui log_benchmark -- --ignored --nocapture
 //! ```
 
+use crate::support::WINDOW;
 use iracing_companion_launcher::contract::{AppCard, LogLevel, LogLine, Status, ViewState};
 use iracing_companion_launcher::ui;
 use std::time::{Duration, Instant};
-
-const WINDOW: egui::Vec2 = egui::vec2(1200.0, 700.0);
 
 fn state(lines: usize) -> ViewState {
     let levels = [
@@ -99,38 +98,79 @@ impl Frames {
 
 /// The cheapest of `n` steady frames, and the cheapest of `n` first frames after a new line.
 fn measure(lines: usize, n: usize) -> (Duration, Duration) {
-    let frames = Frames::new();
-    let mut s = state(lines);
-    for _ in 0..3 {
-        frames.frame(&s);
-    }
-    let steady = (0..n).map(|_| frames.frame(&s)).min().unwrap();
-    let levels = [LogLevel::Info];
-    let append = (0..n)
-        .map(|i| {
-            s.log.push(line(&levels, lines + i));
-            frames.frame(&s)
-        })
-        .min()
-        .unwrap();
+    let mut log = Log::new(lines);
+    let steady = (0..n).map(|_| log.frame()).min().unwrap();
+    let append = (0..n).map(|_| log.append()).min().unwrap();
     (steady, append)
 }
 
+/// A window on a log of some length, warmed up.
+struct Log {
+    frames: Frames,
+    state: ViewState,
+}
+
+impl Log {
+    fn new(lines: usize) -> Self {
+        let log = Self {
+            frames: Frames::new(),
+            state: state(lines),
+        };
+        for _ in 0..3 {
+            log.frame();
+        }
+        log
+    }
+
+    fn frame(&self) -> Duration {
+        self.frames.frame(&self.state)
+    }
+
+    /// The first frame after a new line.
+    fn append(&mut self) -> Duration {
+        let n = self.state.log.len();
+        self.state.log.push(line(&[LogLevel::Info], n));
+        self.frame()
+    }
+}
+
+/// Lines in the short and the long log. A cost per line in view is the same for both; a cost per
+/// line in the log is 100 times larger in the long one.
+const SHORT: usize = 100;
+const LONG: usize = 10_000;
+/// Frames measured per log; the cheapest counts.
+const ROUNDS: usize = 30;
+
 #[test]
 fn log_cost_does_not_grow_with_length() {
-    // Warm the process (font files, allocator) before timing anything.
-    measure(10, 3);
-    let (steady_short, append_short) = measure(100, 15);
-    let (steady_long, append_long) = measure(2000, 15);
-    // Twenty times the lines; anything that scales with them shows as a ratio far above this.
-    let limit = |short: Duration| short * 3 + Duration::from_millis(2);
+    // Short and long frames alternate, so whatever else the machine is doing (other tests run
+    // beside this one) weighs on both alike, and the cheapest of each is compared.
+    let mut short = Log::new(SHORT);
+    let mut long = Log::new(LONG);
+    let mut steady = (Duration::MAX, Duration::MAX);
+    let mut append = (Duration::MAX, Duration::MAX);
+    for _ in 0..ROUNDS {
+        steady.0 = steady.0.min(short.frame());
+        steady.1 = steady.1.min(long.frame());
+    }
+    for _ in 0..ROUNDS {
+        append.0 = append.0.min(short.append());
+        append.1 = append.1.min(long.append());
+    }
+    // A frame costs about 0.5 ms with optimised dependencies, and the long log measures within
+    // 5 % of the short one. This limit fails on any per-line cost above about 50 ns.
+    let limit = |short: Duration| short * 3 / 2 + Duration::from_micros(250);
     assert!(
-        steady_long <= limit(steady_short),
-        "steady frame: {steady_short:?} at 100 lines, {steady_long:?} at 2000"
+        steady.1 <= limit(steady.0),
+        "steady frame: {:?} at {SHORT} lines, {:?} at {LONG}",
+        steady.0,
+        steady.1
     );
     assert!(
-        append_long <= limit(append_short),
-        "frame after a new line: {append_short:?} at 100 lines, {append_long:?} at 2000"
+        append.1 <= limit(append.0),
+        "frame after a new line: {:?} at {SHORT} lines, {:?} at {LONG}",
+        append.0,
+        append.1
     );
 }
 
@@ -139,7 +179,7 @@ fn log_cost_does_not_grow_with_length() {
 fn log_benchmark() {
     measure(10, 3);
     println!("lines  steady frame  first frame after a new line");
-    for lines in [100, 500, 2000] {
+    for lines in [SHORT, 2000, LONG] {
         let (steady, append) = measure(lines, 20);
         println!("{lines:>5}  {steady:>12.2?}  {append:>12.2?}");
     }
