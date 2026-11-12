@@ -13,7 +13,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
 /// The write half of `ProcessTracker::save`. A failed serialisation writes nothing: the file on disk keeps the
-/// last good state rather than being replaced by an empty object.
+/// last good state rather than being replaced by an empty object. A failed replace removes the temp file, as
+/// `core::config`'s `replace_atomically` does; Python left it behind.
 pub(super) fn write_state(state_file: &std::path::Path, json: serde_json::Result<String>) {
     let Ok(json) = json else {
         return;
@@ -21,8 +22,8 @@ pub(super) fn write_state(state_file: &std::path::Path, json: serde_json::Result
     let mut tmp = OsString::from(state_file.as_os_str());
     tmp.push(".tmp");
     let tmp = PathBuf::from(tmp);
-    if std::fs::write(&tmp, json).is_ok() {
-        let _ = std::fs::rename(&tmp, state_file);
+    if std::fs::write(&tmp, json).is_ok() && std::fs::rename(&tmp, state_file).is_err() {
+        let _ = std::fs::remove_file(&tmp);
     }
 }
 
@@ -235,6 +236,17 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&file).unwrap(), "{}");
         assert!(!tmp.exists());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn failed_replace_removes_the_temp_file() {
+        let dir = tempfile::tempdir().unwrap();
+        // A directory where the state file goes: the replace always fails.
+        let file = dir.path().join("process_state.json");
+        std::fs::create_dir(&file).unwrap();
+        write_state(&file, to_python_json(&State::default()));
+        assert!(file.is_dir());
+        assert!(!dir.path().join("process_state.json.tmp").exists());
     }
 
     #[test]

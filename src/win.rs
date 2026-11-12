@@ -3,6 +3,7 @@
 //! handles and registry keys.
 
 use std::ffi::OsStr;
+use std::marker::PhantomData;
 use std::os::windows::ffi::OsStrExt;
 
 use windows::Win32::Foundation::{CloseHandle, HANDLE, RPC_E_CHANGED_MODE};
@@ -40,6 +41,8 @@ pub(crate) fn basename(path: &str) -> &str {
 /// `CoInitializeEx` returns `S_FALSE` and its drop balances it.
 pub(crate) struct ComApartment {
     owns_init: bool,
+    /// `!Send` and `!Sync`: the drop must run on the thread that entered.
+    _thread_bound: PhantomData<*const ()>,
 }
 
 impl ComApartment {
@@ -52,13 +55,19 @@ impl ComApartment {
     pub(crate) fn enter() -> Option<Self> {
         // SAFETY: CoInitializeEx takes no pointers (the reserved one is null) and
         // affects only the current thread. A success is balanced by
-        // CoUninitialize in Drop; every caller holds the guard as a local that
-        // is dropped on the thread that entered it.
+        // CoUninitialize in Drop, which runs on the thread that entered: the
+        // guard is neither Send nor Sync.
         let hr = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
         if hr == RPC_E_CHANGED_MODE {
-            Some(Self { owns_init: false })
+            Some(Self {
+                owns_init: false,
+                _thread_bound: PhantomData,
+            })
         } else if hr.is_ok() {
-            Some(Self { owns_init: true })
+            Some(Self {
+                owns_init: true,
+                _thread_bound: PhantomData,
+            })
         } else {
             None
         }
