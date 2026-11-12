@@ -70,7 +70,7 @@ impl AppManager {
     /// Saved path, then Start Menu shortcut, then common paths. A detected
     /// path is saved to config before it is returned.
     pub fn find_app_path(&mut self, app: &str) -> Option<String> {
-        let info = self.def(app)?.clone();
+        let info = self.def(app)?;
         let key = config_key(app);
 
         if let Some(saved) = self.config.lock().app_path(&key) {

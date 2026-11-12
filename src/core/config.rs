@@ -326,20 +326,19 @@ fn replace_atomically(path: &Path, bytes: &[u8]) -> io::Result<()> {
 /// `BasicInterpolation.before_set`: after `%%` and `%(name)s` references are
 /// removed, a remaining `%` makes `configparser.set` raise `ValueError`.
 fn configparser_accepts(value: &str) -> bool {
-    let mut rest = value.replace("%%", "");
-    let mut remaining = String::new();
+    // `%%` goes first, as in Python, so a reference can span a removed `%%`.
+    let without_escapes = value.replace("%%", "");
+    let mut rest = without_escapes.as_str();
+    // `_KEYCRE.sub` removes references left to right; any `%` that does not
+    // start one survives the substitution.
     while let Some(p) = rest.find('%') {
-        remaining.push_str(&rest[..p]);
         let tail = &rest[p..];
         match key_ref_len(tail) {
-            Some(len) => rest = tail[len..].to_string(),
-            None => {
-                remaining.push('%');
-                rest = tail[1..].to_string();
-            }
+            Some(len) => rest = &tail[len..],
+            None => return false,
         }
     }
-    !remaining.contains('%')
+    true
 }
 
 /// UTF-8 first; Python wrote the file in the ANSI code page, so fall back to it.
@@ -671,6 +670,12 @@ mod tests {
             "a%%b%(c)sd",
             "C:/100%%/a.exe",
             "%(home)s/a.exe",
+            "%%%%",
+            "%%(a)s",
+            "%(a%%)s",
+            "%(a%b)s",
+            "%(a)s%(b)s",
+            "%(a(b)s",
         ] {
             assert!(configparser_accepts(ok), "{ok:?} should be accepted");
         }
@@ -682,6 +687,11 @@ mod tests {
             "%%%",
             "C:/100%/a.exe",
             "%(home)/a.exe",
+            "%(a)x",
+            "%(a)s%",
+            "a%(b)x%(c)s",
+            "%(a)%(b)s",
+            "%(a)s%%%",
         ] {
             assert!(!configparser_accepts(bad), "{bad:?} should be rejected");
         }

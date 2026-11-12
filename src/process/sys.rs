@@ -9,7 +9,7 @@ use std::time::Duration;
 use windows::Wdk::System::SystemInformation::{NtQuerySystemInformation, SystemProcessInformation};
 use windows::Win32::Foundation::{
     ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER, FILETIME, GENERIC_READ, GENERIC_WRITE,
-    WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    STATUS_INFO_LENGTH_MISMATCH, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows::Win32::Security::SECURITY_ATTRIBUTES;
 use windows::Win32::Storage::FileSystem::{
@@ -37,6 +37,9 @@ const STILL_ACTIVE: u32 = 259;
 
 /// Exit code psutil passes to `TerminateProcess` for both `terminate()` and `kill()`.
 const SIGTERM: u32 = 15;
+
+/// FILETIME ticks (100 ns since 1601-01-01) at the Unix epoch, 1970-01-01.
+const UNIX_EPOCH_IN_FILETIME_TICKS: u64 = 116_444_736_000_000_000;
 
 /// The two psutil exceptions the Python catches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,7 +114,7 @@ fn pid_in_pids(pid: u32) -> bool {
 
 /// FILETIME ticks to epoch seconds, as psutil's `psutil_FiletimeToUnixTime`.
 fn filetime_ticks_to_epoch(ticks: u64) -> f64 {
-    ticks.wrapping_sub(116_444_736_000_000_000) as f64 / 10_000_000.0
+    ticks.wrapping_sub(UNIX_EPOCH_IN_FILETIME_TICKS) as f64 / 10_000_000.0
 }
 
 /// `psutil.Process(pid).create_time()` on Windows: `GetProcessTimes` through a
@@ -205,21 +208,24 @@ fn nt_create_time(pid: u32) -> Result<f64, ProcError> {
                 &mut needed,
             )
         };
-        // STATUS_INFO_LENGTH_MISMATCH: the process list grew; retry larger.
-        if status.0 == 0xC000_0004_u32 as i32 {
+        // The process list grew; retry larger.
+        if status == STATUS_INFO_LENGTH_MISMATCH {
             buf.resize((needed as usize / 8 + 1).max(buf.len() * 2), 0);
             continue;
         }
         if status.is_err() {
             return Err(ProcError::AccessDenied);
         }
+        // On success the kernel reports how many bytes it wrote; no entry lies beyond them.
+        let written = (needed as usize).min(bytes as usize);
         let base = buf.as_ptr().cast::<u8>();
         let mut offset = 0usize;
         loop {
-            if offset + std::mem::size_of::<SpiHead>() > bytes as usize {
+            if offset + std::mem::size_of::<SpiHead>() > written {
                 return Err(ProcError::NoSuchProcess);
             }
-            // SAFETY: the entry lies inside `buf`, checked just above.
+            // SAFETY: the entry lies inside the bytes the kernel wrote, which lie
+            // inside `buf`, checked just above; `read_unaligned` needs no alignment.
             let head = unsafe { std::ptr::read_unaligned(base.add(offset).cast::<SpiHead>()) };
             if head.unique_process_id == pid as usize {
                 return Ok(filetime_ticks_to_epoch(head.create_time as u64));
@@ -480,6 +486,7 @@ mod tests {
 
     #[test]
     fn filetime_conversion_is_epoch_seconds() {
+        assert_eq!(filetime_ticks_to_epoch(UNIX_EPOCH_IN_FILETIME_TICKS), 0.0);
         assert_eq!(filetime_ticks_to_epoch(116_444_736_000_000_000), 0.0);
         assert_eq!(filetime_ticks_to_epoch(116_444_736_015_000_000), 1.5);
     }
