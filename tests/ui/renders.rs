@@ -142,6 +142,47 @@ fn display_scale_keeps_dots_and_focus_inside_their_cards() {
     assert!(ring > 100, "no focus ring: {ring} px changed");
 }
 
+/// A stopping app's dot is the starting orange and a stopped app's the idle grey (#9); no
+/// fixture state has either, so this render has no Python reference:
+/// `target/ui-snapshots/other/stopping.png`.
+#[test]
+fn stopping_dot_is_orange_and_stopped_dot_grey() {
+    let mut state = fixture("mixed");
+    state.apps[0].status = Status::Stopping;
+    state.apps[1].status = Status::Stopped;
+    let image = render(&state);
+    let out_dir = repo_path("target/ui-snapshots/other");
+    std::fs::create_dir_all(&out_dir).unwrap();
+    image.save(out_dir.join("stopping.png")).unwrap();
+
+    let orange = theme::status_color(Status::Starting);
+    let grey = theme::status_color(Status::Idle);
+    assert_eq!(theme::status_color(Status::Stopping), orange);
+    assert_eq!(theme::status_color(Status::Stopped), grey);
+    let geom = geometry(&state);
+    let count = |card: Bounds, color: Color32| {
+        let b = card.painted();
+        let mut n = 0;
+        for y in b.y..b.bottom() {
+            for x in b.x..b.right() {
+                let p = image.get_pixel(x as u32, y as u32);
+                n += usize::from(Color32::from_rgb(p[0], p[1], p[2]) == color);
+            }
+        }
+        n
+    };
+    // A dot of radius 8.5 px has well over 150 solid pixels.
+    for (i, want, other) in [(0, orange, grey), (1, grey, orange)] {
+        let card = geom.apps[i].card;
+        let (name, status) = (&state.apps[i].name, state.apps[i].status);
+        assert!(
+            count(card, want) > 150,
+            "{name} ({status:?}) has no dot in {want:?}"
+        );
+        assert_eq!(count(card, other), 0, "{name} ({status:?}) shows {other:?}");
+    }
+}
+
 /// Names too long for their card are clipped at their label, as Tk clips a label's text,
 /// instead of running through the card's border: `target/ui-snapshots/other/long-names.png`.
 #[test]

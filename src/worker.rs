@@ -134,16 +134,19 @@ fn launch_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: 
     out.divider();
     out.log(LogLevel::Launch, "Starting launch sequence...");
 
+    let mut tally = LaunchTally::default();
     for app in backend.app_list() {
         if !apps.contains(&app) {
             continue;
         }
+        tally.selected += 1;
 
         let Some(path) = backend.find_app_path(&app) else {
             out.log(
                 LogLevel::Warning,
                 &format!("Skipping {app} - not configured"),
             );
+            tally.not_configured += 1;
             continue;
         };
 
@@ -152,6 +155,7 @@ fn launch_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: 
             let children = backend.child_names(&app);
             out.helpers("helpers", &children);
             out.app(&app, Status::Running, children.len());
+            tally.running += 1;
             continue;
         }
 
@@ -163,15 +167,19 @@ fn launch_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: 
             let children = backend.child_names(&app);
             out.helpers("helpers", &children);
             out.app(&app, Status::Running, children.len());
+            tally.running += 1;
         } else {
             out.log(LogLevel::Error, &format!("{app} failed to start"));
             out.log(LogLevel::Warning, &format!("Try reinstalling {app}"));
             out.app(&app, Status::Failed, 0);
+            tally.failed += 1;
         }
     }
 
-    // Logged whatever happened above, even with nothing selected.
-    out.log(LogLevel::Success, "All apps launched!");
+    // v2.3.2 logged "All apps launched!" whatever happened above (#8).
+    if let Some((level, summary)) = tally.summary() {
+        out.log(level, &summary);
+    }
 
     if let Some(game) = game {
         launch_selected_game(backend, out, game);
@@ -179,6 +187,37 @@ fn launch_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: 
 
     out.log(LogLevel::Success, "Launch sequence complete!");
     (out.emit)(Event::LaunchFinished);
+}
+
+/// What became of the checked apps in a launch sequence.
+#[derive(Default)]
+struct LaunchTally {
+    selected: usize,
+    /// Started, or already running.
+    running: usize,
+    failed: usize,
+    not_configured: usize,
+}
+
+impl LaunchTally {
+    /// The line after the app loop: none when no app was checked.
+    fn summary(&self) -> Option<(LogLevel, String)> {
+        if self.selected == 0 {
+            return None;
+        }
+        if self.running == self.selected {
+            return Some((LogLevel::Success, "All apps launched!".to_owned()));
+        }
+        let noun = if self.selected == 1 { "app" } else { "apps" };
+        let mut summary = format!("Launched {} of {} {noun}", self.running, self.selected);
+        if self.failed > 0 {
+            summary.push_str(&format!(", {} failed", self.failed));
+        }
+        if self.not_configured > 0 {
+            summary.push_str(&format!(", {} not configured", self.not_configured));
+        }
+        Some((LogLevel::Warning, summary))
+    }
 }
 
 /// Launches the selected game at the end of the launch sequence, unless it is not found or
@@ -227,11 +266,13 @@ fn close_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: O
     // (`docs/behaviour.md`, "Changes from v2.3.2"). A game is found there only
     // while the app is tracked and alive, and then the app is closed below.
     let mut left_running: Vec<String> = Vec::new();
+    let mut any_selected = false;
 
     for app in backend.app_list() {
         if !apps.contains(&app) {
             continue;
         }
+        any_selected = true;
 
         for name in backend.games_under(&app) {
             if !left_running.contains(&name) {
@@ -285,7 +326,11 @@ fn close_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: O
         }
     }
 
-    out.log(LogLevel::Success, "All apps closed!");
+    // Every checked app is closed or was not running by now. v2.3.2 logged this
+    // line also when no app was checked (#8).
+    if any_selected {
+        out.log(LogLevel::Success, "All apps closed!");
+    }
     (out.emit)(Event::CloseFinished);
 }
 

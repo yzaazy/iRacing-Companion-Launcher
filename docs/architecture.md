@@ -58,7 +58,7 @@ flowchart TD
 | `worker` | `Command` and `Event`; `Sequencer` (the launch and close sequences); `Worker` (runs it on a thread); `Inline` (runs it on the caller's thread, for tests); the `Dispatch` trait. |
 | `managers` | `Backend` trait and `Managers`, its real implementation: detection order, saving detected paths, launch and close per app, game launch routing. `TestHost` swaps in a fake Start Menu, Steam key, shell and waits for tests. |
 | `dialog` | `NativeDialog`: the Windows open dialog (`IFileOpenDialog`) with Tk 8.6's options. |
-| `core::config` | `ConfigStore` (hand-written `configparser`-compatible INI reader and writer), `SharedConfig`, `SetPathError`, `config_key`, `resolve_config_dir`. |
+| `core::config` | `ConfigStore` (hand-written `configparser`-compatible INI reader and writer), `SharedConfig`, `config_key`, `resolve_config_dir`. |
 | `core::definitions` | The companion apps and racing games: `AppDef`, `GameDef`. |
 | `core::log` | Log line construction: timestamp prefix, divider. |
 | `detect::shortcuts` | Start Menu search and `.lnk` resolution through `IShellLinkW`. |
