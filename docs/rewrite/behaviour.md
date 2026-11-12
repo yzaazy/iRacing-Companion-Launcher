@@ -29,7 +29,7 @@ These are the only places Rust may differ from Python. Anything else that differ
 - A saved `selected_game` is restored even when that game is not found: the radio is selected and disabled.
 - At the end of a launch the Launch button is set to enabled unconditionally, and likewise Close after a close, even when `_update_button_text` would have disabled it.
 - `shortcut_names` and `paths` in `RACE_GAMES` are never consulted. Games are found by saved path or Steam registry only.
-- A path containing `%` cannot be saved: `configparser` rejects the value, so `set_app_path` fails and Browse stops before the card is set idle or checked. `ConfigStore::set_app_path` returns false in that case.
+- A path containing `%` cannot be saved: `configparser` rejects the value, so `set_app_path` fails and Browse stops before the card is set idle or checked. `ConfigStore::set_app_path` returns `Err(SetPathError::Refused)` in that case; a failed save is `Err(SetPathError::Save(_))`, which Python reports as `False` and its callers ignore.
 
 ## Config (`core/config_manager.py`)
 
