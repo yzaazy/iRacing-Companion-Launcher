@@ -472,18 +472,6 @@ fn failed_direct_launch_tracks_nothing() {
 }
 
 #[test]
-fn forget_leaves_the_process_running() {
-    let mut d = Dummies::new();
-    let exe = d.exe("forgotten");
-    let mut t = ProcessTracker::new(d.state_file());
-    assert!(t.launch_and_track(KEY, &exe, WAIT, LaunchMethod::Direct));
-    t.forget(KEY);
-    assert!(!t.is_tracked(KEY));
-    assert!(is_process_running(&d.name("forgotten")));
-    assert_eq!(read_state(&d.state_file()), serde_json::json!({}));
-}
-
-#[test]
 fn state_file_is_written_like_python() {
     let mut d = Dummies::new();
     let exe = d.exe("format");

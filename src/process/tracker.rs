@@ -177,11 +177,6 @@ impl ProcessTracker {
         true
     }
 
-    /// Forgets a tracked entry without killing the process.
-    pub fn forget(&mut self, key: &str) {
-        self.drop_key(key);
-    }
-
     /// The live root process for `key`, or None. Drops the entry on any mismatch
     /// so callers never act on stale state.
     fn proc_for(&mut self, key: &str) -> Option<Target> {

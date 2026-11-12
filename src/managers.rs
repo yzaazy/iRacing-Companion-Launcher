@@ -104,13 +104,6 @@ impl AppManager {
         is_process_running(&exe)
     }
 
-    pub fn get_child_count(&mut self, app: &str) -> usize {
-        if self.def(app).is_none() {
-            return 0;
-        }
-        self.tracker.is_tracked_running(app).1
-    }
-
     pub fn get_child_names(&mut self, app: &str) -> Vec<String> {
         if self.def(app).is_none() {
             return Vec::new();
@@ -214,11 +207,6 @@ impl GameManager {
             return false;
         }
         is_process_running(&exe)
-    }
-
-    /// Unused by the window, as in Python.
-    pub fn close_game(&self, game: &str) -> bool {
-        self.def(game).is_some_and(|g| kill_process(g.exe))
     }
 }
 

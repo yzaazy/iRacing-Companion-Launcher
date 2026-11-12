@@ -62,14 +62,12 @@ fn unknown_names_answer_like_python() {
     assert_eq!(managers.find_app_path(name), None);
     assert!(!managers.is_app_running(name));
     assert!(managers.get_child_names(name).is_empty());
-    assert_eq!(managers.apps.get_child_count(name), 0);
     assert!(!managers.launch_app(name, "C:/x.exe"));
     assert!(!managers.close_app(name));
     assert_eq!(managers.game_exe(name), None);
     assert_eq!(managers.find_game_path(name), None);
     assert!(!managers.is_game_running(name));
     assert!(!managers.launch_game(name, "C:/x.exe"));
-    assert!(!managers.games.close_game(name));
 }
 
 #[test]

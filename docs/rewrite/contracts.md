@@ -146,7 +146,6 @@ impl ProcessTracker {
     pub fn is_tracked_running(&mut self, key: &str) -> (bool, usize);
     pub fn get_child_names(&mut self, key: &str) -> Vec<String>;
     pub fn close_tracked(&mut self, key: &str) -> bool;
-    pub fn forget(&mut self, key: &str);
 }
 pub enum LaunchMethod { Direct, Shell } // CreateProcess, or ShellExecute for needs_shell_launch
 
