@@ -1,4 +1,5 @@
-//! The shared types in `model.rs` read the shape of `tests/fixtures/ui/fixtures.json` and round-trip.
+//! The shared types in `model.rs` (`docs/architecture.md`, "Shared types") read the shape of
+//! `tests/fixtures/ui/fixtures.json` and round-trip.
 
 use iracing_companion_launcher::model::{
     AppCard, GameCard, LogLevel, LogLine, Status, UiAction, ViewState,

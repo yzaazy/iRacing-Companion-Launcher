@@ -1,6 +1,6 @@
 # Test fixtures
 
-Files captured from the Python app v2.3.2, the app the Rust port replaces. They keep its answers, so the tests can hold the Rust app to them without Python. The Python app was deleted after commit `d0a9ffb`; `git show d0a9ffb:<path>` shows any of its files, and any script below that needed it.
+Files captured from the Python app v2.3.2, the app the Rust port replaces. They keep its answers, so the tests can hold the Rust app to them without Python. The Python app as released is at tag `v2.3.2`. Commit `d0a9ffb` is the last one that has the Python app together with the fixture generators and `tools/capture_reference.py`; `git show d0a9ffb:<path>` shows any of them.
 
 Nothing here runs during `cargo test` or `tools/gate.ps1`: the tests read the committed files and never invoke Python.
 

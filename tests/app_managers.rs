@@ -333,7 +333,8 @@ fn app_found_nowhere_writes_nothing() {
     assert_eq!(f.config(), None);
 }
 
-/// A deliberate difference: the Python app crashed saving a `%` path; Rust uses it unsaved.
+/// v2.3.2 crashed saving a detected `%` path; Rust uses it unsaved (`docs/behaviour.md`,
+/// "Changes from v2.3.2": "Malformed files no longer stop startup").
 #[test]
 fn detected_path_with_a_percent_is_used_unsaved() {
     let f = Fixture::new("app-percent");

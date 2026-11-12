@@ -1,5 +1,6 @@
-//! Runs launch and close sequences off the UI thread, a deliberate difference from the Python app
-//! (up to v2.3.2), which ran them on the Tk thread.
+//! Runs launch and close sequences off the UI thread; the Python app (up to v2.3.2) ran them on
+//! the Tk thread (`docs/behaviour.md`, "Changes from v2.3.2": "The window stays responsive during
+//! Launch and Close").
 //!
 //! [`Sequencer`] holds the Python app's launch, game launch and close sequences
 //! line for line; [`Worker`] runs it on a background thread, one command at a
@@ -7,7 +8,7 @@
 //!
 //! Python reads two things from the window mid-sequence: each card's checkbox,
 //! and the selected game card's status in the close sequence. Checkboxes arrive
-//! captured in the [`Command`] (a deliberate difference). The game status is
+//! captured in the [`Command`] (same change from v2.3.2). The game status is
 //! mirrored here: it changes only at startup (the seed), through this
 //! sequencer's own events, and through Browse, which only turns `not_found`
 //! into `idle` and so never changes the one question asked of it, "is it
@@ -229,7 +230,8 @@ fn close_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: O
         let path = backend.find_app_path(&app);
         // No detected path: the first close_app already kills a running
         // instance, so the second one below reports "was not running" and the
-        // card goes back to not-found. Ported unchanged.
+        // card goes back to not-found. A quirk carried over from v2.3.2 (`docs/behaviour.md`,
+        // "Known quirks carried over from v2.3.2").
         if path.is_none() && !backend.close_app(&app) {
             continue;
         }

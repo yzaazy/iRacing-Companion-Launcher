@@ -1,4 +1,5 @@
-//! Rule-based window layout reproducing the measured Python geometry (`tests/fixtures/ui/ui-spec.json`).
+//! Rule-based window layout reproducing the measured Python geometry (`tests/fixtures/ui/ui-spec.json`;
+//! `docs/architecture.md`, "UI").
 //!
 //! The Python window is built with Tk's packer, and its quirks are what the window looks like:
 //! the button row absorbing a height overflow, columns sharing surplus width by integer division,

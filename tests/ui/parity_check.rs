@@ -1,5 +1,5 @@
 //! Compares a render with the Python reference screenshot of the same state, in the three classes
-//! of the parity criteria:
+//! of the parity criteria (`docs/architecture.md`, "Tests"):
 //!
 //! - **flat**: every pixel outside the two classes below. Passes with zero pixels whose channels
 //!   differ by more than [`TOLERANCE`].

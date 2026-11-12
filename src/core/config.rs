@@ -71,7 +71,8 @@ impl SharedConfig {
 }
 
 /// Where `config.ini` and `process_state.json` live: `IRCL_CONFIG_DIR` when set, `target/dev-config`
-/// in debug builds, otherwise `%APPDATA%\iRacingCompanionLauncher`, as the Python app used.
+/// in debug builds, otherwise `%APPDATA%\iRacingCompanionLauncher`, as the Python app used
+/// (`docs/architecture.md`, "Config and state location").
 pub fn resolve_config_dir() -> PathBuf {
     let dir = if let Some(dir) = non_empty_env("IRCL_CONFIG_DIR") {
         PathBuf::from(dir)
@@ -157,8 +158,9 @@ impl ConfigStore {
     }
 
     pub fn save(&self) -> io::Result<()> {
-        // Python's text mode writes CRLF line endings. UTF-8 is a deliberate
-        // difference from the Python app, which used the ANSI code page.
+        // Python's text mode writes CRLF line endings. UTF-8 is a change from v2.3.2, which used
+        // the ANSI code page (`docs/behaviour.md`, "Changes from v2.3.2": "`config.ini` is
+        // written as UTF-8").
         let text = self.render().replace('\n', "\r\n");
         replace_atomically(&self.dir.join(CONFIG_FILENAME), text.as_bytes())
     }
