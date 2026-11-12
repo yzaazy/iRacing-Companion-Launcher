@@ -7,12 +7,10 @@ use iracing_companion_launcher::model::{AppCard, GameCard, Status};
 use iracing_companion_launcher::ui::pack::Bounds;
 use iracing_companion_launcher::ui::{self, theme};
 
-/// The same rules at other window sizes and display scales, for a look:
-/// `target/ui-snapshots/other-sizes/` and `target/ui-snapshots/scales/`. Nothing to compare them
-/// with; `display_scale_keeps_dots_and_focus_inside_their_cards` holds one scale to rules.
+/// The same rules at other window sizes render at those sizes; the images are for a look:
+/// `target/ui-snapshots/other-sizes/`. There is no Python reference to compare them with.
 #[test]
-#[ignore = "visual inspection"]
-fn render_other_window_sizes_and_scales() {
+fn render_other_window_sizes() {
     let out_dir = repo_path("target/ui-snapshots/other-sizes");
     std::fs::create_dir_all(&out_dir).unwrap();
     for (name, size) in [
@@ -20,16 +18,28 @@ fn render_other_window_sizes_and_scales() {
         ("log-full", egui::vec2(1000.0, 640.0)),
     ] {
         let image = render_at(&fixture(name), size, 1.0);
-        assert_eq!(image.dimensions(), (size.x as u32, size.y as u32));
+        assert_eq!(image.dimensions(), (size.x as u32, size.y as u32), "{name}");
         image
             .save(out_dir.join(format!("{name}-{}x{}.png", size.x, size.y)))
             .unwrap();
     }
+}
+
+/// The window at Windows display scaling of 100, 125, 150 and 200 % renders at the scaled size;
+/// the images are for a look: `target/ui-snapshots/scales/`. There is no Python reference at
+/// these scales; `display_scale_keeps_dots_and_focus_inside_their_cards` holds 150 % to rules.
+#[test]
+fn render_display_scales() {
     let out_dir = repo_path("target/ui-snapshots/scales");
     std::fs::create_dir_all(&out_dir).unwrap();
     for name in ["mixed", "log-full"] {
         for ppp in [1.0f32, 1.25, 1.5, 2.0] {
             let image = render_at(&fixture(name), WINDOW, ppp);
+            let want = (
+                (WINDOW.x * ppp).round() as u32,
+                (WINDOW.y * ppp).round() as u32,
+            );
+            assert_eq!(image.dimensions(), want, "{name} at {ppp}");
             image
                 .save(out_dir.join(format!("{name}@{}.png", (ppp * 100.0) as u32)))
                 .unwrap();
