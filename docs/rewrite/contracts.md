@@ -211,9 +211,9 @@ The parity check (`tests/ui/parity_check.rs`, which documents each class in full
 
 | Class | Covers | Passes when |
 |---|---|---|
-| flat | Everything outside the two classes below | Zero differing pixels |
-| edges | Rounded-corner zones of cards, buttons, the log box, checkboxes and radios, and the status dots | The shape's bounding box equals the spec, and only anti-aliased edge pixels differ |
-| text | Every text element | Left edge and baseline within 1 px of the reference ink box, right edge within 2 px; glyph anti-aliasing is free to differ |
+| flat | Every pixel outside the text regions (the status dots' glyph regions are not text) and the edge zones below | No pixel has a channel that differs by more than 8 |
+| edges | Zones derived from the element rects in `ui-spec.json`: the four corner zones of each card, the log box, Select All, each Browse button and Launch and Close (a square of corner radius + 2 px, reaching 1 px outside the rect); each checkbox and radio box grown by 1 px; each status dot's ink box grown by 2 px; the two rounded ends of the log scrollbar thumb, when the state has one | The shape's bounding box (pixels more than 8 per channel from the zone's background) is the same in the render as in the reference, and every pixel that differs by more than 8 lies on an edge of the reference shape (its 3x3 neighbourhood in the reference is not uniform): anti-aliasing only |
+| text | Every text element and visible log line that has a text region and recorded ink in `ui-spec.json`, measured inside its region widened by 3 px left and right; ink is pixels more than 48 per channel from the background | Left edge, top and bottom of the ink box within 1 px of the reference's, right edge within 2 px, and the ink colour (measured to ignore ClearType fringes) within 16 per channel. A region with no ink in the reference image is not checked; a render with no ink where the reference has some fails. Glyph pixels themselves are free to differ |
 
 ## Testing rules
 

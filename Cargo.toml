@@ -29,7 +29,7 @@ eframe = { version = "0.37.0", default-features = false, features = [
 egui = "0.37.0"
 raw-window-handle = "0.6.2"
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.154"
+serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 
 [dependencies.windows]
 version = "0.62.2"

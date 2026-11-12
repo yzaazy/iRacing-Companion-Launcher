@@ -523,6 +523,27 @@ mod tests {
         assert_eq!(filetime_ticks_to_epoch(116_444_736_015_000_000), 1.5);
     }
 
+    /// Creation FILETIMEs of live processes with what psutil 7.1.0 made of
+    /// them (`tests/fixtures/README.md`), bit for bit.
+    #[test]
+    fn filetime_conversion_matches_psutil() {
+        let rows: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+            "../../tests/fixtures/process/create_times.json"
+        ))
+        .unwrap();
+        assert!(rows.len() >= 6);
+        for row in rows {
+            let ticks = row["filetime"].as_u64().unwrap();
+            let psutil: f64 = row["create_time"].as_str().unwrap().parse().unwrap();
+            let rust = filetime_ticks_to_epoch(ticks);
+            assert_eq!(
+                rust.to_bits(),
+                psutil.to_bits(),
+                "{ticks}: {rust:?} vs {psutil:?}"
+            );
+        }
+    }
+
     #[test]
     fn create_time_of_self_matches_both_sources() {
         let pid = std::process::id();

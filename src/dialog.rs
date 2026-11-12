@@ -92,7 +92,9 @@ fn open_dialog(request: &DialogRequest) -> Option<IFileOpenDialog> {
         .collect();
     if !specs.is_empty() {
         // SAFETY: `dialog` is live; each spec points to NUL-terminated strings in
-        // `texts`, and both vectors stay alive while the dialog lives (it copies them).
+        // `texts`, and `specs` and `texts` outlive the call. They are dropped when
+        // this function returns, while the dialog may live on: that is sound
+        // because SetFileTypes copies the specs and their strings.
         unsafe { dialog.SetFileTypes(&specs) }.ok()?;
         // No -typevariable: Tk shows the first filter (indices are 1-based).
         // SAFETY: `dialog` is live; the call takes only a value besides it.

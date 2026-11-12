@@ -47,38 +47,61 @@ fn golden_options() -> SnapshotOptions {
         .output_path(repo_path("tests/snapshots"))
 }
 
-/// Render `state`, write it to `target/ui-snapshots/`, compare it with the reference and with its
-/// golden render, and write `target/ui-diff/<state>.png` when parity fails.
+/// Render `state`, write it to `target/ui-snapshots/`, and check it with `check_render`.
 fn check_state(state: &str) {
     let image = render(&fixture(state));
     let out = repo_path("target/ui-snapshots");
     std::fs::create_dir_all(&out).unwrap();
     image.save(out.join(format!("{state}.png"))).unwrap();
+    check_render(state, &image, &repo_path("target/ui-diff"));
+}
 
-    let mut failures = Vec::new();
+/// Compare `image` with the reference of `state`, writing `<diff_dir>/<state>.png` when parity
+/// fails; only once parity passes, compare it with its golden render. A render that fails parity
+/// therefore never reaches the golden step, and `UPDATE_SNAPSHOTS=1` cannot approve it.
+fn check_render(state: &str, image: &image::RgbaImage, diff_dir: &std::path::Path) {
     let rgb = image::DynamicImage::ImageRgba8(image.clone()).to_rgb8();
-    let diff_dir = repo_path("target/ui-diff");
     let diff_path = diff_dir.join(format!("{state}.png"));
     let _ = std::fs::remove_file(&diff_path);
-    match compare(state, &rgb) {
-        Err(e) => failures.push(format!("{state}: {e}")),
-        Ok(diff) if !diff.ok() => {
-            std::fs::create_dir_all(&diff_dir).unwrap();
-            check::diff_image(&diff, check::state_spec(spec(), state), reference(state))
-                .save(&diff_path)
-                .unwrap();
-            failures.push(format!(
-                "parity with the Python reference fails, see {}:\n{}",
-                diff_path.display(),
-                check::report(&diff, 10)
-            ));
+    let diff = compare(state, &rgb).unwrap_or_else(|e| panic!("{state}: {e}"));
+    if !diff.ok() {
+        std::fs::create_dir_all(diff_dir).unwrap();
+        check::diff_image(&diff, check::state_spec(spec(), state), reference(state))
+            .save(&diff_path)
+            .unwrap();
+        panic!(
+            "{state}:\nparity with the Python reference fails, see {}:\n{}\n\
+             (the golden render was not compared)",
+            diff_path.display(),
+            check::report(&diff, 10)
+        );
+    }
+    if let Err(e) = egui_kittest::try_image_snapshot_options(image, state, &golden_options()) {
+        panic!("{state}:\ngolden render: {e}");
+    }
+}
+
+/// A render that fails parity fails with the parity report and stops before the golden step,
+/// which would otherwise also fail on it (or, under `UPDATE_SNAPSHOTS=1`, approve it).
+#[test]
+fn parity_failure_stops_before_the_golden_render() {
+    let mut bad = image::DynamicImage::ImageRgb8(reference("idle").clone()).to_rgba8();
+    for y in 300..320 {
+        for x in 300..340 {
+            bad.put_pixel(x, y, image::Rgba([200, 0, 200, 255]));
         }
-        Ok(_) => {}
     }
-    if let Err(e) = egui_kittest::try_image_snapshot_options(&image, state, &golden_options()) {
-        failures.push(format!("golden render: {e}"));
-    }
-    assert!(failures.is_empty(), "{state}:\n{}", failures.join("\n"));
+    let diff_dir = repo_path("target/ui-diff/self-test");
+    let failed = std::panic::catch_unwind(|| check_render("idle", &bad, &diff_dir))
+        .expect_err("a planted block must fail");
+    let message = failed.downcast_ref::<String>().cloned().unwrap_or_default();
+    assert!(
+        message.contains("parity with the Python reference fails")
+            && message.contains("the golden render was not compared")
+            && !message.contains("golden render:"),
+        "{message}"
+    );
+    assert!(diff_dir.join("idle.png").exists());
 }
 
 #[test]

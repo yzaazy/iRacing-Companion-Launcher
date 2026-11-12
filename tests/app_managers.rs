@@ -475,6 +475,24 @@ fn watch_the_wait(f: &mut Fixture) {
     f.tracker_sleep = note_state_then_sleep;
 }
 
+thread_local! {
+    /// The exe name [`note_state_then_await_start`] waits for, per test thread.
+    static AWAITED: RefCell<String> = const { RefCell::new(String::new()) };
+}
+
+/// [`note_state_then_sleep`], except that the wait ends when a process named
+/// [`AWAITED`] is running instead of after a fixed time: a freshly copied
+/// dummy can take longer than any fixed wait to start on a loaded machine.
+fn note_state_then_await_start(_: Duration) {
+    note_state_then_sleep(Duration::ZERO);
+    AWAITED.with_borrow(|name| {
+        assert!(
+            wait_until(Duration::from_secs(60), || is_process_running(name)),
+            "{name} never started"
+        );
+    });
+}
+
 /// Whether [`APP`] was in the state file during the last watched wait.
 fn tracked_during_the_wait() -> Option<bool> {
     WATCHED.with_borrow(|(_, seen)| *seen)
@@ -508,6 +526,8 @@ fn shell_launch_is_tracked_by_the_new_pid() {
     let mut f = Fixture::new("launch-shell");
     let exe = f.dummies.exe("shell");
     watch_the_wait(&mut f);
+    AWAITED.set(f.dummies.name("shell"));
+    f.tracker_sleep = note_state_then_await_start;
     let mut m = f.app_managers(vec![f.app("shell", vec![], true)], vec![]);
 
     assert!(m.launch_app(APP, &exe));
