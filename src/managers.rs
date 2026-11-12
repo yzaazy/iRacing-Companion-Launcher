@@ -2,14 +2,19 @@
 //!
 //! The controller and the worker reach both managers through the [`Backend`]
 //! trait, so tests can swap in a scripted fake that never touches a process.
+//! The managers' own tests use [`Managers::with_test_host`] instead: the real
+//! logic over their own definitions, Start Menu, Steam key and shell.
 
+use std::path::PathBuf;
 use std::time::Duration;
+
+use windows::Win32::System::Registry::HKEY_CURRENT_USER;
 
 use crate::core::config::{SharedConfig, config_key};
 use crate::core::definitions::{self, AppDef, GameDef};
 use crate::detect::paths::find_path_in_list;
-use crate::detect::shortcuts::{ShortcutLookup, find_shortcut_target};
-use crate::detect::steam::check_steam_game_installed;
+use crate::detect::shortcuts::{ShortcutLookup, find_shortcut_target, find_shortcut_target_in};
+use crate::detect::steam::{check_steam_game_installed, check_steam_game_installed_in};
 use crate::process::tracker::{LaunchMethod, ProcessTracker};
 use crate::process::{is_process_running, kill_process, launch_process, shell_open};
 
@@ -19,6 +24,28 @@ const APP_LAUNCH_WAIT: Duration = Duration::from_secs(2);
 const STEAM_LAUNCH_WAIT: Duration = Duration::from_secs(3);
 /// `time.sleep(2)` after a `.lnk` launch, and `launch_process`'s default wait for an `.exe`.
 const GAME_LAUNCH_WAIT: Duration = Duration::from_secs(2);
+
+/// The stand-in for `os.startfile` in a [`TestHost`].
+pub type ShellOpen = Box<dyn FnMut(&str) -> std::io::Result<()> + Send>;
+
+/// What [`Managers`] consults and calls on the real machine, replaced for
+/// tests: the Start Menus, the Steam uninstall key, `os.startfile` for game
+/// paths and the launch waits.
+pub struct TestHost {
+    /// Searched in place of the user's and the all-users Start Menu.
+    pub start_menu: Vec<PathBuf>,
+    /// A key under `HKEY_CURRENT_USER`, searched in place of
+    /// `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`.
+    pub steam_uninstall_key: String,
+    /// Called in place of `ShellExecute` for `steam://` and `.lnk` game paths.
+    pub shell_open: ShellOpen,
+    /// In place of the 2 s wait after a tracked app launch.
+    pub app_launch_wait: Duration,
+    /// In place of the 3 s wait after a `steam://` game launch.
+    pub steam_launch_wait: Duration,
+    /// In place of the 2 s wait after a `.lnk` or `.exe` game launch.
+    pub game_launch_wait: Duration,
+}
 
 /// Everything the window and the launch/close sequences ask of `AppManager`
 /// and `GameManager`. Blocking methods (`launch_app`, `close_app`,
@@ -47,6 +74,8 @@ pub struct Managers {
     apps: Vec<AppDef>,
     games: Vec<GameDef>,
     tracker: ProcessTracker,
+    /// `None` on the real machine.
+    test_host: Option<TestHost>,
 }
 
 impl Managers {
@@ -57,7 +86,68 @@ impl Managers {
             apps: definitions::apps(),
             games: definitions::games(),
             tracker,
+            test_host: None,
         }
+    }
+
+    /// Managers over the test's own definitions and [`TestHost`], for tests.
+    pub fn with_test_host(
+        config: SharedConfig,
+        tracker: ProcessTracker,
+        apps: Vec<AppDef>,
+        games: Vec<GameDef>,
+        host: TestHost,
+    ) -> Self {
+        Self {
+            config,
+            apps,
+            games,
+            tracker,
+            test_host: Some(host),
+        }
+    }
+
+    fn shortcut_target(&self, shortcut_names: &[&str]) -> Option<String> {
+        match &self.test_host {
+            None => find_shortcut_target(shortcut_names, ShortcutLookup::Target),
+            Some(host) => {
+                find_shortcut_target_in(&host.start_menu, shortcut_names, ShortcutLookup::Target)
+            }
+        }
+    }
+
+    fn steam_game_installed(&self, appid: &str) -> bool {
+        match &self.test_host {
+            None => check_steam_game_installed(appid),
+            Some(host) => {
+                check_steam_game_installed_in(HKEY_CURRENT_USER, &host.steam_uninstall_key, appid)
+            }
+        }
+    }
+
+    fn shell_open(&mut self, path: &str) -> std::io::Result<()> {
+        match &mut self.test_host {
+            None => shell_open(path),
+            Some(host) => (host.shell_open)(path),
+        }
+    }
+
+    fn app_launch_wait(&self) -> Duration {
+        self.test_host
+            .as_ref()
+            .map_or(APP_LAUNCH_WAIT, |host| host.app_launch_wait)
+    }
+
+    fn steam_launch_wait(&self) -> Duration {
+        self.test_host
+            .as_ref()
+            .map_or(STEAM_LAUNCH_WAIT, |host| host.steam_launch_wait)
+    }
+
+    fn game_launch_wait(&self) -> Duration {
+        self.test_host
+            .as_ref()
+            .map_or(GAME_LAUNCH_WAIT, |host| host.game_launch_wait)
     }
 
     fn app_def(&self, app: &str) -> Option<&AppDef> {
@@ -87,7 +177,7 @@ impl Backend for Managers {
         if let Some(saved) = self.config.lock().app_path(&key) {
             return Some(saved);
         }
-        if let Some(target) = find_shortcut_target(info.shortcut_names, ShortcutLookup::Target) {
+        if let Some(target) = self.shortcut_target(info.shortcut_names) {
             // Python raises here if configparser refuses the value (a `%` in
             // the path) and startup crashes; the port keeps the path unsaved.
             // A failed save is ignored, as in Python.
@@ -131,8 +221,8 @@ impl Backend for Managers {
         } else {
             LaunchMethod::Direct
         };
-        self.tracker
-            .launch_and_track(app, path, APP_LAUNCH_WAIT, method)
+        let wait = self.app_launch_wait();
+        self.tracker.launch_and_track(app, path, wait, method)
     }
 
     /// Tracked close when tracked; otherwise (or when the tracked process was
@@ -165,7 +255,7 @@ impl Backend for Managers {
         if let Some(saved) = self.config.lock().app_path(&key) {
             return Some(saved);
         }
-        if !appid.is_empty() && check_steam_game_installed(appid) {
+        if !appid.is_empty() && self.steam_game_installed(appid) {
             let url = format!("steam://rungameid/{appid}");
             // A steam:// URL is always accepted; a failed save is ignored, as in Python.
             let _ = self.config.lock().set_app_path(&key, &url);
@@ -187,16 +277,16 @@ impl Backend for Managers {
         };
         if path.starts_with("steam://") {
             // os.startfile raising is caught by the method's `except Exception`.
-            if shell_open(path).is_err() {
+            if self.shell_open(path).is_err() {
                 return false;
             }
-            std::thread::sleep(STEAM_LAUNCH_WAIT);
+            std::thread::sleep(self.steam_launch_wait());
         } else if path.to_lowercase().ends_with(".lnk") {
-            if shell_open(path).is_err() {
+            if self.shell_open(path).is_err() {
                 return false;
             }
-            std::thread::sleep(GAME_LAUNCH_WAIT);
-        } else if !launch_process(path, GAME_LAUNCH_WAIT) {
+            std::thread::sleep(self.game_launch_wait());
+        } else if !launch_process(path, self.game_launch_wait()) {
             return false;
         }
         is_process_running(&exe)
