@@ -348,8 +348,8 @@ mod tests {
             }
 
             /// What the tracker writes, it reads back as the same state: same
-            /// keys in the same order, same values, floats to within 2 units in
-            /// the last place (see `floats_read_back_exactly`).
+            /// keys in the same order, same values, floats bit for bit (see
+            /// `floats_read_back_exactly`).
             #[test]
             fn written_state_reads_back_the_same(value in state_like()) {
                 let state = load_bytes(&serde_json::to_vec(&value).unwrap());
@@ -358,26 +358,26 @@ mod tests {
                 prop_assert_eq!(keys(&again), keys(&state));
                 for ((_, a), (_, b)) in again.0.iter().zip(&state.0) {
                     let (a, b) = (serde_json::to_value(a).unwrap(), serde_json::to_value(b).unwrap());
-                    prop_assert!(close(&a, &b), "{:?} read back as {:?}", b, a);
+                    prop_assert!(same(&a, &b), "{:?} read back as {:?}", b, a);
                 }
             }
         }
 
-        /// Equal, except that floats may differ by 2 units in the last place.
-        fn close(a: &Value, b: &Value) -> bool {
+        /// Equal, with floats compared bit for bit.
+        fn same(a: &Value, b: &Value) -> bool {
             match (a, b) {
                 (Value::Number(x), Value::Number(y)) if x.is_f64() || y.is_f64() => {
                     match (x.as_f64(), y.as_f64()) {
-                        (Some(x), Some(y)) => x.to_bits().abs_diff(y.to_bits()) <= 2,
+                        (Some(x), Some(y)) => x.to_bits() == y.to_bits(),
                         _ => false,
                     }
                 }
                 (Value::Array(x), Value::Array(y)) => {
-                    x.len() == y.len() && x.iter().zip(y).all(|(x, y)| close(x, y))
+                    x.len() == y.len() && x.iter().zip(y).all(|(x, y)| same(x, y))
                 }
                 (Value::Object(x), Value::Object(y)) => {
                     x.len() == y.len()
-                        && x.iter().all(|(k, v)| y.get(k).is_some_and(|w| close(v, w)))
+                        && x.iter().all(|(k, v)| y.get(k).is_some_and(|w| same(v, w)))
                 }
                 _ => a == b,
             }
@@ -385,13 +385,11 @@ mod tests {
 
         /// Found by `written_state_reads_back_the_same`: serde_json's default
         /// float parsing is not correctly rounded and reads about one
-        /// `create_time` in eight up to 2 units in the last place off, so a
-        /// rewritten state file can differ from Python's in the last digit.
-        /// Python's `json` reads it exactly. The tracker's 0.5 s tolerance is
-        /// unaffected. serde_json's `float_roundtrip` feature would fix it; that
-        /// changes the bytes written, so it waits for the owner's decision.
+        /// `create_time` in eight 1-2 units in the last place off, so a
+        /// rewritten state file could differ from Python's in the last digit.
+        /// Python's `json` reads it exactly, and so does serde_json with its
+        /// `float_roundtrip` feature, which Cargo.toml enables.
         #[test]
-        #[ignore = "known: serde_json misreads some floats by 1-2 ulp; see the doc comment"]
         fn floats_read_back_exactly() {
             let text = "{\r\n  \"App\": {\r\n    \"pid\": 1,\r\n    \"create_time\": 2081698010.2156038\r\n  }\r\n}";
             assert_eq!(to_python_json(&load_bytes(text.as_bytes())).unwrap(), text);
