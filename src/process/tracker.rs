@@ -17,10 +17,11 @@ use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
-use super::{
-    ProcError, WaitOutcome, create_time, identity, kill_if_same, pids_by_exe, proc_wait,
-    shell_open, snapshot, spawn_detached,
+use super::sys::{
+    ProcError, WaitOutcome, create_time, identity, kill_if_same, proc_wait, snapshot,
+    spawn_detached,
 };
+use super::{pids_by_exe, shell_open};
 use crate::win::basename;
 
 /// Tolerance (seconds) when comparing persisted vs. live creation time. Python
