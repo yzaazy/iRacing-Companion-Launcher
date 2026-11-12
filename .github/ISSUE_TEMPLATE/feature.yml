@@ -1,0 +1,29 @@
+name: Feature
+description: Something new the launcher should do, or a change to what it does now.
+labels: [enhancement]
+type: Feature
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is missing or awkward today, and when you run into it.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What the launcher should do instead.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Other ways to solve it, and why not those. Optional.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Open questions, effect on the v2.3.2 parity (`docs/behaviour.md`), screenshots. Optional.

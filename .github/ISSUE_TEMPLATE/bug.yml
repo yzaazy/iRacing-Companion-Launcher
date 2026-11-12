@@ -1,0 +1,60 @@
+name: Bug
+description: Something the launcher does wrong.
+labels: [bug]
+type: Bug
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: What goes wrong, in a sentence or two.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: From a running launcher, what to click or change to see it.
+      placeholder: |
+        1. Check no apps and select iRacing.
+        2. Press Launch.
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+      description: What the window and the activity log show instead. A screenshot helps.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown in the window header.
+      placeholder: "3.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: v232
+    attributes:
+      label: Did v2.3.2 do the same?
+      description: If it did, this is a quirk carried over from v2.3.2, not a regression.
+      options:
+        - Don't know
+        - "Yes"
+        - "No"
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Cause, a possible fix, open questions. Optional.
