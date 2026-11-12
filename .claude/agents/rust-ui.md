@@ -21,4 +21,4 @@ Follow the `ui-parity` skill (`.claude/skills/ui-parity/SKILL.md`) to compare ag
 
 ## Report
 
-End with: the files you changed, the gate output's last line, the `ui_diff` result per fixture state, and every region that still differs with your reading of why.
+End with: the files you changed, the gate output's last line, the parity test's result per fixture state and class, and every region that still differs with your reading of why.

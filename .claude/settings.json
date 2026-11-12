@@ -5,9 +5,7 @@
       "PowerShell(cargo *)",
       "Bash(pwsh tools/gate.ps1*)",
       "PowerShell(pwsh tools/gate.ps1*)",
-      "PowerShell(./tools/gate.ps1*)",
-      "PowerShell(python tools/ui_diff.py*)",
-      "Bash(python tools/ui_diff.py*)"
+      "PowerShell(./tools/gate.ps1*)"
     ]
   },
   "hooks": {
