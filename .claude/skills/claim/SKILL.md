@@ -13,7 +13,9 @@ description: Claim a GitHub issue before working on it, and release the claim wh
 1. **Read** the issue:
    ```powershell
    gh issue view N --json state,assignees,labels,comments
+   gh api repos/yzaazy/iRacing-Companion-Launcher/issues/N --jq '.type.name'
    ```
+   An issue without a label (`bug`, `enhancement`, `documentation`) or a type (`Bug`, `Feature`, `Task`) gets them now: `gh issue edit N --add-label <label>`, `gh api -X PATCH repos/yzaazy/iRacing-Companion-Launcher/issues/N -f type=<Type>`.
 2. **Stop** and tell the owner, without claiming, when the issue is closed, or when it is already claimed: it has the label `in progress`, or its latest `Claimed:` comment has no `Released:` comment after it. Name the branch the claim gives. Go on only when the owner says so (for example to take over that branch).
 3. **Branch**: `issue-N-<short-slug>` from `origin/main` (`git fetch`, then `git switch -c issue-N-<slug> origin/main`, then `git branch --unset-upstream`).
 4. **Claim**:
