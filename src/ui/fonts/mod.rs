@@ -279,7 +279,9 @@ mod registry {
     pub fn system_link(value: &str) -> Vec<String> {
         let (key, name) = (HSTRING::from(KEY), HSTRING::from(value));
         let mut size = 0u32;
-        // SAFETY: a size query with no buffer.
+        // SAFETY: `key` and `name` are NUL-terminated UTF-16 strings that live until the call
+        // returns. With no type or data buffer the call writes only the value's size in bytes,
+        // through a pointer to the local `size`, which outlives the call.
         let status = unsafe {
             RegGetValueW(
                 HKEY_LOCAL_MACHINE,
@@ -288,14 +290,17 @@ mod registry {
                 RRF_RT_REG_MULTI_SZ,
                 None,
                 None,
-                Some(&mut size),
+                Some(&raw mut size),
             )
         };
         if status.is_err() || size == 0 {
             return Vec::new();
         }
         let mut buf = vec![0u16; (size as usize).div_ceil(2)];
-        // SAFETY: `buf` holds `size` bytes.
+        // SAFETY: `key` and `name` are NUL-terminated UTF-16 strings that live until the call
+        // returns. `buf` is a live allocation of at least `size` bytes (`size.div_ceil(2)` u16s)
+        // and `size` tells the call so: it writes at most that many bytes into `buf`, then the
+        // number written through a pointer to the local `size`, which outlives the call.
         let status = unsafe {
             RegGetValueW(
                 HKEY_LOCAL_MACHINE,
@@ -304,7 +309,7 @@ mod registry {
                 RRF_RT_REG_MULTI_SZ,
                 None,
                 Some(buf.as_mut_ptr().cast()),
-                Some(&mut size),
+                Some(&raw mut size),
             )
         };
         if status.is_err() {
