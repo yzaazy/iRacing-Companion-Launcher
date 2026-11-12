@@ -4,7 +4,7 @@ mod detect_support;
 
 use detect_support::{Tree, s};
 use iracing_companion_launcher::detect::shortcuts::{
-    find_shortcut_target, find_shortcut_target_in,
+    ShortcutLookup, find_shortcut_target, find_shortcut_target_in,
 };
 use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, COINIT_MULTITHREADED, CoInitializeEx};
 
@@ -17,7 +17,7 @@ fn app_shortcut_nested_several_folders_deep_resolves_to_target() {
     tree.lnk(&tree.root2(), r"Vendor\Tools\Wheel\Deep\Fanatec.lnk", &exe);
 
     assert_eq!(
-        find_shortcut_target_in(&tree.roots(), NAMES, false),
+        find_shortcut_target_in(&tree.roots(), NAMES, ShortcutLookup::Target),
         Some(s(&exe))
     );
 }
@@ -29,13 +29,13 @@ fn file_name_matches_in_any_case_and_keeps_pattern_casing() {
     tree.lnk(&tree.root1(), r"Sub\FANATEC.LNK", &exe);
 
     assert_eq!(
-        find_shortcut_target_in(&tree.roots(), NAMES, false),
+        find_shortcut_target_in(&tree.roots(), NAMES, ShortcutLookup::Target),
         Some(s(&exe))
     );
     // rglob yields the literal pattern joined onto the directory, not the
     // name as it is stored on disk.
     assert_eq!(
-        find_shortcut_target_in(&tree.roots(), NAMES, true),
+        find_shortcut_target_in(&tree.roots(), NAMES, ShortcutLookup::Shortcut),
         Some(s(&tree.root1().join(r"Sub\Fanatec.lnk")))
     );
 }
@@ -49,7 +49,7 @@ fn first_root_wins_over_an_earlier_name_in_the_second_root() {
     tree.lnk(&tree.root2(), "Fanatec.lnk", &second);
 
     assert_eq!(
-        find_shortcut_target_in(&tree.roots(), NAMES, false),
+        find_shortcut_target_in(&tree.roots(), NAMES, ShortcutLookup::Target),
         Some(s(&first))
     );
 }
@@ -63,7 +63,7 @@ fn first_name_wins_over_a_shallower_later_name_in_the_same_root() {
     tree.lnk(&tree.root1(), "Fanatec Control Panel.lnk", &second);
 
     assert_eq!(
-        find_shortcut_target_in(&tree.roots(), NAMES, false),
+        find_shortcut_target_in(&tree.roots(), NAMES, ShortcutLookup::Target),
         Some(s(&first))
     );
 }
@@ -77,7 +77,7 @@ fn walk_order_matches_python_rglob() {
     tree.lnk(&tree.root1(), r"A\Fanatec.lnk", &nested);
     tree.lnk(&tree.root1(), "Fanatec.lnk", &top);
     assert_eq!(
-        find_shortcut_target_in(&tree.roots(), NAMES, false),
+        find_shortcut_target_in(&tree.roots(), NAMES, ShortcutLookup::Target),
         Some(s(&top))
     );
 
@@ -89,7 +89,7 @@ fn walk_order_matches_python_rglob() {
     tree.lnk(&tree.root1(), r"A\X\Fanatec.lnk", &a);
     tree.lnk(&tree.root1(), r"B\Fanatec.lnk", &b);
     assert_eq!(
-        find_shortcut_target_in(&tree.roots(), NAMES, false),
+        find_shortcut_target_in(&tree.roots(), NAMES, ShortcutLookup::Target),
         Some(s(&b))
     );
 
@@ -100,7 +100,7 @@ fn walk_order_matches_python_rglob() {
     tree.lnk(&tree.root1(), r"A\X\Fanatec.lnk", &a);
     tree.lnk(&tree.root1(), r"B\Y\Fanatec.lnk", &b);
     assert_eq!(
-        find_shortcut_target_in(&tree.roots(), NAMES, false),
+        find_shortcut_target_in(&tree.roots(), NAMES, ShortcutLookup::Target),
         Some(s(&b))
     );
 
@@ -111,7 +111,7 @@ fn walk_order_matches_python_rglob() {
     tree.lnk(&tree.root1(), r"A\Fanatec.lnk", &a);
     tree.lnk(&tree.root1(), r"B\Fanatec.lnk", &b);
     assert_eq!(
-        find_shortcut_target_in(&tree.roots(), NAMES, false),
+        find_shortcut_target_in(&tree.roots(), NAMES, ShortcutLookup::Target),
         Some(s(&a))
     );
 }
@@ -126,7 +126,7 @@ fn shortcut_with_missing_target_is_skipped_for_a_later_valid_one() {
     std::fs::remove_file(&gone).unwrap();
 
     assert_eq!(
-        find_shortcut_target_in(&tree.roots(), NAMES, false),
+        find_shortcut_target_in(&tree.roots(), NAMES, ShortcutLookup::Target),
         Some(s(&valid))
     );
 }
@@ -140,10 +140,13 @@ fn game_mode_returns_the_lnk_path_without_resolving_it() {
 
     let names = &["iRacing.lnk", "iRacing Simulator.lnk"];
     assert_eq!(
-        find_shortcut_target_in(&tree.roots(), names, true),
+        find_shortcut_target_in(&tree.roots(), names, ShortcutLookup::Shortcut),
         Some(s(&lnk))
     );
-    assert_eq!(find_shortcut_target_in(&tree.roots(), names, false), None);
+    assert_eq!(
+        find_shortcut_target_in(&tree.roots(), names, ShortcutLookup::Target),
+        None
+    );
 }
 
 #[test]
@@ -153,11 +156,11 @@ fn non_ascii_paths_round_trip() {
     let lnk = tree.lnk(&tree.root1(), r"Startmenü\Ordner ß\Fanatec.lnk", &exe);
 
     assert_eq!(
-        find_shortcut_target_in(&tree.roots(), NAMES, false),
+        find_shortcut_target_in(&tree.roots(), NAMES, ShortcutLookup::Target),
         Some(s(&exe))
     );
     assert_eq!(
-        find_shortcut_target_in(&tree.roots(), NAMES, true),
+        find_shortcut_target_in(&tree.roots(), NAMES, ShortcutLookup::Shortcut),
         Some(s(&lnk))
     );
 }
@@ -172,12 +175,12 @@ fn corrupt_lnk_and_directory_named_like_a_shortcut_are_skipped() {
     tree.lnk(&tree.root1(), r"C\Fanatec.lnk", &valid);
 
     assert_eq!(
-        find_shortcut_target_in(&tree.roots(), NAMES, false),
+        find_shortcut_target_in(&tree.roots(), NAMES, ShortcutLookup::Target),
         Some(s(&valid))
     );
     // Games only need the match to exist, so the corrupt file is returned.
     assert_eq!(
-        find_shortcut_target_in(&tree.roots(), NAMES, true),
+        find_shortcut_target_in(&tree.roots(), NAMES, ShortcutLookup::Shortcut),
         Some(s(&tree.root1().join(r"A\Fanatec.lnk")))
     );
 }
@@ -187,7 +190,10 @@ fn empty_lnk_file_is_skipped() {
     let tree = Tree::new();
     std::fs::write(tree.root1().join("Fanatec.lnk"), b"").unwrap();
 
-    assert_eq!(find_shortcut_target_in(&tree.roots(), NAMES, false), None);
+    assert_eq!(
+        find_shortcut_target_in(&tree.roots(), NAMES, ShortcutLookup::Target),
+        None
+    );
 }
 
 #[test]
@@ -198,9 +204,18 @@ fn nothing_found() {
     let missing_root = tree.dir.path().join("does-not-exist");
 
     let roots = vec![missing_root, tree.root1(), tree.root2()];
-    assert_eq!(find_shortcut_target_in(&roots, NAMES, false), None);
-    assert_eq!(find_shortcut_target_in(&roots, NAMES, true), None);
-    assert_eq!(find_shortcut_target_in(&roots, &[], false), None);
+    assert_eq!(
+        find_shortcut_target_in(&roots, NAMES, ShortcutLookup::Target),
+        None
+    );
+    assert_eq!(
+        find_shortcut_target_in(&roots, NAMES, ShortcutLookup::Shortcut),
+        None
+    );
+    assert_eq!(
+        find_shortcut_target_in(&roots, &[], ShortcutLookup::Target),
+        None
+    );
 }
 
 #[test]
@@ -219,7 +234,7 @@ fn junctions_are_walked_like_directories() {
     assert!(made.status.success(), "{made:?}");
 
     assert_eq!(
-        find_shortcut_target_in(&tree.roots(), NAMES, false),
+        find_shortcut_target_in(&tree.roots(), NAMES, ShortcutLookup::Target),
         Some(s(&exe))
     );
 }
@@ -236,16 +251,16 @@ fn works_on_threads_with_and_without_com() {
     std::thread::scope(|scope| {
         let none = scope.spawn(|| {
             (0..3)
-                .map(|_| find_shortcut_target_in(roots, NAMES, false))
+                .map(|_| find_shortcut_target_in(roots, NAMES, ShortcutLookup::Target))
                 .collect::<Vec<_>>()
         });
         let sta = scope.spawn(|| {
             let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
-            find_shortcut_target_in(roots, NAMES, false)
+            find_shortcut_target_in(roots, NAMES, ShortcutLookup::Target)
         });
         let mta = scope.spawn(|| {
             let _ = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
-            let found = find_shortcut_target_in(roots, NAMES, false);
+            let found = find_shortcut_target_in(roots, NAMES, ShortcutLookup::Target);
             // The thread must still be multithreaded afterwards: another MTA
             // init succeeds, where a leftover STA would refuse it.
             assert!(unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok());
@@ -261,11 +276,14 @@ fn works_on_threads_with_and_without_com() {
 fn real_start_menu_search_does_not_fail() {
     // Read-only: the real roots are walked and nothing matches this name.
     assert_eq!(
-        find_shortcut_target(&["ircl-no-such-shortcut-7f3a.lnk"], false),
+        find_shortcut_target(&["ircl-no-such-shortcut-7f3a.lnk"], ShortcutLookup::Target),
         None
     );
     assert_eq!(
-        find_shortcut_target(&["ircl-no-such-shortcut-7f3a.lnk"], true),
+        find_shortcut_target(
+            &["ircl-no-such-shortcut-7f3a.lnk"],
+            ShortcutLookup::Shortcut
+        ),
         None
     );
 }
@@ -325,12 +343,12 @@ fn mixed_tree_matches_python_answers() {
     for (names, app, game) in cases {
         let rel = |found: Option<String>| found.map(|f| s(&tree.dir.path().join(f)));
         assert_eq!(
-            find_shortcut_target_in(&roots, names, false),
+            find_shortcut_target_in(&roots, names, ShortcutLookup::Target),
             rel(app),
             "{names:?}"
         );
         assert_eq!(
-            find_shortcut_target_in(&roots, names, true),
+            find_shortcut_target_in(&roots, names, ShortcutLookup::Shortcut),
             rel(game),
             "{names:?} as a game"
         );

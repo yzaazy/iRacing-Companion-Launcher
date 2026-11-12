@@ -8,9 +8,9 @@ use std::time::Duration;
 use crate::core::config::{SharedConfig, config_key};
 use crate::core::definitions::{self, AppDef, GameDef};
 use crate::detect::paths::find_path_in_list;
-use crate::detect::shortcuts::find_shortcut_target;
+use crate::detect::shortcuts::{ShortcutLookup, find_shortcut_target};
 use crate::detect::steam::check_steam_game_installed;
-use crate::process::tracker::ProcessTracker;
+use crate::process::tracker::{LaunchMethod, ProcessTracker};
 use crate::process::{is_process_running, kill_process, launch_process, shell_open};
 
 /// Wait after a tracked app launch (`launch_and_track`'s `wait_time=2.0`).
@@ -76,7 +76,7 @@ impl AppManager {
         if let Some(saved) = self.config.lock().app_path(&key) {
             return Some(saved);
         }
-        if let Some(target) = find_shortcut_target(info.shortcut_names, false) {
+        if let Some(target) = find_shortcut_target(info.shortcut_names, ShortcutLookup::Target) {
             // Python raises here if configparser refuses the value (a `%` in
             // the path) and startup crashes; the port keeps the path unsaved.
             // A failed save is ignored, as in Python.
@@ -122,8 +122,13 @@ impl AppManager {
         let Some(needs_shell_launch) = self.def(app).map(|a| a.needs_shell_launch) else {
             return false;
         };
+        let method = if needs_shell_launch {
+            LaunchMethod::Shell
+        } else {
+            LaunchMethod::Direct
+        };
         self.tracker
-            .launch_and_track(app, path, APP_LAUNCH_WAIT, needs_shell_launch)
+            .launch_and_track(app, path, APP_LAUNCH_WAIT, method)
     }
 
     /// Tracked close when tracked; otherwise (or when the tracked process was

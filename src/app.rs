@@ -7,7 +7,7 @@
 //!
 //! ## Buttons across a queue
 //!
-//! `launch_normal` and `close_normal` are the Python widget states, changed
+//! [`ButtonState::normal`] is the Python widget state, changed
 //! exactly where Python changes them: `_update_button_text` sets both, a
 //! press disables its own button, and the end of its sequence enables it
 //! unconditionally (even where `_update_button_text` would not have).
@@ -93,6 +93,38 @@ fn enabled_key(name: &str) -> String {
     format!("{}_enabled", config_key(name))
 }
 
+/// The Launch or the Close button: its Python widget state, and how many
+/// commands of its kind are queued or running (see the module doc).
+#[derive(Debug, Clone, Copy)]
+struct ButtonState {
+    normal: bool,
+    pending: usize,
+}
+
+impl ButtonState {
+    /// Enabled, nothing queued: the widgets as Python creates them.
+    const IDLE: Self = Self {
+        normal: true,
+        pending: 0,
+    };
+
+    fn enabled(self) -> bool {
+        self.normal && self.pending == 0
+    }
+
+    /// A press: disables the button and queues its command.
+    fn press(&mut self) {
+        self.normal = false;
+        self.pending += 1;
+    }
+
+    /// The end of its sequence enables the button unconditionally.
+    fn finish(&mut self) {
+        self.pending = self.pending.saturating_sub(1);
+        self.normal = true;
+    }
+}
+
 /// Sees every log line and card status the controller produces itself.
 pub type Trace = Box<dyn FnMut(&Event)>;
 
@@ -104,10 +136,8 @@ pub struct Controller {
     settings: Box<dyn Settings>,
     app_exes: HashMap<String, String>,
     game_exes: HashMap<String, String>,
-    launch_normal: bool,
-    close_normal: bool,
-    launches_pending: usize,
-    closes_pending: usize,
+    launch: ButtonState,
+    close: ButtonState,
     trace: Option<Trace>,
     dispatch: Option<Box<dyn Dispatch>>,
 }
@@ -189,10 +219,8 @@ impl Controller {
             settings,
             app_exes,
             game_exes,
-            launch_normal: true,
-            close_normal: true,
-            launches_pending: 0,
-            closes_pending: 0,
+            launch: ButtonState::IDLE,
+            close: ButtonState::IDLE,
             trace,
             dispatch: None,
         };
@@ -350,14 +378,14 @@ impl Controller {
         self.state.close_label = format!("Close all ({count})");
 
         let enabled = count != 0 || self.state.selected_game.is_some();
-        self.launch_normal = enabled;
-        self.close_normal = enabled;
+        self.launch.normal = enabled;
+        self.close.normal = enabled;
         self.refresh_buttons();
     }
 
     fn refresh_buttons(&mut self) {
-        self.state.launch_enabled = self.launch_normal && self.launches_pending == 0;
-        self.state.close_enabled = self.close_normal && self.closes_pending == 0;
+        self.state.launch_enabled = self.launch.enabled();
+        self.state.close_enabled = self.close.enabled();
     }
 
     /// `_on_checkbox_change`: the UI has already flipped the box.
@@ -500,8 +528,7 @@ impl Controller {
         if !self.state.launch_enabled {
             return;
         }
-        self.launch_normal = false;
-        self.launches_pending += 1;
+        self.launch.press();
         self.refresh_buttons();
         let command = Command::Launch {
             apps: self.checked_apps(),
@@ -515,8 +542,7 @@ impl Controller {
         if !self.state.close_enabled {
             return;
         }
-        self.close_normal = false;
-        self.closes_pending += 1;
+        self.close.press();
         self.refresh_buttons();
         let command = Command::Close {
             apps: self.checked_apps(),
@@ -571,13 +597,11 @@ impl Controller {
             // The end of a sequence enables its button unconditionally; the
             // labels are not recomputed, so a count can go stale, as in Python.
             Event::LaunchFinished => {
-                self.launches_pending = self.launches_pending.saturating_sub(1);
-                self.launch_normal = true;
+                self.launch.finish();
                 self.refresh_buttons();
             }
             Event::CloseFinished => {
-                self.closes_pending = self.closes_pending.saturating_sub(1);
-                self.close_normal = true;
+                self.close.finish();
                 self.refresh_buttons();
             }
         }

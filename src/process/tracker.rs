@@ -24,6 +24,16 @@ const CREATE_TIME_EPSILON: f64 = 0.5;
 /// How long `close_tracked` waits for terminated processes before killing survivors.
 const CLOSE_WAIT: Duration = Duration::from_secs(3);
 
+/// How [`ProcessTracker::launch_and_track`] starts the process.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LaunchMethod {
+    /// `CreateProcess`, detached; the PID comes back from the call.
+    Direct,
+    /// `ShellExecute` with the default verb, for manifests Windows refuses
+    /// to start directly; the PID is found by exe name afterwards.
+    Shell,
+}
+
 #[derive(Debug)]
 pub struct ProcessTracker {
     state_file: PathBuf,
@@ -49,7 +59,7 @@ impl ProcessTracker {
     /// Launches `exe_path` and remembers its PID under `key`. True if the
     /// launched process is alive after `wait`.
     ///
-    /// `needs_shell_launch` goes through `ShellExecute` instead of a raw
+    /// [`LaunchMethod::Shell`] goes through `ShellExecute` instead of a raw
     /// `CreateProcess`, which Windows refuses (error 740) for manifests with
     /// `uiAccess="true"` such as Elgato Stream Deck. The shell does not hand back
     /// a PID, so the new process is found by exe name afterwards.
@@ -58,9 +68,9 @@ impl ProcessTracker {
         key: &str,
         exe_path: &str,
         wait: Duration,
-        needs_shell_launch: bool,
+        method: LaunchMethod,
     ) -> bool {
-        if needs_shell_launch {
+        if method == LaunchMethod::Shell {
             let exe_name = basename(exe_path);
             let before: HashSet<u32> = pids_by_exe(exe_name).into_iter().collect();
             if shell_open(exe_path).is_err() {

@@ -141,16 +141,18 @@ pub fn shell_open(target: &str) -> std::io::Result<()>;
 // process/tracker.rs
 impl ProcessTracker {
     pub fn new(state_file: PathBuf) -> Self;
-    pub fn launch_and_track(&mut self, key: &str, exe_path: &str, wait: Duration, needs_shell_launch: bool) -> bool;
+    pub fn launch_and_track(&mut self, key: &str, exe_path: &str, wait: Duration, method: LaunchMethod) -> bool;
     pub fn is_tracked(&self, key: &str) -> bool;
     pub fn is_tracked_running(&mut self, key: &str) -> (bool, usize);
     pub fn get_child_names(&mut self, key: &str) -> Vec<String>;
     pub fn close_tracked(&mut self, key: &str) -> bool;
     pub fn forget(&mut self, key: &str);
 }
+pub enum LaunchMethod { Direct, Shell } // CreateProcess, or ShellExecute for needs_shell_launch
 
 // detect/
-pub fn find_shortcut_target(shortcut_names: &[&str], is_game: bool) -> Option<String>;
+pub fn find_shortcut_target(shortcut_names: &[&str], lookup: ShortcutLookup) -> Option<String>;
+pub enum ShortcutLookup { Target, Shortcut } // the resolved target (apps), or the .lnk path itself (games)
 pub fn find_path_in_list(paths: &[String]) -> Option<String>;
 pub fn check_steam_game_installed(appid: &str) -> bool;
 ```

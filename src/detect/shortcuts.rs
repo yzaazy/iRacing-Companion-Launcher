@@ -24,12 +24,21 @@ const IO_REPARSE_TAG_SYMLINK: u32 = 0xA000_000C;
 /// target comes back truncated and then fails the existence check.
 const MAX_PATH: usize = 260;
 
+/// What a Start Menu hit returns. Python's `is_game` flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShortcutLookup {
+    /// The shortcut's stored target, which must exist (apps, `is_game=False`).
+    Target,
+    /// The `.lnk` path itself (games, `is_game=True`).
+    Shortcut,
+}
+
 /// Searches the user's and then the all-users Start Menu.
 ///
 /// Games get the `.lnk` path itself, apps the shortcut's target, which must
 /// exist. Python's `Path(os.getenv(...))` raises when a variable is unset; a
 /// missing variable skips that root here instead.
-pub fn find_shortcut_target(shortcut_names: &[&str], is_game: bool) -> Option<String> {
+pub fn find_shortcut_target(shortcut_names: &[&str], lookup: ShortcutLookup) -> Option<String> {
     let roots: Vec<PathBuf> = ["APPDATA", "ProgramData"]
         .iter()
         .filter_map(std::env::var_os)
@@ -41,14 +50,14 @@ pub fn find_shortcut_target(shortcut_names: &[&str], is_game: bool) -> Option<St
                 .join("Programs")
         })
         .collect();
-    find_shortcut_target_in(&roots, shortcut_names, is_game)
+    find_shortcut_target_in(&roots, shortcut_names, lookup)
 }
 
 /// [`find_shortcut_target`] over explicit roots, so tests can use a fake tree.
 pub fn find_shortcut_target_in(
     roots: &[PathBuf],
     shortcut_names: &[&str],
-    is_game: bool,
+    lookup: ShortcutLookup,
 ) -> Option<String> {
     for root in roots {
         if !root.exists() {
@@ -56,7 +65,7 @@ pub fn find_shortcut_target_in(
         }
         for name in shortcut_names {
             let hit = rglob_literal(root, name, |candidate| {
-                if is_game {
+                if lookup == ShortcutLookup::Shortcut {
                     candidate
                         .exists()
                         .then(|| candidate.to_string_lossy().into_owned())
