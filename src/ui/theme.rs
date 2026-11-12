@@ -104,13 +104,14 @@ pub(super) const CHECKBOX_BORDER_WIDTH: f32 = 3.0;
 pub(super) const RADIO_BORDER_UNCHECKED: f32 = 3.0;
 pub(super) const RADIO_BORDER_CHECKED: f32 = 6.0;
 
-/// `STATUS_COLORS`; `stopping` has no entry in Python and falls back to idle grey.
+/// `STATUS_COLORS`. `stopping` had no entry in Python and fell back to idle grey; it now shares
+/// the `starting` orange (#9). `stopped` keeps the idle grey.
 pub fn status_color(status: Status) -> Color32 {
     match status {
-        Status::Starting => hex(0xffa726),
+        Status::Starting | Status::Stopping => hex(0xffa726),
         Status::Running => hex(0x66bb6a),
         Status::Failed => hex(0xef5350),
-        Status::Idle | Status::Stopping | Status::Stopped | Status::NotFound => hex(0x666666),
+        Status::Idle | Status::Stopped | Status::NotFound => hex(0x666666),
     }
 }
 
