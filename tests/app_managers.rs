@@ -335,7 +335,7 @@ fn app_found_nowhere_writes_nothing() {
 }
 
 /// v2.3.2 crashed saving a detected `%` path; Rust saves it with the `%` escaped
-/// (`docs/behaviour.md`, "Changes from v2.3.2", change 9) and finds it there next time.
+/// (`docs/behaviour.md`, "Changes from v2.3.2", change 11) and finds it there next time.
 #[test]
 fn detected_path_with_a_percent_is_saved_escaped() {
     let f = Fixture::new("app-percent");

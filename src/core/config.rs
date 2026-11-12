@@ -121,7 +121,7 @@ impl ConfigStore {
 
     /// Saves. Every `%` is written as `%%`, configparser's own escape, so any
     /// path is stored and reads back as it was, in v2.3.2 too. v2.3.2 wrote
-    /// the path raw and raised on a lone `%` (`docs/behaviour.md`, change 9).
+    /// the path raw and raised on a lone `%` (`docs/behaviour.md`, change 11).
     pub fn set_app_path(&mut self, key: &str, path: &str) -> io::Result<()> {
         // An escaped value is always accepted and `[AppPaths]` always exists.
         self.set(APP_PATHS, key, &path.replace('%', "%%"));

@@ -1,7 +1,7 @@
 //! Replays the golden transcripts recorded from the Python controller up to
 //! v2.3.2 (`tests/fixtures/app/transcripts.json`) against the Rust controller
 //! and worker with a fake backend, and asserts identical transcripts and end
-//! states, after applying the deliberate changes from v2.3.2 that show in a
+//! states, with change 11 in `docs/behaviour.md` applied to every recorded
 //! transcript. Sequences run inline here so the order is deterministic.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] functions; a panic there fails the test
@@ -118,7 +118,7 @@ fn replay(scenario: &Value) -> Run {
     }
 }
 
-/// The Python transcript with change 9 in `docs/behaviour.md` applied (#13): a
+/// The Python transcript with change 11 in `docs/behaviour.md` applied (#13): a
 /// picked path with a `%`, where v2.3.2's `set_app_path` raised and the Browse
 /// handler stopped, is now saved, so the handler goes on as for any other path.
 fn with_percent_paths_saved(python: &[Value]) -> Vec<Value> {
