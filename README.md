@@ -60,6 +60,16 @@ cargo build --release        # target\release\iracing-companion-launcher.exe
 
 The release exe is one self-contained file; its version comes from `Cargo.toml`. `windows installer.iss` packages it into `installer_output\iRacing_Companion_Launcher_Setup.exe`. Tests launch and kill only dummy processes they start themselves.
 
+GitHub Actions runs the same gate on every pull request and every push to `main`.
+
+### Releasing
+
+1. Bump `version` in `Cargo.toml`, run `cargo check`, commit `Cargo.toml` and `Cargo.lock`, and merge it into `main` through a pull request.
+2. Tag it and push the tag: `git tag v3.1.0`, `git push origin v3.1.0`. The tag must equal the version and be on a commit on `main`; any other tag makes no release.
+3. The Release workflow audits the dependencies, runs the gate, builds the exe and the installer, and creates a **draft** release with the installer attached.
+4. Download the installer from the draft and test it: a fresh install and an upgrade over the previous version.
+5. Edit the notes and publish the draft. Publishing announces the release on Discord.
+
 Further reading:
 
 - [docs/architecture.md](docs/architecture.md): how the program is built and tested

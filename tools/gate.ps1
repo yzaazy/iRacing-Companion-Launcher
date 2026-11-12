@@ -37,7 +37,7 @@ function Test-Installer {
 $steps = [ordered]@{
     'fmt'    = { cargo fmt --all -- --check }
     'clippy' = { cargo clippy --all-targets -- -D warnings }
-    'test'   = { cargo test }
+    'test'   = { cargo test --no-fail-fast }
 }
 if ($Release) {
     $steps['build'] = { cargo build --release }

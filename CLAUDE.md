@@ -25,6 +25,7 @@ tests/               one binary per area; tests/ui/ is the UI binary
 tests/fixtures/      data captured from v2.3.2 (see its README); tests/fixtures/ui/ holds the UI spec, fixture states and reference screenshots
 tests/snapshots/     golden renders of the Rust window
 tools/gate.ps1       the gate
+.github/workflows/   CI (the gate), Release (draft release on a v* tag), Audit (weekly)
 windows installer.iss  Inno Setup script
 ```
 
@@ -36,7 +37,7 @@ windows installer.iss  Inno Setup script
 
 ## Gate
 
-`pwsh tools/gate.ps1` runs `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test`. Work is done when it prints `GATE GREEN` on the final edit. Fix lint hits in code; an `#[allow]` needs a reason beside it. Never weaken a test to get green. The `rust-gate` skill has the details.
+`pwsh tools/gate.ps1` runs `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test --no-fail-fast`. Work is done when it prints `GATE GREEN` on the final edit. CI runs the same script on every pull request and push to `main`; change the gate there, not in the workflow. Fix lint hits in code; an `#[allow]` needs a reason beside it. Never weaken a test to get green. The `rust-gate` skill has the details.
 
 ## Run
 
@@ -47,7 +48,9 @@ windows installer.iss  Inno Setup script
 - The developer's real companion apps and games (Fanatec, Stream Deck, SimHub, iRacing and the rest) run on this machine. Tests launch and kill only **dummy processes** they started themselves, under names no real app uses (`tests/dummy_support`). Pressing Launch or Close in a running build is the developer's step.
 - Debug builds and tests keep config and state under `target/dev-config/` or a temp directory. Only an installed release build uses `%APPDATA%\iRacingCompanionLauncher`.
 - Edit only the files your brief assigns to you.
-- Pushing, tagging, building the installer and releasing each wait for the user's explicit go.
+- Claim a GitHub issue before working on it, and release the claim when dropping it: the `claim` skill.
+- Pushing a branch other than `main` and opening a pull request need no go: `main` is protected, and only the owner merges. Pushing a tag, building the installer and releasing each wait for the user's explicit go.
+- `main` takes changes only through pull requests, which need the green `Gate` check and the owner's approval; only the owner merges.
 
 ## UI changes
 
@@ -58,6 +61,6 @@ windows installer.iss  Inno Setup script
 
 ## Version, build and release
 
-The version lives only in `version` in `Cargo.toml`; tags are `v{version}`. For bumping the version, building the installer or releasing, use the `release` skill. Each outward step waits for the owner's explicit go.
+The version lives only in `version` in `Cargo.toml`; tags are `v{version}`. Pushing a `v*` tag makes the Release workflow build the exe and the installer and create a **draft** release with the installer attached; the owner tests it, edits the notes and publishes it. For bumping the version, tagging or releasing, use the `release` skill. Each outward step waits for the owner's explicit go.
 
-Release notifications reach Discord through GitTrack (gittrack.me), connected to the repository by a GitHub webhook on "Releases"; publishing a release is all it needs.
+Release notifications reach Discord through GitTrack (gittrack.me), connected to the repository by a GitHub webhook on "Releases"; publishing the draft is all it needs.

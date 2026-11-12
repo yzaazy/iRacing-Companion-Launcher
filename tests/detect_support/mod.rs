@@ -3,9 +3,11 @@
 #![allow(dead_code)] // each test crate uses a different subset of the helpers
 #![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] functions; a panic there fails the test
 
-use std::os::windows::ffi::OsStrExt;
+use std::ffi::OsString;
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
 
+use windows::Win32::Storage::FileSystem::GetLongPathNameW;
 use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx, IPersistFile,
 };
@@ -24,7 +26,10 @@ impl Tree {
     }
 
     pub(crate) fn with_prefix(prefix: &str) -> Self {
-        let dir = tempfile::Builder::new().prefix(prefix).tempdir().unwrap();
+        let dir = tempfile::Builder::new()
+            .prefix(prefix)
+            .tempdir_in(long_temp_dir())
+            .unwrap();
         for sub in ["root1", "root2", "targets"] {
             std::fs::create_dir_all(dir.path().join(sub)).unwrap();
         }
@@ -58,6 +63,22 @@ impl Tree {
         create_lnk(&path, target);
         path
     }
+}
+
+/// The temp directory in its long form. `TEMP` can be an 8.3 short path (on a GitHub
+/// runner `C:\Users\RUNNER~1\...`), while a resolved shortcut gives the long one, so a
+/// tree under the short form would never match what detection returns.
+fn long_temp_dir() -> PathBuf {
+    let short = wide(&std::env::temp_dir());
+    let mut buf = vec![0u16; 32_768];
+    // SAFETY: `short` is a NUL-terminated UTF-16 string alive across the call, and `buf`
+    // is a live, writable buffer whose length the binding passes along.
+    let len = unsafe { GetLongPathNameW(PCWSTR(short.as_ptr()), Some(&mut buf)) } as usize;
+    assert!(
+        len > 0 && len < buf.len(),
+        "GetLongPathNameW failed on the temp directory"
+    );
+    PathBuf::from(OsString::from_wide(&buf[..len]))
 }
 
 /// Writes a `.lnk` through the same shell interfaces the detection reads.

@@ -14,11 +14,16 @@ use iracing_companion_launcher::process::{
     is_process_running, kill_process, launch_process, shell_open,
 };
 use serde_json::Value;
-use windows::Win32::Foundation::CloseHandle;
-use windows::Win32::System::Threading::{
-    OpenProcess, PROCESS_ACCESS_RIGHTS, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
-    PROCESS_TERMINATE,
+use windows::Win32::Foundation::{CloseHandle, HANDLE, LUID};
+use windows::Win32::Security::{
+    AdjustTokenPrivileges, LUID_AND_ATTRIBUTES, LookupPrivilegeValueW, SE_DEBUG_NAME,
+    TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_PRIVILEGES_ATTRIBUTES,
 };
+use windows::Win32::System::Threading::{
+    GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_ACCESS_RIGHTS,
+    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
+};
+use windows::core::PCWSTR;
 
 const WAIT: Duration = Duration::from_millis(1000);
 const KEY: &str = "Dummy App";
@@ -286,8 +291,42 @@ fn can_open(pid: u64, access: PROCESS_ACCESS_RIGHTS) -> bool {
     }
 }
 
+/// Disables `SeDebugPrivilege` in this test process. An elevated administrator with it
+/// enabled (a GitHub runner) opens any process whatever its DACL, so a dummy that refuses
+/// access would not refuse this process; the launcher runs without it. Process-wide and
+/// idempotent; no test relies on the privilege, and disabling one the token lacks is a no-op.
+fn drop_debug_privilege() {
+    let mut token = HANDLE::default();
+    // SAFETY: GetCurrentProcess returns a pseudo-handle that needs no closing;
+    // `token` is a live out-pointer for the new token handle.
+    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &raw mut token) }
+        .is_err()
+    {
+        return;
+    }
+    let mut luid = LUID::default();
+    // SAFETY: SE_DEBUG_NAME is a static NUL-terminated string; `luid` is a live out-pointer.
+    if unsafe { LookupPrivilegeValueW(PCWSTR::null(), SE_DEBUG_NAME, &raw mut luid) }.is_ok() {
+        let disabled = TOKEN_PRIVILEGES {
+            PrivilegeCount: 1,
+            Privileges: [LUID_AND_ATTRIBUTES {
+                Luid: luid,
+                Attributes: TOKEN_PRIVILEGES_ATTRIBUTES(0),
+            }],
+        };
+        // SAFETY: `token` was opened above with TOKEN_ADJUST_PRIVILEGES; `disabled` is a
+        // complete one-entry TOKEN_PRIVILEGES alive across the call; no previous state is asked for.
+        let _ = unsafe {
+            AdjustTokenPrivileges(token, false, Some(&raw const disabled), 0, None, None)
+        };
+    }
+    // SAFETY: `token` was opened above and is closed exactly once.
+    let _ = unsafe { CloseHandle(token) };
+}
+
 #[test]
 fn helper_that_refuses_waiting_is_still_closed() {
+    drop_debug_privilege();
     let mut d = Dummies::new();
     let exe = d.exe("locked");
     let mut t = ProcessTracker::new(d.state_file());
@@ -310,6 +349,7 @@ fn helper_that_refuses_waiting_is_still_closed() {
 
 #[test]
 fn process_that_refuses_everything_is_tracked_and_survives_close() {
+    drop_debug_privilege();
     let mut d = Dummies::new();
     let exe = d.exe("opaque");
     let state = d.state_file();
