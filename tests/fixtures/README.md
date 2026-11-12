@@ -50,6 +50,8 @@ The transcripts name the backend calls by the Python method names (`get_child_na
 
 `tests/app_transcripts.rs` replays every scenario against the Rust controller and requires the same transcript and end state.
 
+Edited by hand since, for deliberate changes from v2.3.2 (`docs/behaviour.md`): for change 9 ([#8](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/8)), the `All apps launched!` line became the warning summary in `launch_one_fails`, `launch_path_gone` and `close_not_found_running_double_close`, and was removed from `launch_nothing_selected_with_game` and `launch_nothing_selected_then_none`.
+
 ## ui/
 
 The window as the Python app v2.3.2 drew it, at 1200x700 and 96 DPI. The layout tests (`tests/ui/layout.rs`) and the screenshot parity tests (`tests/ui/parity.rs`) compare the Rust window against these files.

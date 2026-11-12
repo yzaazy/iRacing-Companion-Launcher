@@ -13,10 +13,10 @@ use std::time::{Duration, Instant};
 
 use app_support::{FakeBackend, FakeDialog, Recorder};
 use iracing_companion_launcher::app::Controller;
-use iracing_companion_launcher::core::config::{ConfigStore, SharedConfig};
+use iracing_companion_launcher::core::config::{ConfigStore, SharedConfig, config_key};
 use iracing_companion_launcher::core::definitions;
 use iracing_companion_launcher::managers::Backend;
-use iracing_companion_launcher::model::UiAction;
+use iracing_companion_launcher::model::{LogLevel, UiAction};
 use iracing_companion_launcher::worker::{Inline, Sequencer, Worker};
 use serde_json::{Value, json};
 use windows::Win32::Foundation::S_FALSE;
@@ -275,6 +275,74 @@ fn close_warns_once_about_the_selected_game() {
     let warnings: Vec<&String> = log.iter().filter(|l| l.starts_with('⚠')).collect();
     assert_eq!(warnings, [&still_running("iRacing")]);
     assert!(!log.contains(&"iRacing was closed manually".to_owned()));
+}
+
+/// Runs one Launch with every app found and checked, inline, and returns the log
+/// lines after "Starting launch sequence..." with their levels, without timestamps.
+fn launch_log(mut script: Value) -> Vec<(LogLevel, String)> {
+    let dir = tempfile::tempdir().unwrap();
+    let rec = Recorder::default();
+    let config = SharedConfig::new(ConfigStore::load(dir.path()));
+    script["find_game_path"] = json!({});
+    let mut backend = FakeBackend::new(script, rec.clone());
+    let startup = Controller::startup(&mut backend, Box::new(config), "3.0.0", None);
+    let sequencer = Sequencer::new(Box::new(backend), startup.game_statuses());
+    let mut controller = startup.attach(Box::new(Inline::new(sequencer, Box::new(|_| {}))));
+    let mut dialog = FakeDialog::new([], rec);
+
+    controller.handle(UiAction::Launch, &mut dialog);
+    controller.pump();
+
+    let log: Vec<(LogLevel, String)> = controller
+        .state()
+        .log
+        .iter()
+        .map(|l| (l.level, l.text.get(11..).unwrap_or(&l.text).to_owned()))
+        .collect();
+    let starting = log
+        .iter()
+        .position(|(_, l)| l == "Starting launch sequence...");
+    log[starting.unwrap() + 1..].to_vec()
+}
+
+/// The summary after the app loop counts what went wrong instead of claiming
+/// that every app was launched (#8).
+#[test]
+fn launch_summary_counts_failed_and_unconfigured_apps() {
+    let mut find = every_app(json!("C:/fake/app.exe"));
+    // Found at startup, gone by the time Launch asks.
+    find["Fanatec"] = json!(["C:/fake/app.exe", null]);
+    let mut launch = every_app(json!(true));
+    launch["SimHub"] = json!([false]);
+    let log = launch_log(json!({ "find_app_path": find, "launch_app": launch }));
+
+    let apps = definitions::apps().len();
+    let summary = (
+        LogLevel::Warning,
+        format!(
+            "Launched {} of {apps} apps, 1 failed, 1 not configured",
+            apps - 2
+        ),
+    );
+    assert!(log.contains(&summary), "{log:#?}");
+    assert!(
+        !log.iter().any(|(_, l)| l == "All apps launched!"),
+        "{log:#?}"
+    );
+}
+
+/// A Close with only a game selected closes no app, and says nothing about apps (#8).
+#[test]
+fn close_with_no_app_checked_logs_no_apps_summary() {
+    let mut config = String::from("[Settings]\nselected_game = iRacing\n");
+    for app in definitions::apps() {
+        config.push_str(&format!("{}_enabled = False\n", config_key(app.name)));
+    }
+    let log = close_log(
+        &config,
+        json!({ "find_game_path": { "iRacing": ["steam://rungameid/266410"] } }),
+    );
+    assert!(!log.contains(&"All apps closed!".to_owned()), "{log:#?}");
 }
 
 /// `ShellExecuteW` runs on the worker thread, so the thread must be a
