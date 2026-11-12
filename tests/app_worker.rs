@@ -17,7 +17,7 @@ use iracing_companion_launcher::core::config::{ConfigStore, SharedConfig};
 use iracing_companion_launcher::core::definitions;
 use iracing_companion_launcher::managers::Backend;
 use iracing_companion_launcher::model::UiAction;
-use iracing_companion_launcher::worker::{Sequencer, Worker};
+use iracing_companion_launcher::worker::{Inline, Sequencer, Worker};
 use serde_json::{Value, json};
 use windows::Win32::Foundation::S_FALSE;
 use windows::Win32::System::Com::{
@@ -61,6 +61,9 @@ impl Backend for HookedBackend {
     }
     fn child_names(&mut self, app: &str) -> Vec<String> {
         self.inner.child_names(app)
+    }
+    fn games_under(&mut self, app: &str) -> Vec<String> {
+        self.inner.games_under(app)
     }
     fn launch_app(&mut self, app: &str, path: &str) -> bool {
         (self.on_launch)();
@@ -192,6 +195,86 @@ fn commands_queue_in_order_with_their_own_selection() {
         repaints.load(Ordering::SeqCst) > 0,
         "events request a repaint"
     );
+}
+
+/// Runs one Close with every app found and checked, inline, and returns the
+/// log lines after "Closing applications..." without their timestamps.
+/// `config` is the test's `config.ini`.
+fn close_log(config: &str, mut script: Value) -> Vec<String> {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("config.ini"), config).unwrap();
+    let rec = Recorder::default();
+    let config = SharedConfig::new(ConfigStore::load(dir.path()));
+    script["find_app_path"] = every_app(json!("C:/fake/app.exe"));
+    script["close_app"] = every_app(json!(true));
+    let mut backend = FakeBackend::new(script, rec.clone());
+    let startup = Controller::startup(&mut backend, Box::new(config), "3.0.0", None);
+    let sequencer = Sequencer::new(Box::new(backend), startup.game_statuses());
+    let mut controller = startup.attach(Box::new(Inline::new(sequencer, Box::new(|_| {}))));
+    let mut dialog = FakeDialog::new([], rec);
+
+    controller.handle(UiAction::Close, &mut dialog);
+    controller.pump();
+
+    let log: Vec<String> = controller
+        .state()
+        .log
+        .iter()
+        .map(|l| l.text.get(11..).unwrap_or(&l.text).to_owned())
+        .collect();
+    let closing = log.iter().position(|l| l == "Closing applications...");
+    log[closing.unwrap() + 1..].to_vec()
+}
+
+fn still_running(game: &str) -> String {
+    format!("⚠ {game} is still running - please close it manually")
+}
+
+/// A game that a closed app had started keeps running, and the log says so
+/// once per game, whether or not a game is selected.
+#[test]
+fn close_warns_about_each_game_a_closed_app_had_started() {
+    let log = close_log(
+        "",
+        json!({
+            "games_under": {
+                "Crew Chief V4": [["rFactor 2"]],
+                "Elgato Stream Deck": [["iRacing", "rFactor 2"]],
+            },
+        }),
+    );
+    let warnings: Vec<&String> = log.iter().filter(|l| l.starts_with('⚠')).collect();
+    assert_eq!(
+        warnings,
+        [&still_running("rFactor 2"), &still_running("iRacing")]
+    );
+    assert_eq!(
+        &log[log.len() - 3..],
+        [
+            still_running("rFactor 2"),
+            still_running("iRacing"),
+            "All apps closed!".to_owned()
+        ]
+    );
+}
+
+/// The selected game already gets that warning when it was running; it is not
+/// repeated, and the game is not asked for again.
+#[test]
+fn close_warns_once_about_the_selected_game() {
+    let log = close_log(
+        "[Settings]\nselected_game = iRacing\n",
+        json!({
+            "find_game_path": { "iRacing": ["steam://rungameid/266410"] },
+            // Running at startup, and gone by name afterwards: the simulator
+            // below the app is what is left running.
+            "is_game_running": { "iRacing": [true, false] },
+            "games_under": { "Elgato Stream Deck": [["iRacing"]] },
+        }),
+    );
+    let warnings: Vec<&String> = log.iter().filter(|l| l.starts_with('⚠')).collect();
+    assert_eq!(warnings, [&still_running("iRacing")]);
+    assert!(!log.contains(&"iRacing was closed manually".to_owned()));
 }
 
 /// `ShellExecuteW` runs on the worker thread, so the thread must be a

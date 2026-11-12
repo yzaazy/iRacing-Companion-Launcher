@@ -40,6 +40,8 @@ pub struct ProcessTracker {
     state: State,
     /// The launch wait: `std::thread::sleep`, as Python's `time.sleep`.
     sleep: fn(Duration),
+    /// Lowercased exe names the tree walk never enters; see [`Self::spare`].
+    spared: Vec<String>,
 }
 
 impl ProcessTracker {
@@ -57,6 +59,7 @@ impl ProcessTracker {
             state: load(&state_file),
             state_file,
             sleep,
+            spared: Vec::new(),
         };
         let keys: Vec<String> = tracker.state.0.iter().map(|(k, _)| k.clone()).collect();
         for key in keys {
@@ -64,6 +67,14 @@ impl ProcessTracker {
             tracker.proc_for(&key);
         }
         tracker
+    }
+
+    /// Exe names, in any case, that are never a tracked app's descendant: the
+    /// games. A tracked app can start a game (a Stream Deck button does), and a
+    /// game is closed by hand only. A process with such a name, and everything
+    /// below it, is not opened, counted, named or closed.
+    pub fn spare<'a>(&mut self, exe_names: impl IntoIterator<Item = &'a str>) {
+        self.spared = exe_names.into_iter().map(str::to_lowercase).collect();
     }
 
     /// Launches `exe_path` and remembers its PID under `key`. True if the
@@ -132,8 +143,8 @@ impl ProcessTracker {
         let Some(root) = self.proc_for(key) else {
             return (false, 0);
         };
-        match children(root.pid) {
-            Ok(descendants) => (true, descendants.len()),
+        match children(root.pid, &self.spared) {
+            Ok(tree) => (true, tree.descendants.len()),
             Err(_) => {
                 self.drop_key(key);
                 (false, 0)
@@ -146,7 +157,7 @@ impl ProcessTracker {
         let Some(root) = self.proc_for(key) else {
             return Vec::new();
         };
-        let Ok(descendants) = children(root.pid) else {
+        let Ok(Tree { descendants, .. }) = children(root.pid, &self.spared) else {
             return Vec::new();
         };
         // psutil reads each name afresh, and one descendant vanishing in between
@@ -160,14 +171,27 @@ impl ProcessTracker {
         descendants.into_iter().map(|c| c.name).collect()
     }
 
+    /// Exe names of the spared processes ([`Self::spare`]) running below the
+    /// tracked process, which a close of it leaves running. Empty when nothing
+    /// is tracked under `key`.
+    pub fn spared_names(&mut self, key: &str) -> Vec<String> {
+        let Some(root) = self.proc_for(key) else {
+            return Vec::new();
+        };
+        children(root.pid, &self.spared)
+            .map(|tree| tree.spared)
+            .unwrap_or_default()
+    }
+
     /// Terminates the tracked process and all its descendants, waits up to 3 s,
     /// kills the survivors and forgets the entry. True if the tracked process was
-    /// alive at the start.
+    /// alive at the start. A spared exe ([`Self::spare`]) and everything below
+    /// it is no descendant, and keeps running.
     pub fn close_tracked(&mut self, key: &str) -> bool {
         let Some(root) = self.proc_for(key) else {
             return false;
         };
-        let Ok(descendants) = children(root.pid) else {
+        let Ok(Tree { descendants, .. }) = children(root.pid, &self.spared) else {
             self.drop_key(key);
             return false;
         };
@@ -259,6 +283,15 @@ struct Descendant {
     name: String,
 }
 
+/// What [`children`] found below a root.
+#[derive(Debug, Default)]
+struct Tree {
+    /// Depth first.
+    descendants: Vec<Descendant>,
+    /// Exe names of the spared processes the walk stopped at.
+    spared: Vec<String>,
+}
+
 /// `psutil.Process(pid)` then `.create_time()`: the identity, and the creation
 /// time, which psutil caches from the identity or reads through the slower
 /// fallback when the fast path was refused.
@@ -275,14 +308,18 @@ fn identified(pid: u32) -> Result<(Option<f64>, f64), ProcError> {
 /// depth first, keeping a process only if it was created at or after the root.
 /// That guard (against the root, not each parent) skips processes whose parent
 /// PID was recycled by the root.
-fn children(root_pid: u32) -> Result<Vec<Descendant>, ProcError> {
+///
+/// Unlike psutil, the walk stops at a process whose lowercased exe name is in
+/// `spared`: it is noted by name before it is opened, and nothing below it is
+/// visited.
+fn children(root_pid: u32, spared: &[String]) -> Result<Tree, ProcError> {
     let snap = snapshot();
     let root_ctime = create_time(root_pid)?;
     let mut by_parent: HashMap<u32, Vec<usize>> = HashMap::new();
     for (i, p) in snap.iter().enumerate() {
         by_parent.entry(p.ppid).or_default().push(i);
     }
-    let mut out = Vec::new();
+    let mut out = Tree::default();
     let mut seen = HashSet::new();
     let mut stack = vec![root_pid];
     while let Some(pid) = stack.pop() {
@@ -293,9 +330,13 @@ fn children(root_pid: u32) -> Result<Vec<Descendant>, ProcError> {
         }
         for &i in by_parent.get(&pid).map(Vec::as_slice).unwrap_or_default() {
             let child = &snap[i];
+            if spared.contains(&child.name.to_lowercase()) {
+                out.spared.push(child.name.clone());
+                continue;
+            }
             match identified(child.pid) {
                 Ok((identity, ct)) if root_ctime <= ct => {
-                    out.push(Descendant {
+                    out.descendants.push(Descendant {
                         pid: child.pid,
                         identity,
                         name: child.name.clone(),
@@ -408,8 +449,9 @@ mod tests {
         let root_pid = tree.root.id();
         let start = Instant::now();
         let ping = loop {
-            let found = children(root_pid)
+            let found = children(root_pid, &[])
                 .unwrap()
+                .descendants
                 .into_iter()
                 .find(|c| c.name.eq_ignore_ascii_case("ping.exe"));
             if let Some(ping) = found {
@@ -426,7 +468,7 @@ mod tests {
             pid: root_pid,
             identity: root_ident,
         }];
-        for c in children(root_pid).unwrap() {
+        for c in children(root_pid, &[]).unwrap().descendants {
             targets.push(Target {
                 pid: c.pid,
                 identity: c.identity,

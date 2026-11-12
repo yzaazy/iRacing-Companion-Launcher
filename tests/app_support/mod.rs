@@ -152,6 +152,10 @@ impl Backend for FakeBackend {
     fn child_names(&mut self, app: &str) -> Vec<String> {
         serde_json::from_value(self.call("get_child_names", &[app], json!([]))).unwrap()
     }
+    // Not recorded: the Python app had no such call, so its transcripts hold none.
+    fn games_under(&mut self, app: &str) -> Vec<String> {
+        serde_json::from_value(self.respond("games_under", app, json!([]))).unwrap()
+    }
     fn launch_app(&mut self, app: &str, path: &str) -> bool {
         flag(self.call("launch_app", &[app, path], json!(false)))
     }

@@ -17,6 +17,16 @@ pub struct GameDef {
     pub steam_appid: &'static str,
     pub steam_folder: &'static str,
     pub paths: &'static [&'static str],
+    /// Exe names of the game's own processes besides `exe`, which v2.3.2 did
+    /// not know. Closing an app leaves them running, as it does `exe`.
+    pub other_exes: &'static [&'static str],
+}
+
+impl GameDef {
+    /// Every exe name the game runs under: `exe`, then `other_exes`.
+    pub fn exes(&self) -> impl Iterator<Item = &'static str> {
+        std::iter::once(self.exe).chain(self.other_exes.iter().copied())
+    }
 }
 
 const GARAGE61_TAIL: &str = r"garage61-install\garage61-launcher.exe";
@@ -111,6 +121,8 @@ pub fn games() -> Vec<GameDef> {
             steam_appid: "266410",
             steam_folder: "iRacing",
             paths: &[r"C:\Program Files (x86)\iRacing\iRacingLauncher64.exe"],
+            // `exe` is the iRacing UI; a session runs in the simulator.
+            other_exes: &["iRacingSim64DX11.exe"],
         },
         GameDef {
             name: "Assetto Corsa Competizione",
@@ -119,6 +131,7 @@ pub fn games() -> Vec<GameDef> {
             steam_appid: "805550",
             steam_folder: "Assetto Corsa Competizione",
             paths: &[],
+            other_exes: &[],
         },
         GameDef {
             name: "Assetto Corsa Evo",
@@ -127,6 +140,7 @@ pub fn games() -> Vec<GameDef> {
             steam_appid: "3058630",
             steam_folder: "Assetto Corsa Evo",
             paths: &[],
+            other_exes: &[],
         },
         GameDef {
             name: "Automobilista 2",
@@ -135,6 +149,7 @@ pub fn games() -> Vec<GameDef> {
             steam_appid: "1066890",
             steam_folder: "Automobilista 2",
             paths: &[],
+            other_exes: &[],
         },
         GameDef {
             name: "rFactor 2",
@@ -143,6 +158,7 @@ pub fn games() -> Vec<GameDef> {
             steam_appid: "365960",
             steam_folder: "rFactor 2",
             paths: &[],
+            other_exes: &[],
         },
     ]
 }

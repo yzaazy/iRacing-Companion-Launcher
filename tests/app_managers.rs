@@ -240,6 +240,7 @@ impl Fixture {
             steam_appid,
             steam_folder: "ircl-test Dummy Game",
             paths: Vec::leak(vec![leak(s(&lnk_target))]),
+            other_exes: &[],
         }
     }
 }
@@ -579,6 +580,68 @@ fn tracked_tree_is_named_and_closed_as_a_tree() {
     }
     assert_eq!(f.state(), Some(json!({})));
     assert!(m.child_names(APP).is_empty());
+}
+
+/// A tracked app can start a game (a Stream Deck button does). The game and
+/// everything below it is no helper of the app and outlives the app's close.
+#[test]
+fn game_started_by_a_tracked_app_survives_the_close() {
+    let mut f = Fixture::new("close-spares-game");
+    // The dummy root starts "child", which starts "grandchild".
+    let root = f.dummies.tree();
+    let mut m = f.app_managers(
+        vec![f.app("root", vec![], false)],
+        vec![f.game("child", "")],
+    );
+
+    assert!(m.launch_app(APP, &root));
+    assert!(started(&f.dummies.name("grandchild")));
+    assert!(m.is_game_running(GAME));
+    assert!(m.is_app_running(APP));
+    assert!(m.child_names(APP).is_empty(), "a game is not a helper");
+    assert_eq!(m.games_under(APP), [GAME]);
+
+    assert!(m.close_app(APP));
+    assert!(exited(&f.dummies.name("root")));
+    assert_eq!(f.state(), Some(json!({})));
+    // Long enough for a terminated process to be gone.
+    std::thread::sleep(Duration::from_millis(500));
+    for role in ["child", "grandchild"] {
+        assert!(
+            is_process_running(&f.dummies.name(role)),
+            "{role} was closed"
+        );
+    }
+    assert!(m.games_under(APP).is_empty(), "the app is not tracked now");
+}
+
+/// A game's other processes (the simulator behind iRacing's UI) are spared
+/// like its `exe`, wherever they sit in the app's tree.
+#[test]
+fn game_process_under_another_exe_name_survives_the_close() {
+    let mut f = Fixture::new("close-spares-sim");
+    let root = f.dummies.tree();
+    let game = GameDef {
+        other_exes: Vec::leak(vec![leak(f.dummies.name("grandchild"))]),
+        ..f.game("never-started", "")
+    };
+    let mut m = f.app_managers(vec![f.app("root", vec![], false)], vec![game]);
+
+    assert!(m.launch_app(APP, &root));
+    assert!(started(&f.dummies.name("grandchild")));
+    assert_eq!(m.child_names(APP), [f.dummies.name("child")]);
+    assert_eq!(m.games_under(APP), [GAME]);
+
+    assert!(m.close_app(APP));
+    for role in ["root", "child"] {
+        assert!(exited(&f.dummies.name(role)), "{role} survived");
+    }
+    // Long enough for a terminated process to be gone.
+    std::thread::sleep(Duration::from_millis(500));
+    assert!(
+        is_process_running(&f.dummies.name("grandchild")),
+        "the game was closed"
+    );
 }
 
 #[test]
