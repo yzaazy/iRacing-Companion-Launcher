@@ -23,6 +23,8 @@ These are the only places Rust may differ from Python. Anything else that differ
 
 ## Quirks to port unchanged
 
+Each has a GitHub issue for the decision to fix it after v3.0.0, in list order: #7, #8, #9, #10, #11, #12, #13. Until an issue is worked on, the quirk stays.
+
 - Close on an app with no detected path that is running: the first `close_app` kills it, the second returns false, so the log says "was not running" and the card returns to not-found ([main_window.py:470-494](../../iracing_launcher_app/ui/main_window.py)).
 - "All apps launched!" is logged after the app loop regardless of failures or an empty selection.
 - `stopping` has no entry in `STATUS_COLORS`, so the dot shows the idle colour.
