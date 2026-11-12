@@ -2,7 +2,7 @@
 //! `ui/widgets/game_card.py`: rounded frames, checkbox, radio button, status dot and buttons.
 //! Every shape is painted at a rect from `layout`, in colours from `theme`.
 
-use crate::ui::layout::Bounds;
+use crate::ui::pack::Bounds;
 use crate::ui::text;
 use crate::ui::theme::{self, ButtonColors, Font};
 use egui::{Color32, CornerRadius, Painter, Shape, Stroke, pos2};

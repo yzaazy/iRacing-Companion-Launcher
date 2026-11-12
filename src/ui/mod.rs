@@ -4,6 +4,7 @@ pub mod fonts;
 pub mod input;
 pub mod layout;
 pub mod log;
+pub mod pack;
 pub mod sections;
 pub mod text;
 pub mod theme;

@@ -11,7 +11,8 @@
 
 use crate::model::{LogLine, ViewState};
 use crate::ui::input::{Controls, Ring};
-use crate::ui::layout::{Bounds, LogText};
+use crate::ui::layout::LogText;
+use crate::ui::pack::Bounds;
 use crate::ui::text::{self, Run};
 use crate::ui::theme;
 use egui::{

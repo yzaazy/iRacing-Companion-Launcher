@@ -6,7 +6,7 @@
 use crate::support::{fixture, geometry, harness, pixel, press, repo_path, tabs};
 use egui::{Key, Modifiers, Pos2, pos2};
 use iracing_companion_launcher::model::UiAction;
-use iracing_companion_launcher::ui::layout::Bounds;
+use iracing_companion_launcher::ui::pack::Bounds;
 use iracing_companion_launcher::ui::theme;
 
 /// The unfocused window of each state is held to the reference and to its golden render in

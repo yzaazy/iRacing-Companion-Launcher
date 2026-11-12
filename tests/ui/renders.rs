@@ -4,7 +4,7 @@
 use crate::support::{WINDOW, builder, fixture, geometry, render, render_at, repo_path};
 use egui::{Color32, Key};
 use iracing_companion_launcher::model::{AppCard, GameCard, Status};
-use iracing_companion_launcher::ui::layout::Bounds;
+use iracing_companion_launcher::ui::pack::Bounds;
 use iracing_companion_launcher::ui::{self, theme};
 
 /// The same rules at other window sizes and display scales, for a look:

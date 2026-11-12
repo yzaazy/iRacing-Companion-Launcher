@@ -4,7 +4,8 @@
 
 use crate::support::{WINDOW, fixtures, spec, with_ctx};
 use iracing_companion_launcher::model::ViewState;
-use iracing_companion_launcher::ui::layout::{self, Bounds};
+use iracing_companion_launcher::ui::layout;
+use iracing_companion_launcher::ui::pack::Bounds;
 use iracing_companion_launcher::ui::sections::{self, Geometry, TextGeom};
 use iracing_companion_launcher::ui::{self as ui, theme};
 use serde_json::Value;

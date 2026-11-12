@@ -7,8 +7,9 @@
 
 use crate::model::{AppCard, GameCard, Status, UiAction, ViewState};
 use crate::ui::input::{Control, Controls, Kind, Ring};
-use crate::ui::layout::{self, Anchor, Bounds, ButtonRow, CardParts, Layout, LogText, Trailing};
+use crate::ui::layout::{self, ButtonRow, CardParts, Layout, LogText, Trailing};
 use crate::ui::log as log_view;
+use crate::ui::pack::{Anchor, Bounds};
 use crate::ui::text;
 use crate::ui::theme::{self, Font};
 use crate::ui::widgets::{self, ButtonLook};
