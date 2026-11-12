@@ -167,3 +167,65 @@ fn startup_saves_config_to_disk() {
     );
     assert!(!saved.contains("fanatec_enabled"), "{saved}");
 }
+
+/// A saved game that is not found starts as None, stays in config, and is selected again
+/// at the first startup that finds it (#10).
+#[test]
+fn saved_game_not_found_starts_as_none_and_stays_saved() {
+    let mut scenario = scenarios()
+        .into_iter()
+        .find(|s| s["name"] == "launch_game_not_configured")
+        .unwrap();
+    assert_eq!(scenario["settings"]["selected_game"], "rFactor 2");
+    let dir = tempfile::tempdir().unwrap();
+    let started = |config: ConfigStore, script: &Value| {
+        let mut backend = FakeBackend::new(script.clone(), Recorder::default());
+        let startup = Controller::startup(
+            &mut backend,
+            Box::new(SharedConfig::new(config)),
+            "3.0.0",
+            None,
+        );
+        let sequencer = Sequencer::new(Box::new(backend), startup.game_statuses());
+        startup.attach(Box::new(Inline::new(sequencer, Box::new(|_| {}))))
+    };
+
+    let controller = started(
+        seeded_config(dir.path(), &scenario["settings"]),
+        &scenario["script"],
+    );
+    assert_eq!(controller.state().selected_game, None);
+    assert_eq!(controller.state().launch_label, "Launch apps (7)");
+    let saved = std::fs::read_to_string(dir.path().join("config.ini")).unwrap();
+    assert!(saved.contains("selected_game = rFactor 2"), "{saved}");
+
+    scenario["script"]["find_game_path"]["rFactor 2"] = json!(["steam://rungameid/365960"]);
+    let controller = started(ConfigStore::load(dir.path()), &scenario["script"]);
+    assert_eq!(
+        controller.state().selected_game.as_deref(),
+        Some("rFactor 2")
+    );
+    assert_eq!(controller.state().launch_label, "Launch with rFactor 2 (7)");
+}
+
+/// A selected game that is gone by the time Launch reaches it is skipped with the line
+/// v2.3.2 logged (recorded before #10 made a saved game that is not found start as None).
+#[test]
+fn selected_game_gone_at_launch_is_skipped() {
+    let mut scenario = scenarios()
+        .into_iter()
+        .find(|s| s["name"] == "launch_game_not_configured")
+        .unwrap();
+    scenario["script"]["find_game_path"]["rFactor 2"] = json!(["steam://rungameid/365960", null]);
+    let run = replay(&scenario);
+    let tail = &run.transcript[run.transcript.len() - 3..];
+    assert_eq!(
+        tail,
+        [
+            json!(["call", "find_game_path", "rFactor 2", null]),
+            json!(["log", "warning", "Skipping rFactor 2 - not configured"]),
+            json!(["log", "success", "Launch sequence complete!"]),
+        ],
+    );
+    assert_eq!(run.final_state["selected_game"], "rFactor 2");
+}

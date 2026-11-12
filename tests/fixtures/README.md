@@ -50,6 +50,10 @@ The transcripts name the backend calls by the Python method names (`get_child_na
 
 `tests/app_transcripts.rs` replays every scenario against the Rust controller and requires the same transcript and end state.
 
+Edited by hand since the capture, for deliberate changes from v2.3.2 ([docs/behaviour.md](../../docs/behaviour.md#changes-from-v232)):
+
+- Change 9 ([#10](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/10)), a saved game that is not found starts as None: in `startup_saved_settings`, `launch_game_not_configured` and `browse_game` the end state has `selected_game` null and the Launch label `Launch apps (N)`, and the last two no longer look the game up at the end of Launch or log `Skipping <game> - not configured`. `selected_game_gone_at_launch_is_skipped` keeps that line, as v2.3.2 recorded it, under test.
+
 ## ui/
 
 The window as the Python app v2.3.2 drew it, at 1200x700 and 96 DPI. The layout tests (`tests/ui/layout.rs`) and the screenshot parity tests (`tests/ui/parity.rs`) compare the Rust window against these files.

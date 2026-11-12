@@ -280,14 +280,14 @@ impl Controller {
             }
         }
 
-        // Restored even when that game is not found: its radio shows selected
-        // and disabled.
+        // A saved game that is not found starts as None (#10). The setting is
+        // kept, so the choice comes back once the game is found again.
         let saved = self.settings.setting("selected_game").unwrap_or_default();
         self.state.selected_game = self
             .state
             .games
             .iter()
-            .any(|g| g.name == saved)
+            .any(|g| g.name == saved && g.status != Status::NotFound)
             .then_some(saved);
 
         self.update_button_text();
