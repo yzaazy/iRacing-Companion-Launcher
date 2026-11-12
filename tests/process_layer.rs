@@ -146,6 +146,35 @@ fn tree_is_counted_named_and_closed_together() {
 }
 
 #[test]
+fn spared_exe_and_its_subtree_are_not_counted_named_or_closed() {
+    let mut d = Dummies::new();
+    let root = d.tree();
+    let mut t = ProcessTracker::new(d.state_file());
+    // In any case, as every other name match.
+    t.spare([d.name("child").to_uppercase().as_str()]);
+
+    assert!(t.launch_and_track(KEY, &root, WAIT, LaunchMethod::Direct));
+    assert!(
+        wait_until(Duration::from_secs(15), || is_process_running(
+            &d.name("grandchild")
+        )),
+        "expected child and grandchild"
+    );
+    assert_eq!(t.is_tracked_running(KEY), (true, 0));
+    assert!(t.child_names(KEY).is_empty());
+    assert_eq!(t.spared_names(KEY), [d.name("child")]);
+
+    assert!(t.close_tracked(KEY));
+    assert!(!is_process_running(&d.name("root")), "root survived");
+    assert!(!t.is_tracked(KEY));
+    // Long enough for a terminated process to be gone.
+    std::thread::sleep(Duration::from_millis(500));
+    for role in ["child", "grandchild"] {
+        assert!(is_process_running(&d.name(role)), "{role} was closed");
+    }
+}
+
+#[test]
 fn process_that_exits_by_itself_is_dropped() {
     let mut d = Dummies::new();
     let exe = d.exe("quits");

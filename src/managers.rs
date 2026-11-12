@@ -56,6 +56,9 @@ pub trait Backend: Send {
     fn find_app_path(&mut self, app: &str) -> Option<String>;
     fn is_app_running(&mut self, app: &str) -> bool;
     fn child_names(&mut self, app: &str) -> Vec<String>;
+    /// Names of the games running below the tracked app (the app started
+    /// them), which `close_app` leaves running.
+    fn games_under(&mut self, app: &str) -> Vec<String>;
     fn launch_app(&mut self, app: &str, path: &str) -> bool;
     fn close_app(&mut self, app: &str) -> bool;
 
@@ -80,11 +83,13 @@ pub struct Managers {
 
 impl Managers {
     /// Apps and games share `config`, as both Python managers share one `ConfigManager`.
-    pub fn new(config: SharedConfig, tracker: ProcessTracker) -> Self {
+    pub fn new(config: SharedConfig, mut tracker: ProcessTracker) -> Self {
+        let games = definitions::games();
+        spare_games(&mut tracker, &games);
         Self {
             config,
             apps: definitions::apps(),
-            games: definitions::games(),
+            games,
             tracker,
             test_host: None,
         }
@@ -93,11 +98,12 @@ impl Managers {
     /// Managers over the test's own definitions and [`TestHost`], for tests.
     pub fn with_test_host(
         config: SharedConfig,
-        tracker: ProcessTracker,
+        mut tracker: ProcessTracker,
         apps: Vec<AppDef>,
         games: Vec<GameDef>,
         host: TestHost,
     ) -> Self {
+        spare_games(&mut tracker, &games);
         Self {
             config,
             apps,
@@ -159,6 +165,12 @@ impl Managers {
     }
 }
 
+/// A game is closed by hand only, so a wrong press on Close never ends a
+/// session: a game that a tracked app started is no part of that app's tree.
+fn spare_games(tracker: &mut ProcessTracker, games: &[GameDef]) {
+    tracker.spare(games.iter().flat_map(GameDef::exes));
+}
+
 impl Backend for Managers {
     fn app_list(&self) -> Vec<String> {
         self.apps.iter().map(|a| a.name.to_owned()).collect()
@@ -210,6 +222,23 @@ impl Backend for Managers {
             return Vec::new();
         }
         self.tracker.child_names(app)
+    }
+
+    fn games_under(&mut self, app: &str) -> Vec<String> {
+        if self.app_def(app).is_none() {
+            return Vec::new();
+        }
+        let running: Vec<String> = self
+            .tracker
+            .spared_names(app)
+            .iter()
+            .map(|exe| exe.to_lowercase())
+            .collect();
+        self.games
+            .iter()
+            .filter(|g| g.exes().any(|exe| running.contains(&exe.to_lowercase())))
+            .map(|g| g.name.to_owned())
+            .collect()
     }
 
     fn launch_app(&mut self, app: &str, path: &str) -> bool {

@@ -217,14 +217,26 @@ fn launch_selected_game(backend: &mut dyn Backend, out: &mut Out, game: &str) {
     }
 }
 
-/// The close sequence: the checked apps, then a check on the selected game if it was running.
+/// The close sequence: the checked apps, then a check on the selected game if it was running,
+/// then a warning for every other game that a closed app had started.
 fn close_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: Option<&str>) {
     out.divider();
     out.log(LogLevel::Close, "Closing applications...");
 
+    // Games running below a tracked app, which its close leaves running
+    // (`docs/behaviour.md`, "Changes from v2.3.2"). A game is found there only
+    // while the app is tracked and alive, and then the app is closed below.
+    let mut left_running: Vec<String> = Vec::new();
+
     for app in backend.app_list() {
         if !apps.contains(&app) {
             continue;
+        }
+
+        for name in backend.games_under(&app) {
+            if !left_running.contains(&name) {
+                left_running.push(name);
+            }
         }
 
         let path = backend.find_app_path(&app);
@@ -255,17 +267,23 @@ fn close_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: O
         }
     }
 
+    let still_running =
+        |game: &str| format!("⚠ {game} is still running - please close it manually");
+    let mut told = None;
     if let Some(game) = game
         && out.game_status.get(game) == Some(&Status::Running)
     {
-        if backend.is_game_running(game) {
-            out.log(
-                LogLevel::Warning,
-                &format!("⚠ {game} is still running - please close it manually"),
-            );
+        if left_running.iter().any(|g| g.as_str() == game) || backend.is_game_running(game) {
+            out.log(LogLevel::Warning, &still_running(game));
+            told = Some(game);
         } else {
             out.log(LogLevel::Success, &format!("{game} was closed manually"));
             out.game(game, Status::Idle);
+        }
+    }
+    for game in &left_running {
+        if told != Some(game.as_str()) {
+            out.log(LogLevel::Warning, &still_running(game));
         }
     }
 

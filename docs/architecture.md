@@ -118,7 +118,7 @@ sequenceDiagram
 
 - **Launch routes.** Apps: `LaunchMethod::Direct` (`CreateProcessW`, detached, new process group, only a `NUL` handle inherited; the PID comes back from the call) or `LaunchMethod::Shell` for apps whose definition sets `needs_shell_launch` (Stream Deck: `ShellExecuteW`, then the new PID is found by exe name). Games: `steam://` and `.lnk` through `shell_open`, an `.exe` through `launch_process` (detached, untracked).
 - **Tracking.** `ProcessTracker` keeps, per app name, the root PID, its creation time and the exe path, and saves them to `process_state.json` at every change. An entry is valid only while that PID is alive with the same creation time (0.5 s tolerance), so a recycled PID is never acted on.
-- **Tree walk.** One ToolHelp snapshot of (pid, parent pid, name); descendants of the root that were created at or after it. The helper count on a card and the helper names in the log come from this walk.
+- **Tree walk.** One ToolHelp snapshot of (pid, parent pid, name); descendants of the root that were created at or after it, stopping at any process with a game's exe name (`ProcessTracker::spare`, set by `Managers`). The helper count on a card and the helper names in the log come from this walk.
 - **Close.** Terminate root and descendants, wait up to 3 s, kill survivors, drop the entry. Untracked apps are killed by exe name. Games are never closed.
 
 The exact rules are in [behaviour.md](behaviour.md#process-tracking).
