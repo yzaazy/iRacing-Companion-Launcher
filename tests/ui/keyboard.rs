@@ -229,66 +229,75 @@ fn inside_rounded(b: Bounds, radius: f32, x: i32, y: i32) -> bool {
     p.distance(pos2(cx, cy)) <= radius
 }
 
-#[test]
-fn the_focus_ring_shows_on_every_kind_of_control() {
+/// The ring shows on a control of `kind`, reached by `n` presses of Tab in `state`, and changes
+/// nothing inside its painted shape `b` with corner radius `radius`.
+fn assert_focus_ring(kind: &str, state: &str, n: usize, b: Bounds, radius: f32) {
     let out = repo_path("target/ui-snapshots/focus");
     std::fs::create_dir_all(&out).unwrap();
-    let mixed = geometry(&fixture("mixed"));
-    let log_full = geometry(&fixture("log-full"));
-    let browse = mixed.games[1].browse.as_ref().unwrap().rect.painted();
-    let small = theme::SMALL_BUTTON_RADIUS;
-    let action = theme::ACTION_BUTTON_RADIUS;
-    // Kind, state, Tab presses to reach it, painted shape and its corner radius.
-    let cases = [
-        ("radio", "mixed", 1, mixed.none_card.parts.toggle_box, 11.0),
-        ("browse", "mixed", 3, browse, small),
-        (
-            "select-all",
-            "mixed",
-            7,
-            mixed.select_all.rect.painted(),
-            small,
-        ),
-        (
-            "checkbox",
-            "mixed",
-            8,
-            mixed.apps[0].parts.toggle_box,
-            theme::CHECKBOX_RADIUS,
-        ),
-        ("launch", "mixed", 15, mixed.launch.rect.painted(), action),
-        ("close", "mixed", 16, mixed.close.rect.painted(), action),
-        (
-            "log",
-            "log-full",
-            15,
-            log_full.layout.log.log_box.painted(),
-            theme::LOG_RADIUS,
-        ),
-    ];
-    for (kind, state, n, b, radius) in cases {
-        let mut h = harness(fixture(state));
-        let plain = h.render().unwrap();
-        tabs(&mut h, n);
-        let image = h.render().unwrap();
-        image.save(out.join(format!("{kind}.png"))).unwrap();
-        assert_eq!(
-            pixel(&image, above(b)),
-            theme::FOCUS_RING,
-            "{kind}: no ring above it"
-        );
-        // Drawn around the control, it changes nothing inside its shape.
-        for y in b.y..b.bottom() {
-            for x in b.x..b.right() {
-                if !inside_rounded(b, radius, x, y) {
-                    continue;
-                }
-                assert_eq!(
-                    image.get_pixel(x as u32, y as u32),
-                    plain.get_pixel(x as u32, y as u32),
-                    "{kind}: the ring touched the control at {x},{y}"
-                );
+    let mut h = harness(fixture(state));
+    let plain = h.render().unwrap();
+    tabs(&mut h, n);
+    let image = h.render().unwrap();
+    image.save(out.join(format!("{kind}.png"))).unwrap();
+    assert_eq!(
+        pixel(&image, above(b)),
+        theme::FOCUS_RING,
+        "{kind}: no ring above it"
+    );
+    // Drawn around the control, it changes nothing inside its shape.
+    for y in b.y..b.bottom() {
+        for x in b.x..b.right() {
+            if !inside_rounded(b, radius, x, y) {
+                continue;
             }
+            assert_eq!(
+                image.get_pixel(x as u32, y as u32),
+                plain.get_pixel(x as u32, y as u32),
+                "{kind}: the ring touched the control at {x},{y}"
+            );
         }
     }
+}
+
+#[test]
+fn the_focus_ring_shows_on_a_radio() {
+    let b = geometry(&fixture("mixed")).none_card.parts.toggle_box;
+    assert_focus_ring("radio", "mixed", 1, b, 11.0);
+}
+
+#[test]
+fn the_focus_ring_shows_on_a_browse_button() {
+    let mixed = geometry(&fixture("mixed"));
+    let b = mixed.games[1].browse.as_ref().unwrap().rect.painted();
+    assert_focus_ring("browse", "mixed", 3, b, theme::SMALL_BUTTON_RADIUS);
+}
+
+#[test]
+fn the_focus_ring_shows_on_select_all() {
+    let b = geometry(&fixture("mixed")).select_all.rect.painted();
+    assert_focus_ring("select-all", "mixed", 7, b, theme::SMALL_BUTTON_RADIUS);
+}
+
+#[test]
+fn the_focus_ring_shows_on_a_checkbox() {
+    let b = geometry(&fixture("mixed")).apps[0].parts.toggle_box;
+    assert_focus_ring("checkbox", "mixed", 8, b, theme::CHECKBOX_RADIUS);
+}
+
+#[test]
+fn the_focus_ring_shows_on_launch() {
+    let b = geometry(&fixture("mixed")).launch.rect.painted();
+    assert_focus_ring("launch", "mixed", 15, b, theme::ACTION_BUTTON_RADIUS);
+}
+
+#[test]
+fn the_focus_ring_shows_on_close() {
+    let b = geometry(&fixture("mixed")).close.rect.painted();
+    assert_focus_ring("close", "mixed", 16, b, theme::ACTION_BUTTON_RADIUS);
+}
+
+#[test]
+fn the_focus_ring_shows_on_the_log() {
+    let b = geometry(&fixture("log-full")).layout.log.log_box.painted();
+    assert_focus_ring("log", "log-full", 15, b, theme::LOG_RADIUS);
 }
