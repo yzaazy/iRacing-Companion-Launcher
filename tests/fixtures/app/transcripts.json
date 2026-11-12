@@ -3596,8 +3596,8 @@
    ],
    [
     "log",
-    "success",
-    "All apps launched!"
+    "warning",
+    "Launched 6 of 7 apps, 1 failed"
    ],
    [
     "log",
@@ -5133,8 +5133,8 @@
    ],
    [
     "log",
-    "success",
-    "All apps launched!"
+    "warning",
+    "Launched 6 of 7 apps, 1 not configured"
    ],
    [
     "log",
@@ -5635,11 +5635,6 @@
     "log",
     "launch",
     "Starting launch sequence..."
-   ],
-   [
-    "log",
-    "success",
-    "All apps launched!"
    ],
    [
     "call",
@@ -6189,11 +6184,6 @@
     "log",
     "launch",
     "Starting launch sequence..."
-   ],
-   [
-    "log",
-    "success",
-    "All apps launched!"
    ],
    [
     "call",
@@ -13929,8 +13919,8 @@
    ],
    [
     "log",
-    "success",
-    "All apps launched!"
+    "warning",
+    "Launched 5 of 6 apps, 1 not configured"
    ],
    [
     "log",
