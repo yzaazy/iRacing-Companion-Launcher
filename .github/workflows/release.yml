@@ -14,6 +14,8 @@ permissions:
   contents: write
 
 env:
+  # As in ci.yml, so the gate here restores CI's cache.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
   TAG: ${{ github.ref_name }}
   GH_TOKEN: ${{ github.token }}
   ISCC: C:\Program Files (x86)\Inno Setup 6\ISCC.exe

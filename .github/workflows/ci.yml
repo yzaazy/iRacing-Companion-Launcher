@@ -15,6 +15,12 @@ concurrency:
 permissions:
   contents: read
 
+# Line tables only instead of full debug info: much smaller build output, so a smaller
+# cache and faster links; panics and backtraces keep file and line. Local builds keep
+# full debug info. Release uses the same value, so both hit the same cache key.
+env:
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+
 jobs:
   gate:
     name: Gate
