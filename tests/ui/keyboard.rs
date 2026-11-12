@@ -3,119 +3,19 @@
 //! control, a visible ring marks it, and any mouse press or Escape lets go of it. Unfocused, the
 //! window is exactly what it was before keyboard access existed.
 
+use crate::support::{fixture, geometry, harness, pixel, press, repo_path, tabs};
 use egui::{Key, Modifiers, Pos2, pos2};
-use egui_kittest::Harness;
-use iracing_companion_launcher::contract::{UiAction, ViewState};
+use iracing_companion_launcher::contract::UiAction;
 use iracing_companion_launcher::ui::layout::Bounds;
-use iracing_companion_launcher::ui::{self, sections, theme};
-use std::collections::BTreeMap;
-use std::path::Path;
+use iracing_companion_launcher::ui::theme;
 
-const WINDOW: egui::Vec2 = egui::vec2(1200.0, 700.0);
-
-/// The headless wgpu adapter crashes when two threads create devices at once; tests in this
-/// binary take turns.
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-}
-
-fn fixtures() -> BTreeMap<String, ViewState> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/rewrite/fixtures.json");
-    serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
-}
-
-fn fixture(name: &str) -> ViewState {
-    fixtures()[name].clone()
-}
-
-struct Probe {
-    state: ViewState,
-    actions: Vec<UiAction>,
-}
-
-fn harness(state: ViewState) -> Harness<'static, Probe> {
-    let mut h = Harness::builder()
-        .with_size(WINDOW)
-        .with_pixels_per_point(1.0)
-        .with_render_cursor(false)
-        .with_context_setup(ui::install_fonts)
-        .build_ui_state(
-            |ui, probe: &mut Probe| {
-                let actions = ui::draw(ui, &probe.state);
-                probe.actions.extend(actions);
-            },
-            Probe {
-                state,
-                actions: Vec::new(),
-            },
-        );
-    h.run();
-    h
-}
-
-fn press(h: &mut Harness<'static, Probe>, key: Key) {
-    h.key_press(key);
-    h.run();
-}
-
-fn tabs(h: &mut Harness<'static, Probe>, n: usize) {
-    for _ in 0..n {
-        press(h, Key::Tab);
-    }
-}
-
-fn geometry(state: &ViewState) -> sections::Geometry {
-    let ctx = egui::Context::default();
-    ui::install_fonts(&ctx);
-    let mut geom = None;
-    let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
-        geom = Some(sections::geometry(ui.ctx(), state, WINDOW));
-    });
-    output.textures_delta.clear();
-    geom.unwrap()
-}
-
-fn pixel(image: &image::RgbaImage, p: Pos2) -> egui::Color32 {
-    let q = image.get_pixel(p.x as u32, p.y as u32);
-    egui::Color32::from_rgb(q[0], q[1], q[2])
-}
-
-/// FNV-1a over the RGBA bytes of a render.
-fn fnv(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, &b| {
-        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
-    })
-}
-
-/// The unfocused renders at 1200x700 and 1.0 pixels per point on the headless wgpu adapter,
-/// which pass `ui_diff.py`. Keyboard access changed none of their pixels. They differ from the
-/// renders before it in 18 pixels only: the bottom row of the title's `p` descender, which
-/// overhangs the 30 px title label; Tk clips it there (the reference shows background), and so
-/// does the label clipping that came in with it. If the adapter or driver changes, regenerate
-/// these from renders that still pass `ui_diff.py`.
-const UNFOCUSED_RENDERS: [(&str, u64); 5] = [
-    ("all-missing", 0xcd55_e977_b6b6_c894),
-    ("idle", 0x2a29_1b38_0e52_b06f),
-    ("log-full", 0xf197_3aee_bd80_7c24),
-    ("mixed", 0x62c1_41b2_1559_0863),
-    ("none-selected", 0x59d3_2c28_c367_9682),
-];
-
+/// The unfocused window of each state is held to the reference and to its golden render in
+/// `parity.rs`; focus that came and went leaves nothing behind.
 #[test]
-fn unfocused_renders_are_unchanged() {
-    let _gpu = gpu();
-    for (name, want) in UNFOCUSED_RENDERS {
+fn tab_then_escape_leaves_no_mark() {
+    for name in crate::support::STATES {
         let mut h = harness(fixture(name));
         let image = h.render().unwrap();
-        assert_eq!(
-            fnv(image.as_raw()),
-            want,
-            "{name}: unfocused render changed"
-        );
-        // Focus that came and went leaves nothing behind.
         tabs(&mut h, 3);
         press(&mut h, Key::Escape);
         assert_eq!(
@@ -128,7 +28,6 @@ fn unfocused_renders_are_unchanged() {
 
 #[test]
 fn nothing_is_focused_at_startup() {
-    let _gpu = gpu();
     for name in ["idle", "mixed", "log-full"] {
         let mut h = harness(fixture(name));
         let before = h.render().unwrap();
@@ -169,7 +68,6 @@ fn select(name: Option<&str>) -> Option<UiAction> {
 
 #[test]
 fn tab_follows_the_layout_and_skips_inert_controls() {
-    let _gpu = gpu();
     // mixed: iRacing is selected (its radio is a stop that does nothing), Assetto Corsa
     // Competizione and Elgato Stream Deck are not found (their toggles are skipped; their Browse
     // buttons are stops), and the log does not overflow (no stop).
@@ -226,7 +124,6 @@ fn tab_follows_the_layout_and_skips_inert_controls() {
 
 #[test]
 fn shift_tab_goes_backwards_and_space_activates_too() {
-    let _gpu = gpu();
     let mut h = harness(fixture("mixed"));
     h.key_press_modifiers(Modifiers::SHIFT, Key::Tab);
     h.run();
@@ -240,7 +137,6 @@ fn shift_tab_goes_backwards_and_space_activates_too() {
 
 #[test]
 fn a_mouse_press_or_escape_drops_the_focus() {
-    let _gpu = gpu();
     let state = fixture("mixed");
     let geom = geometry(&state);
 
@@ -296,7 +192,6 @@ fn a_mouse_press_or_escape_drops_the_focus() {
 
 #[test]
 fn a_held_enter_acts_once() {
-    let _gpu = gpu();
     let mut h = harness(fixture("mixed"));
     tabs(&mut h, 15);
     h.event(egui::Event::Key {
@@ -336,8 +231,7 @@ fn inside_rounded(b: Bounds, radius: f32, x: i32, y: i32) -> bool {
 
 #[test]
 fn the_focus_ring_shows_on_every_kind_of_control() {
-    let _gpu = gpu();
-    let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/ui-snapshots/focus");
+    let out = repo_path("target/ui-snapshots/focus");
     std::fs::create_dir_all(&out).unwrap();
     let mixed = geometry(&fixture("mixed"));
     let log_full = geometry(&fixture("log-full"));

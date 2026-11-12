@@ -2,28 +2,13 @@
 //! `docs/rewrite/ui-spec.json`: widget rects, painted boxes, text placement, the log's wrapping,
 //! scroll position and scrollbar. It reads `ui::sections::geometry`, the same geometry `draw` paints.
 
+use crate::support::{WINDOW, fixtures, spec, with_ctx};
 use iracing_companion_launcher::contract::ViewState;
 use iracing_companion_launcher::ui::layout::{self, Bounds};
 use iracing_companion_launcher::ui::sections::{self, Geometry, TextGeom};
 use iracing_companion_launcher::ui::{self as ui, theme};
 use serde_json::Value;
 use std::collections::BTreeMap;
-use std::path::Path;
-
-const WINDOW: egui::Vec2 = egui::vec2(1200.0, 700.0);
-
-fn repo_file(rel: &str) -> String {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
-}
-
-fn fixtures() -> BTreeMap<String, ViewState> {
-    serde_json::from_str(&repo_file("docs/rewrite/fixtures.json")).unwrap()
-}
-
-fn spec() -> Value {
-    serde_json::from_str(&repo_file("docs/rewrite/ui-spec.json")).unwrap()
-}
 
 fn bounds(v: &Value) -> Bounds {
     let n = |k: &str| v[k].as_i64().unwrap_or_else(|| panic!("{k} in {v}")) as i32;
@@ -32,22 +17,6 @@ fn bounds(v: &Value) -> Bounds {
 
 fn slug(name: &str) -> String {
     name.to_lowercase().replace(' ', "_")
-}
-
-/// Run `f` inside a frame of a context with the app's fonts installed.
-fn with_ctx<R>(f: impl FnOnce(&egui::Context) -> R) -> R {
-    let ctx = egui::Context::default();
-    ui::install_fonts(&ctx);
-    let mut f = Some(f);
-    let mut out = None;
-    let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
-        if let Some(f) = f.take() {
-            out = Some(f(ui.ctx()));
-        }
-    });
-    // No renderer here: the font atlas upload is dropped on purpose.
-    output.textures_delta.clear();
-    out.unwrap()
 }
 
 /// Every element the spec names, from the geometry.
@@ -128,7 +97,7 @@ fn elements(g: &Geometry, state: &ViewState) -> BTreeMap<String, Bounds> {
 }
 
 /// Every text label the spec names, except the status dots (painted as disks, checked as
-/// elements and by `ui_diff.py`).
+/// elements and by the parity check).
 fn texts(g: &Geometry, state: &ViewState) -> BTreeMap<String, TextGeom> {
     let mut m = BTreeMap::new();
     m.insert("header.title".into(), g.title.clone());
@@ -172,18 +141,17 @@ fn text_rect(t: &TextGeom, in_button: bool) -> Bounds {
 
 #[test]
 fn layout_matches_spec_for_every_state() {
-    let spec = spec();
     let mut failures = Vec::new();
     let mut checked = 0;
     for (name, state) in fixtures() {
-        let st = &spec["states"][&name];
+        let st = &spec()["states"][name];
         assert!(st.is_object(), "state {name} missing from ui-spec.json");
         let (geom, rows) = with_ctx(|ctx| {
-            let geom = sections::geometry(ctx, &state, WINDOW);
-            let rows = ui::log::row_texts(ctx, &state, geom.log.inner.w as f32);
+            let geom = sections::geometry(ctx, state, WINDOW);
+            let rows = ui::log::row_texts(ctx, state, geom.log.inner.w as f32);
             (geom, rows)
         });
-        let ours = elements(&geom, &state);
+        let ours = elements(&geom, state);
 
         // Widget rects and painted boxes.
         for (el, v) in st["elements"].as_object().unwrap() {
@@ -215,7 +183,7 @@ fn layout_matches_spec_for_every_state() {
         }
 
         // Text placement: Tk's text rect, top, baselines and advance widths.
-        for (el, t) in texts(&geom, &state) {
+        for (el, t) in texts(&geom, state) {
             let v = &st["text"][&el];
             if !v.is_object() {
                 failures.push(format!("{name}: text {el} not in the spec"));

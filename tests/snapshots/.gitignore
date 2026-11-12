@@ -1,0 +1,4 @@
+# egui_kittest writes these beside a golden render that fails or is re-approved.
+*.new.png
+*.diff.png
+*.old.png
