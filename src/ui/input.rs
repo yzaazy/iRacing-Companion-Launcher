@@ -77,6 +77,22 @@ struct Memory {
     no_hover: HashSet<Id>,
 }
 
+/// A tab stop: where its ring goes, and what Space or Enter on it does.
+#[derive(Clone)]
+struct Stop {
+    id: Id,
+    ring: Ring,
+    /// `None` for the log, which does nothing on Space or Enter.
+    activate: Option<Activate>,
+}
+
+/// What activating a control does: emit its action and look pressed.
+#[derive(Clone)]
+struct Activate {
+    action: Option<UiAction>,
+    kind: Kind,
+}
+
 /// A key the controls react to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Press {
@@ -95,11 +111,12 @@ pub struct Controls {
     keys: Vec<Press>,
     primary_pressed: bool,
     time: f64,
-    /// Tab stops in order: id, ring, action, kind.
-    stops: Vec<(Id, Ring, Option<UiAction>, Kind)>,
+    /// The controls' tab stops, in order.
+    stops: Vec<Stop>,
     actions: Vec<UiAction>,
-    /// A tab stop that is not a control: the log, when it can scroll.
-    extra_stop: Option<(usize, Id, Ring)>,
+    /// A tab stop that is not a control (the log, when it can scroll), and the number of
+    /// control stops before it.
+    extra_stop: Option<(usize, Stop)>,
 }
 
 fn memory_id() -> Id {
@@ -216,14 +233,28 @@ impl Controls {
         // Everything that can act is a stop; a selected radio button is one too, as a radio
         // button is, though pressing it changes nothing.
         if c.enabled {
-            self.stops.push((c.id, c.ring, c.action, c.kind));
+            self.stops.push(Stop {
+                id: c.id,
+                ring: c.ring,
+                activate: Some(Activate {
+                    action: c.action,
+                    kind: c.kind,
+                }),
+            });
         }
         Pointer { hover_look }
     }
 
     /// Make a tab stop that is not a control (the log), placed after the controls added so far.
     pub fn stop(&mut self, id: Id, ring: Ring) {
-        self.extra_stop = Some((self.stops.len(), id, ring));
+        self.extra_stop = Some((
+            self.stops.len(),
+            Stop {
+                id,
+                ring,
+                activate: None,
+            },
+        ));
     }
 
     fn pressed(&mut self, id: &Id, action: Option<UiAction>, kind: Kind) {
@@ -245,21 +276,15 @@ impl Controls {
     /// Apply this frame's keys in order, paint the focus ring and remember the state. Returns
     /// every action of the frame, pointer and keyboard, in the order they happened.
     pub fn finish(mut self, ui: &Ui) -> Vec<UiAction> {
-        // Each stop with what activating it does; the log's stop does nothing on Space or Enter.
-        type Stop = (Id, Ring, Option<(Option<UiAction>, Kind)>);
-        let mut stops: Vec<Stop> = self
-            .stops
-            .iter()
-            .map(|(id, ring, action, kind)| (*id, *ring, Some((action.clone(), *kind))))
-            .collect();
-        if let Some((at, id, ring)) = self.extra_stop {
-            stops.insert(at.min(stops.len()), (id, ring, None));
+        let mut stops = std::mem::take(&mut self.stops);
+        if let Some((at, stop)) = self.extra_stop.take() {
+            stops.insert(at.min(stops.len()), stop);
         }
 
         let position = |memory: &Memory| {
             memory
                 .focused
-                .and_then(|f| stops.iter().position(|(id, _, _)| *id == f))
+                .and_then(|f| stops.iter().position(|s| s.id == f))
         };
         if let Some(i) = position(&self.memory) {
             self.memory.focused_index = Some(i);
@@ -277,14 +302,14 @@ impl Controls {
                         (None, None) if key == Press::Next => 0,
                         (None, None) => n - 1,
                     };
-                    self.memory.focused = Some(stops[next].0);
+                    self.memory.focused = Some(stops[next].id);
                     self.memory.focused_index = Some(next);
                 }
                 Press::Activate => {
                     if let Some(i) = position(&self.memory)
-                        && let Some((action, kind)) = stops[i].2.clone()
+                        && let Some(Activate { action, kind }) = stops[i].activate.clone()
                     {
-                        let id = stops[i].0;
+                        let id = stops[i].id;
                         self.pressed(&id, action, kind);
                     }
                 }
@@ -297,7 +322,7 @@ impl Controls {
         }
 
         if let Some(i) = position(&self.memory) {
-            paint_ring(ui.painter(), stops[i].1);
+            paint_ring(ui.painter(), stops[i].ring);
         }
         if !self.actions.is_empty() || self.memory.focused != self.focus_at_start {
             ui.ctx().request_repaint();
