@@ -49,7 +49,7 @@ windows installer.iss  Inno Setup script
 - Debug builds and tests keep config and state under `target/dev-config/` or a temp directory. Only an installed release build uses `%APPDATA%\iRacingCompanionLauncher`.
 - Edit only the files your brief assigns to you.
 - Claim a GitHub issue before working on it, and release the claim when dropping it: the `claim` skill.
-- Pushing, tagging, building the installer and releasing each wait for the user's explicit go.
+- Pushing a branch other than `main` and opening a pull request need no go: `main` is protected, and only the owner merges. Pushing a tag, building the installer and releasing each wait for the user's explicit go.
 - `main` takes changes only through pull requests, which need the green `Gate` check and the owner's approval; only the owner merges.
 
 ## UI changes

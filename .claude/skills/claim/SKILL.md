@@ -6,7 +6,7 @@ description: Claim a GitHub issue before working on it, and release the claim wh
 ## Facts
 
 - Repository: `yzaazy/iRacing-Companion-Launcher`. Every session and agent works through the owner's `gh` account, so the assignee alone cannot tell two sessions apart. A claim is three marks together: the owner as assignee, the label `in progress`, and one comment naming the branch.
-- Picking up an issue at the owner's request is the go for claiming it and for releasing that claim. It is not the go for pushing, a pull request or anything else outward.
+- Picking up an issue at the owner's request is the go for claiming it and for releasing that claim. Pushing the issue's branch and opening its pull request need no go either (`main` is protected and only the owner merges); a tag or a release still does.
 
 ## Claim
 

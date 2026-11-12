@@ -12,7 +12,7 @@ description: Version bump, tag, CI-built installer and GitHub release for the la
 ## Stop points
 
 - Invoking this skill is the go for steps 1 and 2 (bump, gate). It is not the go for anything after them.
-- Pushing (step 3), tagging and pushing the tag (step 4) and publishing the release (step 6) are seen by others. Each waits for the owner's explicit go in the current conversation; a go for one is not a go for the next.
+- Pushing the bump branch and opening its pull request (step 3) need no go; the owner merges. Tagging and pushing the tag (step 4) and publishing the release (step 6) are seen by others. Each waits for the owner's explicit go in the current conversation; a go for one is not a go for the next.
 - Never tag a commit whose gate was not green. Never publish an installer the owner has not tested (step 5).
 
 ## Procedure
@@ -27,7 +27,7 @@ Run from the repo root, in this order. The build, the installer and the draft re
    ```
    must print the `Cargo.toml` version (for example `3.0.0`).
 
-3. **Push** (owner's go): push the bump on a branch and open a pull request to `main`; `main` takes no direct pushes. The owner merges it (the "Protect Main" ruleset requires the green `Gate` check and the owner's approval as code owner; on their own pull request they merge with the admin bypass). Wait for the CI check on `main` to be green.
+3. **Push**: push the bump on a branch and open a pull request to `main`; `main` takes no direct pushes. The owner merges it (the "Protect Main" ruleset requires the green `Gate` check and the owner's approval as code owner; on their own pull request they merge with the admin bypass). Wait for the CI check on `main` to be green.
 
 4. **Tag and push the tag** (owner's go for each): `git fetch`, then `git tag v{version} origin/main` once the bump is merged (releases are made only from commits on `main`), then `git push origin v{version}`. The Release workflow then fails if the tagged commit is not on `main`, if the tag differs from `version` in `Cargo.toml` or a release for it exists, and otherwise runs `cargo audit`, the gate, `cargo build --release`, checks the exe's version, compiles the installer and creates a **draft** release for the tag with the installer attached and generated notes. Watch it with `gh run watch` or on the Actions tab. When it fails after creating nothing, fix the cause, move the tag (`git tag -f`, `git push -f origin v{version}`, owner's go) or delete it, and push again; when it left a draft, delete the draft first.
 
