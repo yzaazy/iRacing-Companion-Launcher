@@ -5,8 +5,9 @@
 
 use std::sync::{Arc, Mutex};
 
-use iracing_companion_launcher::app::{Controller, NativeDialog};
+use iracing_companion_launcher::app::Controller;
 use iracing_companion_launcher::core::config::{ConfigStore, resolve_config_dir};
+use iracing_companion_launcher::dialog::NativeDialog;
 use iracing_companion_launcher::managers::{Managers, SharedConfig};
 use iracing_companion_launcher::process::tracker::ProcessTracker;
 use iracing_companion_launcher::ui;
