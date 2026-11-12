@@ -52,9 +52,12 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [InstallDelete]
-; Up to v2.3.2 the app was a PyInstaller folder. The old uninstaller removes it, but skips any
-; file that is locked (the old app still running); this clears what it left behind.
+; An upgrade installs over the previous version (same AppId), so Setup keeps the install folder
+; and the selected tasks. These are the files older layouts had besides the exe:
+; v1.7.0 to v2.3.2 were a PyInstaller folder, v1.5.x to v1.6.0 shipped the icons beside the exe.
 Type: filesandordirs; Name: "{app}\_internal"
+Type: files; Name: "{app}\iRCL.png"
+Type: files; Name: "{app}\iRCL.ico"
 
 [Files]
 ; Cargo names the exe after the package; install it under the name shortcuts and the
@@ -70,93 +73,36 @@ Name: "{autodesktop}\iRacing Companion Launcher"; Filename: "{app}\iRacing Compa
 Filename: "{app}\iRacing Companion Launcher.exe"; Description: "{cm:LaunchProgram,iRacing Companion Launcher}"; Flags: nowait postinstall skipifsilent
 
 [Code]
-function GetUninstallString(): String;
-var
-  UninstallKey: String;
-  UninstallString: String;
+const
+  UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{AC6B1A17-D640-431A-8A9B-0CF697BD5075}_is1';
+
+// The installed version, or '' when the app is not installed.
+function GetInstalledVersion(): String;
 begin
-  UninstallKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{AC6B1A17-D640-431A-8A9B-0CF697BD5075}_is1';
-  UninstallString := '';
-
-  // Check HKLM (system-wide installation)
-  if not RegQueryStringValue(HKLM, UninstallKey, 'UninstallString', UninstallString) then
-  begin
-    // Check HKCU (current user installation)
-    RegQueryStringValue(HKCU, UninstallKey, 'UninstallString', UninstallString);
-  end;
-
-  Result := UninstallString;
-end;
-
-function IsUpgrade(): Boolean;
-begin
-  Result := (GetUninstallString() <> '');
-end;
-
-function UninstallOldVersion(): Integer;
-var
-  UninstallString: String;
-  ResultCode: Integer;
-begin
-  Result := 0;
-  UninstallString := GetUninstallString();
-
-  if UninstallString <> '' then
-  begin
-    UninstallString := RemoveQuotes(UninstallString);
-
-    if Exec(UninstallString, '/SILENT /NORESTART /SUPPRESSMSGBOXES /DIR="{app}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-      Result := ResultCode
-    else
-      Result := -1;
-  end;
+  Result := '';
+  if not RegQueryStringValue(HKLM, UninstallKey, 'DisplayVersion', Result) then
+    RegQueryStringValue(HKCU, UninstallKey, 'DisplayVersion', Result);
 end;
 
 function InitializeSetup(): Boolean;
 var
   InstalledVersion: String;
-  UninstallKey: String;
-  Response: Integer;
   Message: String;
 begin
   Result := True;
+  InstalledVersion := GetInstalledVersion();
 
-  if IsUpgrade() then
+  if InstalledVersion <> '' then
   begin
-    UninstallKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{AC6B1A17-D640-431A-8A9B-0CF697BD5075}_is1';
-
-    // Try to get the installed version
-    if not RegQueryStringValue(HKLM, UninstallKey, 'DisplayVersion', InstalledVersion) then
-      RegQueryStringValue(HKCU, UninstallKey, 'DisplayVersion', InstalledVersion);
-
-    // Check if it's an upgrade or reinstall
     if InstalledVersion = '{#AppVersion}' then
-    begin
-      // Same version - reinstall
       Message := 'iRacing Companion Launcher version ' + InstalledVersion + ' is already installed.' + #13#10#13#10 +
-                 'Do you want to reinstall?';
-    end
+                 'Do you want to reinstall?'
     else
-    begin
-      // Different version - upgrade
       Message := 'iRacing Companion Launcher version ' + InstalledVersion + ' is currently installed.' + #13#10#13#10 +
                  'Do you want to upgrade to version {#AppVersion}?';
-    end;
 
-    Response := MsgBox(Message, mbConfirmation, MB_YESNO);
-
-    if Response = IDYES then
-    begin
-      if UninstallOldVersion() <> 0 then
-      begin
-        MsgBox('Failed to uninstall the previous version. Please uninstall it manually before continuing.', mbError, MB_OK);
-        Result := False;
-      end;
-    end
-    else
-    begin
-      Result := False;
-    end;
+    // Setup installs over the previous version, which keeps the install folder and the
+    // selected tasks; uninstalling it first would erase both.
+    Result := MsgBox(Message, mbConfirmation, MB_YESNO) = IDYES;
   end;
 end;
-

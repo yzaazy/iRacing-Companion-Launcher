@@ -2,7 +2,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] functions; a panic there fails the test
 
-use iracing_companion_launcher::core::config::{ConfigStore, SetPathError, config_key};
+use iracing_companion_launcher::core::config::{ConfigStore, config_key};
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -288,24 +288,35 @@ fn every_boolean_word_in_any_case() {
 }
 
 #[test]
-fn lone_percent_is_rejected_like_configparser_set() {
+fn percent_in_a_path_is_saved_escaped() {
     let dir = tempfile::tempdir().unwrap();
     let mut store = ConfigStore::load(dir.path());
-    // configparser.set raises ValueError: nothing stored, nothing written.
-    assert!(matches!(
-        store.set_app_path("fanatec", r"C:\100% Racing\Fanatec.exe"),
-        Err(SetPathError::Refused)
-    ));
-    assert!(!dir.path().join("config.ini").exists());
+    // Every `%` is written as `%%`, which configparser (and so v2.3.2) reads back as `%`.
+    store
+        .set_app_path("fanatec", r"C:\100% Racing\Fanatec.exe")
+        .unwrap();
+    store.set_app_path("simhub", r"C:\a%%b\%(x)s.exe").unwrap();
+    assert_eq!(
+        config_bytes(dir.path()),
+        b"[AppPaths]\r\nfanatec = C:\\100%% Racing\\Fanatec.exe\r\nsimhub = C:\\a%%%%b\\%%(x)s.exe\r\n\r\n[Settings]\r\n\r\n"
+    );
+
+    // Read back as picked, from the store and after a reload.
+    for name in ["100% Racing.exe", "a%%b.exe", "%(x)s.exe"] {
+        let exe = dir.path().join(name);
+        fs::write(&exe, b"").unwrap();
+        let exe = exe.to_str().unwrap();
+        store.set_app_path("fanatec", exe).unwrap();
+        assert_eq!(store.app_path("fanatec").as_deref(), Some(exe));
+        assert_eq!(
+            ConfigStore::load(dir.path()).app_path("fanatec").as_deref(),
+            Some(exe)
+        );
+    }
+
+    // A setting configparser refuses is still dropped, as `config.set` raised.
     store.set_setting("selected_game", "50% off");
     assert_eq!(store.setting("selected_game"), None);
-
-    // An escaped percent is stored raw and read back unescaped.
-    let exe = dir.path().join("100% Racing.exe");
-    fs::write(&exe, b"").unwrap();
-    let escaped = exe.to_str().unwrap().replace('%', "%%");
-    store.set_app_path("fanatec", &escaped).unwrap();
-    assert_eq!(store.app_path("fanatec").as_deref(), exe.to_str());
 }
 
 #[test]
@@ -315,11 +326,8 @@ fn missing_directory_loads_empty_and_save_fails() {
     let mut store = ConfigStore::load(&gone);
     assert_eq!(store.setting("selected_game"), None);
     assert!(store.save().is_err());
-    // configparser accepts the value; only the write fails.
-    assert!(matches!(
-        store.set_app_path("fanatec", r"C:\x.exe"),
-        Err(SetPathError::Save(_))
-    ));
+    // The value is stored; only the write fails.
+    assert!(store.set_app_path("fanatec", r"C:\x.exe").is_err());
     assert!(!gone.exists());
 }
 
