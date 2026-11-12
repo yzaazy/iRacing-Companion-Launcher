@@ -16,3 +16,6 @@ installer_output/
 
 # User-specific config
 config.ini
+
+# Personal Claude Code settings
+.claude/settings.local.json
