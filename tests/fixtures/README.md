@@ -50,7 +50,12 @@ The transcripts name the backend calls by the Python method names (`get_child_na
 
 `tests/app_transcripts.rs` replays every scenario against the Rust controller and requires the same transcript and end state.
 
-Edited by hand since, for deliberate changes from v2.3.2 (`docs/behaviour.md`): for change 9 ([#8](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/8)), the `All apps launched!` line became the warning summary in `launch_one_fails`, `launch_path_gone` and `close_not_found_running_double_close`, and was removed from `launch_nothing_selected_with_game` and `launch_nothing_selected_then_none`.
+Scenarios were edited by hand after the capture, for deliberate changes from v2.3.2 (`docs/behaviour.md`, "Changes from v2.3.2"). `close_not_found_running`, recorded as `close_not_found_running_double_close`:
+
+- ends with the labels at `(6)` where Python left them stale at `(7)`, because the end of a sequence now recomputes them (change 9, [#11](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/11));
+- asks `is_app_running` instead of a first `close_app`, and logs `SimHub closed` instead of `SimHub was not running` (change 10, [#7](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/7)).
+
+For change 13 ([#8](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/8)), the `All apps launched!` line became the warning summary in `launch_one_fails`, `launch_path_gone` and `close_not_found_running`, and was removed from `launch_nothing_selected_with_game` and `launch_nothing_selected_then_none`.
 
 ## ui/
 
