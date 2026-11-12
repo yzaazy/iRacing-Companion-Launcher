@@ -1,0 +1,115 @@
+# On a pushed v* tag on a commit on main: gate, release build, installer, and a draft GitHub release with the
+# installer attached. The owner tests the installer, edits the notes and publishes the draft
+# by hand; publishing is what triggers the Discord announcement.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: release-${{ github.ref }}
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ github.ref_name }}
+  GH_TOKEN: ${{ github.token }}
+  ISCC: C:\Program Files (x86)\Inno Setup 6\ISCC.exe
+  EXE: target\release\iracing-companion-launcher.exe
+  INSTALLER: installer_output\iRacing_Companion_Launcher_Setup.exe
+
+jobs:
+  release:
+    name: Draft release
+    runs-on: windows-latest
+    timeout-minutes: 90
+    # Each run step is PowerShell, which does not stop on a failing native command: every
+    # one is checked through $LASTEXITCODE.
+    steps:
+      # Full history, so the next step can see whether the tagged commit is on main.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check the tagged commit is on main
+        run: |
+          git merge-base --is-ancestor HEAD origin/main
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::$env:TAG points at $(git rev-parse --short HEAD), which is not on main; releases are made only from main"
+              exit 1
+          }
+
+      - name: Install the pinned toolchain
+        run: rustup toolchain install
+
+      - name: Check the tag and that no release exists for it
+        run: |
+          $version = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages[0].version
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if ($env:TAG -ne "v$version") {
+              Write-Host "::error::Tag $env:TAG does not match version $version in Cargo.toml"
+              exit 1
+          }
+          # Also finds a draft, which the API would otherwise let a second draft duplicate.
+          gh release view $env:TAG *> $null
+          if ($LASTEXITCODE -eq 0) {
+              Write-Host "::error::A release for $env:TAG already exists; delete it to rerun"
+              exit 1
+          }
+          exit 0
+
+      # The cache CI saved on main; a tag run only reads it.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: gate
+          save-if: false
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: Audit dependencies
+        run: cargo audit
+
+      - name: Gate
+        run: pwsh tools/gate.ps1
+
+      - name: Release build
+        run: cargo build --release
+
+      - name: Check the exe's version
+        run: |
+          $product = (Get-Item -LiteralPath $env:EXE).VersionInfo.ProductVersion
+          if ("v$product" -ne $env:TAG) {
+              Write-Host "::error::The exe's ProductVersion is '$product', the tag is $env:TAG"
+              exit 1
+          }
+
+      # Unlike `tools/gate.ps1 -Release`, which skips the installer when Inno Setup is
+      # missing, this step installs it or fails.
+      - name: Install Inno Setup 6
+        run: |
+          if (-not (Test-Path -LiteralPath $env:ISCC)) {
+              choco install innosetup --no-progress -y
+              if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+          if (-not (Test-Path -LiteralPath $env:ISCC)) {
+              Write-Host "::error::Inno Setup 6 not found at $env:ISCC"
+              exit 1
+          }
+
+      - name: Build the installer
+        run: |
+          & $env:ISCC 'windows installer.iss'
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if (-not (Test-Path -LiteralPath $env:INSTALLER)) {
+              Write-Host "::error::ISCC reported success but wrote no $env:INSTALLER"
+              exit 1
+          }
+
+      - name: Create the draft release
+        run: |
+          gh release create $env:TAG $env:INSTALLER --draft --verify-tag --title $env:TAG --generate-notes
+          if ($LASTEXITCODE -ne 0) { exit 1 }

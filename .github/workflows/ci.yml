@@ -1,0 +1,50 @@
+# The gate (tools/gate.ps1) on every push to main and every pull request. CI runs the
+# script itself, so it cannot drift from the local gate.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Gate
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      # Installs the toolchain pinned in rust-toolchain.toml, with rustfmt and clippy.
+      - name: Install the pinned toolchain
+        run: rustup toolchain install
+
+      # Only main writes the cache; pull requests restore it.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: gate
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Gate
+        run: pwsh tools/gate.ps1
+
+      # The parity renders and diffs, so a UI failure can be looked at.
+      - name: Upload UI diffs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-diff
+          path: |
+            target/ui-diff/
+            target/ui-snapshots/
+            tests/snapshots/*.diff.png
+            tests/snapshots/*.new.png
+          if-no-files-found: ignore

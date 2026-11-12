@@ -269,3 +269,15 @@ $env:UPDATE_SNAPSHOTS = 1; cargo test --test ui parity; Remove-Item Env:UPDATE_S
 - **Release exe**: `cargo build --release` writes `target\release\iracing-companion-launcher.exe`, one self-contained file (`opt-level = "s"`, fat LTO, stripped).
 - **Installer**: `windows installer.iss` (Inno Setup 6) reads the version back from the exe's `ProductVersion`, stops with an error when the exe is missing or has none, installs it as `{app}\iRacing Companion Launcher.exe`, and writes `installer_output\iRacing_Companion_Launcher_Setup.exe`. On upgrade it runs the previous version's uninstaller first and removes the `_internal` folder a v2.x PyInstaller install may have left behind.
 - The release procedure is the `release` skill (`.claude/skills/release/SKILL.md`).
+
+## CI
+
+GitHub Actions, every job on `windows-latest`, with the toolchain from `rust-toolchain.toml`:
+
+- **CI** (`.github/workflows/ci.yml`), on every pull request and push to `main`: runs `tools/gate.ps1` itself, so CI and the local gate cannot drift. On failure it uploads `target/ui-diff/`, `target/ui-snapshots/` and the snapshot `*.diff.png` / `*.new.png` files as the `ui-diff` artifact. Only runs on `main` save the cargo cache.
+- **Release** (`.github/workflows/release.yml`), on a pushed `v*` tag: fails when the tagged commit is not on `main`, when the tag is not `v` + `version` from `Cargo.toml` or a release (draft included) already exists for it; then `cargo audit`, the gate, `cargo build --release`, a check that the exe's `ProductVersion` equals the tag, Inno Setup 6 (installed through Chocolatey when the image lacks it, and a failure rather than the local gate's skip when it cannot be found), the installer into `installer_output\`, and a **draft** release with the installer and generated notes. The owner tests the installer and publishes the draft by hand, which is what triggers the Discord announcement.
+- **Audit** (`.github/workflows/audit.yml`), weekly and on demand: `cargo audit`.
+
+CI cannot test against the real companion apps and games; that check stays manual before a draft is published.
+
+`main` is protected by the "Protect Main" ruleset: no deletion, no force push, changes only through pull requests, which need the green `Gate` check and an approval from the code owner (`.github/CODEOWNERS`: the repository owner, the only account whose approval counts). Admins may bypass it only from a pull request, which is how the owner merges their own: GitHub does not let an author approve their own pull request.
