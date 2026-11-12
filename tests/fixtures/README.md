@@ -50,9 +50,14 @@ The transcripts name the backend calls by the Python method names (`get_child_na
 
 `tests/app_transcripts.rs` replays every scenario against the Rust controller and requires the same transcript and end state.
 
-Edited by hand since the capture, for deliberate changes from v2.3.2 ([docs/behaviour.md](../../docs/behaviour.md#changes-from-v232)):
+One scenario was edited by hand after the capture, for two deliberate changes from v2.3.2 (`docs/behaviour.md`, "Changes from v2.3.2"). `close_not_found_running`, recorded as `close_not_found_running_double_close`:
 
-- Change 9 ([#10](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/10)), a saved game that is not found starts as None: in `startup_saved_settings`, `launch_game_not_configured` and `browse_game` the end state has `selected_game` null and the Launch label `Launch apps (N)`, and the last two no longer look the game up at the end of Launch or log `Skipping <game> - not configured`. `selected_game_gone_at_launch_is_skipped` keeps that line, as v2.3.2 recorded it, under test.
+- ends with the labels at `(6)` where Python left them stale at `(7)`, because the end of a sequence now recomputes them (change 9, [#11](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/11));
+- asks `is_app_running` instead of a first `close_app`, and logs `SimHub closed` instead of `SimHub was not running` (change 10, [#7](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/7)).
+
+Three more scenarios were edited by hand for a later change from v2.3.2 ([docs/behaviour.md](../../docs/behaviour.md#changes-from-v232)):
+
+- Change 12 ([#10](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/10)), a saved game that is not found starts as None: in `startup_saved_settings`, `launch_game_not_configured` and `browse_game` the end state has `selected_game` null and the Launch label `Launch apps (N)`, and the last two no longer look the game up at the end of Launch or log `Skipping <game> - not configured`. `selected_game_gone_at_launch_is_skipped` keeps that line, as v2.3.2 recorded it, under test.
 
 ## ui/
 
