@@ -27,12 +27,12 @@ fn read_repo_file(rel: &str) -> String {
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
-/// `docs/rewrite/fixtures.json`, read once.
+/// `tests/fixtures/ui/fixtures.json`, read once.
 pub(crate) fn fixtures() -> &'static BTreeMap<String, ViewState> {
     static FIXTURES: OnceLock<BTreeMap<String, ViewState>> = OnceLock::new();
     FIXTURES.get_or_init(|| {
         let all: BTreeMap<String, ViewState> =
-            serde_json::from_str(&read_repo_file("docs/rewrite/fixtures.json"))
+            serde_json::from_str(&read_repo_file("tests/fixtures/ui/fixtures.json"))
                 .unwrap_or_else(|e| panic!("fixtures.json does not match ViewState: {e}"));
         assert_eq!(
             all.keys().map(String::as_str).collect::<Vec<_>>(),
@@ -50,10 +50,12 @@ pub(crate) fn fixture(name: &str) -> ViewState {
         .clone()
 }
 
-/// `docs/rewrite/ui-spec.json`, read once.
+/// `tests/fixtures/ui/ui-spec.json`, read once.
 pub(crate) fn spec() -> &'static Value {
     static SPEC: OnceLock<Value> = OnceLock::new();
-    SPEC.get_or_init(|| serde_json::from_str(&read_repo_file("docs/rewrite/ui-spec.json")).unwrap())
+    SPEC.get_or_init(|| {
+        serde_json::from_str(&read_repo_file("tests/fixtures/ui/ui-spec.json")).unwrap()
+    })
 }
 
 /// One wgpu device for the whole process, created on the first render. Every harness renders on

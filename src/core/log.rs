@@ -1,4 +1,4 @@
-//! Ports `core/activity_logger.py`: builds timestamped activity log lines.
+//! Builds timestamped activity log lines.
 
 use crate::model::{LogLevel, LogLine};
 use windows::Win32::Foundation::SYSTEMTIME;

@@ -36,7 +36,7 @@ fn tracked_create_time(path: &Path, key: &str) -> f64 {
 }
 
 // ---------------------------------------------------------------------------
-// Name-based functions (process_manager.py)
+// Name-based functions
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -96,7 +96,7 @@ fn shell_open_reports_a_missing_target() {
 }
 
 // ---------------------------------------------------------------------------
-// Tracker (process_tracker.py)
+// Tracker
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -108,7 +108,7 @@ fn launch_and_track_then_close() {
     assert!(t.launch_and_track(KEY, &exe, WAIT, LaunchMethod::Direct));
     assert!(t.is_tracked(KEY));
     assert_eq!(t.is_tracked_running(KEY), (true, 0));
-    assert!(t.get_child_names(KEY).is_empty());
+    assert!(t.child_names(KEY).is_empty());
     assert_eq!(read_state(&d.state_file())[KEY]["exe_path"], exe.as_str());
 
     assert!(t.close_tracked(KEY));
@@ -131,10 +131,7 @@ fn tree_is_counted_named_and_closed_together() {
         "expected child and grandchild"
     );
     // Depth first, as psutil's children(recursive=True).
-    assert_eq!(
-        t.get_child_names(KEY),
-        [d.name("child"), d.name("grandchild")]
-    );
+    assert_eq!(t.child_names(KEY), [d.name("child"), d.name("grandchild")]);
 
     assert!(t.close_tracked(KEY));
     for role in ["root", "child", "grandchild"] {
@@ -533,7 +530,7 @@ fn python_state_file_is_read_and_rewritten_byte_for_byte() {
         .iter()
         .map(|n| n.as_str().unwrap().replace(python_prefix, &d.prefix))
         .collect();
-    assert_eq!(t.get_child_names(KEY), python_names);
+    assert_eq!(t.child_names(KEY), python_names);
 
     // Every save writes the bytes Python wrote at the same step.
     assert!(t.close_tracked(KEY));

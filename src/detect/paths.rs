@@ -1,4 +1,4 @@
-//! Ports the common-path search in `utils/path_finder.py`.
+//! The common-path search: an app's or game's exe at its usual install locations.
 
 use std::path::Path;
 

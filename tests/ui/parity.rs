@@ -16,7 +16,7 @@ fn reference(state: &str) -> &'static RgbImage {
         STATES
             .iter()
             .map(|&s| {
-                let path = repo_path(&format!("docs/rewrite/reference/{s}.png"));
+                let path = repo_path(&format!("tests/fixtures/ui/reference/{s}.png"));
                 let img = image::open(&path)
                     .unwrap_or_else(|e| panic!("missing reference {}: {e}", path.display()));
                 (s, img.to_rgb8())

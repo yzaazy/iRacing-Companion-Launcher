@@ -148,7 +148,7 @@ fn subtitle(app: &AppCard) -> String {
     }
 }
 
-/// `GameCard._wrap_text`: names over 18 characters break at the last space before 18, or at 18.
+/// A game card's name: names over 18 characters break at the last space before 18, or at 18.
 pub fn wrap_game_name(name: &str) -> String {
     let chars: Vec<char> = name.chars().collect();
     if chars.len() <= GAME_NAME_WRAP {

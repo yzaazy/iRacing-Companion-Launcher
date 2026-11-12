@@ -1,4 +1,4 @@
-//! Ports `core/app_definitions.py`: the companion apps and racing games the launcher knows.
+//! The companion apps and racing games the launcher knows.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppDef {
@@ -73,7 +73,7 @@ pub fn apps() -> Vec<AppDef> {
                 "Garage61.lnk",
                 "garage61.lnk",
             ],
-            // Python leaves this empty and AppManager._initialize_apps fills it in.
+            // The Python app left this empty and filled it in when its app manager started.
             paths: vec![garage61],
             needs_shell_launch: false,
         },

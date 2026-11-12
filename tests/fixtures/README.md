@@ -1,17 +1,19 @@
 # Test fixtures
 
-Files captured from the Python app (v2.3.2), the reference the Rust port copies. The Python app is being removed; these files keep its answers.
+Files captured from the Python app v2.3.2, the app the Rust port replaces. They keep its answers, so the tests can hold the Rust app to them without Python. The Python app as released is at tag `v2.3.2`. Commit `d0a9ffb` is the last one that has the Python app together with the fixture generators and `tools/capture_reference.py`; `git show d0a9ffb:<path>` shows any of them.
+
+Nothing here runs during `cargo test` or `tools/gate.ps1`: the tests read the committed files and never invoke Python.
 
 ## process/
 
-`process_state.json` as the Python `ProcessTracker` (`iracing_launcher_app/managers/process_tracker.py`) wrote it. Captured on 2026-11-12 with Python 3.13.14 and psutil 7.1.0, app v2.3.2, at commit `e45ffe5`, by:
+`process_state.json` as the Python `ProcessTracker` wrote it. Captured on 2026-11-12 with Python 3.13.14 and psutil 7.1.0, app v2.3.2, at commit `e45ffe5`, by `capture_state_files.py`:
 
 ```
 rustc --edition 2021 -C debuginfo=0 -o <scratch>\dummy.exe tests/fixtures/process/dummy.rs
 python tests/fixtures/process/capture_state_files.py <scratch>\dummy.exe tests/fixtures/process
 ```
 
-The script drives the real Python tracker against copies of the dummy process only, launched by a relative path from a temp directory named `dümmy 日本 😀`, so the files hold no machine path and pin the escaping of non-ASCII and astral characters.
+The script loaded the app's own `process_tracker.py` and drove it against copies of the dummy process only, launched by a relative path from a temp directory named `dümmy 日本 😀`, so the files hold no machine path and pin the escaping of non-ASCII and astral characters. It needed the Python app, so it was deleted with it; its last version is in commit `d0a9ffb` (`git show d0a9ffb:tests/fixtures/process/capture_state_files.py`).
 
 | File | What Python wrote |
 |---|---|
@@ -20,23 +22,45 @@ The script drives the real Python tracker against copies of the dummy process on
 | `python_dropped.json` | After the second dummy exited and a new tracker dropped it on load. |
 | `python_view.json` | Not a state file: the dummy name prefix, what the tracker reported for the tree, and the PID and `repr(create_time)` it stored per key. |
 
-`create_times.json` pins the conversion from a process's creation `FILETIME` to psutil's `create_time()` float, which upgrading users have in their state file. Captured on 2026-11-12 with Python 3.13.14 and psutil 7.1.0, at commit `d132f0d`, by:
+`create_times.json` pins the conversion from a process's creation `FILETIME` to psutil's `create_time()` float, which upgrading users have in their state file. Captured on 2026-11-12 with Python 3.13.14 and psutil 7.1.0, at commit `d132f0d`, by `capture_create_times.py`, which needs only Python's standard library and psutil and still runs (Windows, `pip install psutil`):
 
 ```
 python tests/fixtures/process/capture_create_times.py tests/fixtures/process/create_times.json
 ```
 
-For the script's own Python process and five child Python processes it started and killed itself, each row holds the raw creation `FILETIME` from `GetProcessTimes` (via `ctypes`) as one 64-bit integer and `repr(psutil.Process(pid).create_time())`. `filetime_conversion_matches_psutil` in `src/process/sys.rs` feeds each `FILETIME` through the production conversion and requires the recorded float bit for bit.
+For the script's own Python process and five child Python processes it started and killed itself, each row holds the raw creation `FILETIME` from `GetProcessTimes` (via `ctypes`) as one 64-bit integer and `repr(psutil.Process(pid).create_time())`. `filetime_conversion_matches_psutil` in `src/process/sys.rs` feeds each `FILETIME` through the production conversion and requires the recorded float bit for bit. A new capture holds other processes' times, so rerunning it replaces the committed rows rather than reproducing them; the gate does not need it.
 
 The PIDs and creation times in the state files belong to processes that no longer exist. `tests/process_layer.rs` swaps them for live dummies' numbers, which Rust formats exactly as Python did (`python_numbers_are_formatted_like_rust`), and checks that the Rust tracker reads each file and writes the same bytes at the same step. `.gitattributes` keeps the CRLF line endings.
 
 ## core/
 
-configparser input and output, written by `core/generate.py`.
+configparser input and output, and the app definitions, written on 2026-11-11 (commit `feadc36`) by `generate.py` with Python 3.13's `configparser` against the app v2.3.2; the commit does not record the patch version (the other captures on that machine used 3.13.14). It needed no library beyond the standard library, but imported the app's `app_definitions.py`, so it was deleted with the app; its last version is in commit `d0a9ffb` (`git show d0a9ffb:tests/fixtures/core/generate.py`). It:
+
+- dumped the app's `APPS` and `RACE_GAMES` into `definitions.json` (`needs_shell_launch` defaulting to `false`, as the app read it), which `tests/core_definitions.rs` compares with the Rust definitions;
+- wrote `app_written.ini` and `cp1252.ini` with `configparser` exactly as the app's `save_config` did, in the locale encoding (Windows-1252), and the hand-written inputs `comments.ini`, `interpolation.ini`, `parse_error.ini`, `lf_only.ini` and `empty.ini` byte for byte (`missing.ini` is absent on purpose);
+- for each of those eight, loaded it as the app did (locale encoding, a parse error caught and ignored, the `AppPaths` and `Settings` sections added when missing) and wrote `<name>.expected.json`, the defaults, the sections and what `get` and `getboolean` return for every key and for `missing_key` (or `{"error": true}`), and `<name>.saved.ini`, what `save_config` writes after that load, in UTF-8 because the Rust app writes UTF-8.
+
+`.gitattributes` turns off line-ending conversion for every file here.
 
 ## app/
 
-Controller transcripts, written by `app/capture_transcripts.py`.
+`transcripts.json` holds 29 controller scenarios recorded on 2026-11-11 (commit `051a556`) by `capture_transcripts.py` from the app's real controller (`iRacingLauncherGUI`) with Python 3.13, CustomTkinter 5.2.2 and psutil 7.1.0 (the versions on the capture machine; the commit does not record them). The script replaced the app and game managers, the process tracker, the config manager, the logger and the file dialog with fakes that answer from each scenario's script and record every call, put tripwires on every way to start or kill a process, drove the window through each scenario's steps, and wrote per scenario the transcript (calls, status changes, log lines, dialogs) and the end state. It needed the Python app, so it was deleted with it; its last version is in commit `d0a9ffb` (`git show d0a9ffb:tests/fixtures/app/capture_transcripts.py`).
+
+The transcripts name the backend calls by the Python method names (`get_child_names`, ...); `tests/app_support/mod.rs` maps them to the Rust names. `files/` holds the files the browse scenarios pick in the file dialog; the paths in `transcripts.json` point at them.
+
+`tests/app_transcripts.rs` replays every scenario against the Rust controller and requires the same transcript and end state.
+
+## ui/
+
+The window as the Python app v2.3.2 drew it, at 1200x700 and 96 DPI. The layout tests (`tests/ui/layout.rs`) and the screenshot parity tests (`tests/ui/parity.rs`) compare the Rust window against these files.
+
+| File | What it is |
+|---|---|
+| `fixtures.json` | The five fixture states (`idle`, `mixed`, `none-selected`, `all-missing`, `log-full`): what every card, checkbox, radio button and log line shows. Written by hand; the capture script and the Rust tests both drive the window into these states. |
+| `ui-spec.json` | Everything measured from the running Python window per state: widget rectangles, painted boxes, text placement and ink, fonts, colours, shape geometry, and notes on what the numbers alone do not explain. `_readme` inside describes the structure, `environment` the machine (Windows 11, Python 3.13.14, CustomTkinter 5.2.2, Tk 8.6.15). |
+| `reference/<state>.png` | The window's client area in each state, captured with `PrintWindow`. |
+
+`ui-spec.json` and the screenshots were measured and captured on 2026-11-11 from the running Python app v2.3.2 by `tools/capture_reference.py`, which built the window from the app's own UI modules, drove it into each state of `fixtures.json` and closed it again. That script needed the Python app, so it was deleted with it; its last version is in commit `d0a9ffb` (`git show d0a9ffb:tools/capture_reference.py`).
 
 ## Frozen answers in test code
 

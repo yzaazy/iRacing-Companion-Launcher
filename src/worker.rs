@@ -1,12 +1,14 @@
-//! Runs launch and close sequences off the UI thread (the deliberate difference from `ui/main_window.py`).
+//! Runs launch and close sequences off the UI thread; the Python app (up to v2.3.2) ran them on
+//! the Tk thread (`docs/behaviour.md`, "Changes from v2.3.2": "The window stays responsive during
+//! Launch and Close").
 //!
-//! [`Sequencer`] holds `launch_apps`, `_launch_selected_game` and `close_apps`
+//! [`Sequencer`] holds the Python app's launch, game launch and close sequences
 //! line for line; [`Worker`] runs it on a background thread, one command at a
 //! time in the order sent, and [`Inline`] runs it on the caller's thread for tests.
 //!
 //! Python reads two things from the window mid-sequence: each card's checkbox,
-//! and the selected game card's status in `close_apps`. Checkboxes arrive
-//! captured in the [`Command`] (deliberate difference 1). The game status is
+//! and the selected game card's status in the close sequence. Checkboxes arrive
+//! captured in the [`Command`] (same change from v2.3.2). The game status is
 //! mirrored here: it changes only at startup (the seed), through this
 //! sequencer's own events, and through Browse, which only turns `not_found`
 //! into `idle` and so never changes the one question asked of it, "is it
@@ -126,7 +128,8 @@ impl Out<'_> {
     }
 }
 
-/// `launch_apps` ([main_window.py:368-429]). `apps` are the checked cards at the press.
+/// The launch sequence: the checked apps, then the selected game. `apps` are the checked cards
+/// at the press.
 fn launch_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: Option<&str>) {
     out.divider();
     out.log(LogLevel::Launch, "Starting launch sequence...");
@@ -146,7 +149,7 @@ fn launch_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: 
 
         if backend.is_app_running(&app) {
             out.log(LogLevel::Info, &format!("Skipping {app} - already running"));
-            let children = backend.get_child_names(&app);
+            let children = backend.child_names(&app);
             out.helpers("helpers", &children);
             out.app(&app, Status::Running, children.len());
             continue;
@@ -157,7 +160,7 @@ fn launch_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: 
 
         if backend.launch_app(&app, &path) {
             out.log(LogLevel::Success, &format!("{app} started successfully"));
-            let children = backend.get_child_names(&app);
+            let children = backend.child_names(&app);
             out.helpers("helpers", &children);
             out.app(&app, Status::Running, children.len());
         } else {
@@ -178,7 +181,8 @@ fn launch_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: 
     (out.emit)(Event::LaunchFinished);
 }
 
-/// `_launch_selected_game` ([main_window.py:431-454]).
+/// Launches the selected game at the end of the launch sequence, unless it is not found or
+/// already running.
 fn launch_selected_game(backend: &mut dyn Backend, out: &mut Out, game: &str) {
     let Some(path) = backend.find_game_path(game) else {
         out.log(
@@ -213,7 +217,7 @@ fn launch_selected_game(backend: &mut dyn Backend, out: &mut Out, game: &str) {
     }
 }
 
-/// `close_apps` ([main_window.py:456-517]).
+/// The close sequence: the checked apps, then a check on the selected game if it was running.
 fn close_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: Option<&str>) {
     out.divider();
     out.log(LogLevel::Close, "Closing applications...");
@@ -226,14 +230,15 @@ fn close_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: O
         let path = backend.find_app_path(&app);
         // No detected path: the first close_app already kills a running
         // instance, so the second one below reports "was not running" and the
-        // card goes back to not-found. Ported unchanged.
+        // card goes back to not-found. A quirk carried over from v2.3.2 (`docs/behaviour.md`,
+        // "Known quirks carried over from v2.3.2").
         if path.is_none() && !backend.close_app(&app) {
             continue;
         }
 
         out.app(&app, Status::Stopping, 0);
         out.log(LogLevel::Info, &format!("Closing {app}..."));
-        let children = backend.get_child_names(&app);
+        let children = backend.child_names(&app);
         out.helpers("helpers to close", &children);
 
         if backend.close_app(&app) {

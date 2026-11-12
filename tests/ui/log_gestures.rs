@@ -540,7 +540,7 @@ fn dragging_the_thumb_keeps_it_centred_on_the_pointer() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// The keyboard (deliberate difference 10).
+// The keyboard (`docs/behaviour.md`, "Changes from v2.3.2": "Keyboard access").
 
 /// Tab stop 15 of `log-full` and of a longer log: the log, which overflows.
 const LOG_STOP: usize = 15;

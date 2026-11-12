@@ -1,6 +1,6 @@
 //! Fakes for the controller tests: a scripted backend that records every call
 //! and never touches a process, recording config and dialog wrappers, and the
-//! transcript format `tests/fixtures/app/capture_transcripts.py` writes.
+//! format of the recorded transcripts in `tests/fixtures/app/transcripts.json`.
 
 #![allow(dead_code)] // each test binary uses a different part of this module
 #![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] functions; a panic there fails the test
@@ -39,7 +39,8 @@ impl Recorder {
             .clone()
     }
 
-    /// Records what the Python `StatusCard`/`GameCard`/`ActivityLogger` wrappers record.
+    /// Records what the transcript recorder took from the Python app's cards and logger:
+    /// app and game status changes and log lines.
     pub(crate) fn event(&self, event: &Event) {
         match event {
             Event::Log(line) => {
@@ -81,7 +82,7 @@ fn strip_timestamp(text: &str) -> &str {
 
 /// Scripted answers: `script[method][name]` is a list consumed in order, the
 /// last value sticky; a missing entry gives the method's default. Defaults
-/// match the Python fakes.
+/// match the fakes the transcripts were recorded with (see `tests/fixtures/README.md`).
 pub(crate) struct FakeBackend {
     script: Value,
     counters: HashMap<(String, String), usize>,
@@ -147,7 +148,8 @@ impl Backend for FakeBackend {
     fn is_app_running(&mut self, app: &str) -> bool {
         flag(self.call("is_app_running", &[app], json!(false)))
     }
-    fn get_child_names(&mut self, app: &str) -> Vec<String> {
+    // The transcripts record this call under the Python app's method name.
+    fn child_names(&mut self, app: &str) -> Vec<String> {
         serde_json::from_value(self.call("get_child_names", &[app], json!([]))).unwrap()
     }
     fn launch_app(&mut self, app: &str, path: &str) -> bool {

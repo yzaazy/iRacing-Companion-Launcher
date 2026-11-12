@@ -1,4 +1,4 @@
-//! Ports `managers/app_manager.py` and `managers/game_manager.py`: detection, launch and close per app and game.
+//! The app and game managers: detection, launch and close per app and game.
 //!
 //! The controller and the worker reach both managers through the [`Backend`]
 //! trait, so tests can swap in a scripted fake that never touches a process.
@@ -55,7 +55,7 @@ pub trait Backend: Send {
     fn app_exe(&self, app: &str) -> Option<String>;
     fn find_app_path(&mut self, app: &str) -> Option<String>;
     fn is_app_running(&mut self, app: &str) -> bool;
-    fn get_child_names(&mut self, app: &str) -> Vec<String>;
+    fn child_names(&mut self, app: &str) -> Vec<String>;
     fn launch_app(&mut self, app: &str, path: &str) -> bool;
     fn close_app(&mut self, app: &str) -> bool;
 
@@ -205,11 +205,11 @@ impl Backend for Managers {
         is_process_running(&exe)
     }
 
-    fn get_child_names(&mut self, app: &str) -> Vec<String> {
+    fn child_names(&mut self, app: &str) -> Vec<String> {
         if self.app_def(app).is_none() {
             return Vec::new();
         }
-        self.tracker.get_child_names(app)
+        self.tracker.child_names(app)
     }
 
     fn launch_app(&mut self, app: &str, path: &str) -> bool {

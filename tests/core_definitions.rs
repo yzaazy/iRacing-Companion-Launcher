@@ -1,4 +1,4 @@
-//! The definitions equal `core/app_definitions.py`, dumped by tests/fixtures/core/generate.py.
+//! The definitions equal the Python app's up to v2.3.2, dumped into `tests/fixtures/core/definitions.json`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] functions; a panic there fails the test
 
@@ -41,7 +41,7 @@ fn apps_match_python_in_order() {
             app.name
         );
         if app.name == "Garage61" {
-            // Empty in app_definitions.py; AppManager fills it from %APPDATA%.
+            // Empty in the Python definitions; its app manager filled it from %APPDATA%.
             assert!(strings(&py["paths"]).is_empty());
         } else {
             assert_eq!(app.paths, strings(&py["paths"]), "{}: paths", app.name);

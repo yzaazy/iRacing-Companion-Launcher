@@ -1,4 +1,4 @@
-//! Ports `utils/steam_registry.py`: Steam install check through the uninstall registry key.
+//! Steam install check through the uninstall registry key.
 
 use windows::Win32::Foundation::ERROR_SUCCESS;
 use windows::Win32::System::Registry::{

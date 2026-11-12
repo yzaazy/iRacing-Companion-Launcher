@@ -128,7 +128,7 @@ impl<'de> Deserialize<'de> for MaybeState {
     }
 }
 
-/// Python's `_load`: a missing file, unreadable file, invalid JSON (UTF-8 BOM
+/// Loads the state file as the Python app did: a missing file, unreadable file, invalid JSON (UTF-8 BOM
 /// included) or a non-object all mean an empty state. Nothing is written back.
 pub(super) fn load(path: &std::path::Path) -> State {
     let Ok(bytes) = std::fs::read(path) else {

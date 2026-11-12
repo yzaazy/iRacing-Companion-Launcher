@@ -1,5 +1,5 @@
-//! Replays the golden transcripts recorded from the Python controller
-//! (`tests/fixtures/app/capture_transcripts.py`) against the Rust controller
+//! Replays the golden transcripts recorded from the Python controller up to
+//! v2.3.2 (`tests/fixtures/app/transcripts.json`) against the Rust controller
 //! and worker with a fake backend, and asserts identical transcripts and end
 //! states. Sequences run inline here so the order is deterministic.
 

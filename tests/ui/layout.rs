@@ -1,5 +1,5 @@
 //! The layout at 1200x700 reproduces every measured element of every fixture state in
-//! `docs/rewrite/ui-spec.json`: widget rects, painted boxes, text placement, the log's wrapping,
+//! `tests/fixtures/ui/ui-spec.json`: widget rects, painted boxes, text placement, the log's wrapping,
 //! scroll position and scrollbar. It reads `ui::geometry::geometry`, the same geometry `draw` paints.
 
 use crate::support::{WINDOW, fixtures, spec, with_ctx};

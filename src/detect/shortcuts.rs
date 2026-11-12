@@ -1,4 +1,4 @@
-//! Ports the Start Menu search in `utils/path_finder.py`.
+//! The Start Menu search: an app's or game's exe found through its Start Menu shortcut.
 
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;

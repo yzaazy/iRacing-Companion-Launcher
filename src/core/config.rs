@@ -1,4 +1,5 @@
-//! Ports `core/config_manager.py`: `config.ini` in Python `configparser` format.
+//! The config store: `config.ini` in Python `configparser` format, as the Python app up to
+//! v2.3.2 wrote it.
 //!
 //! The reader, interpolation and writer follow `configparser.ConfigParser` with
 //! its defaults (Python 3.13): `=` and `:` delimiters, `#` and `;` full-line
@@ -43,7 +44,7 @@ enum ReadError {
     NotABoolean,
 }
 
-/// `ConfigManager`: the parsed `config.ini` plus the directory it lives in.
+/// The parsed `config.ini` plus the directory it lives in (the Python app's `ConfigManager`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConfigStore {
     dir: PathBuf,
@@ -69,7 +70,9 @@ impl SharedConfig {
     }
 }
 
-/// Where `config.ini` and `process_state.json` live (contracts.md, "Config and state location").
+/// Where `config.ini` and `process_state.json` live: `IRCL_CONFIG_DIR` when set, `target/dev-config`
+/// in debug builds, otherwise `%APPDATA%\iRacingCompanionLauncher`, as the Python app used
+/// (`docs/architecture.md`, "Config and state location").
 pub fn resolve_config_dir() -> PathBuf {
     let dir = if let Some(dir) = non_empty_env("IRCL_CONFIG_DIR") {
         PathBuf::from(dir)
@@ -95,7 +98,7 @@ fn non_empty_env(name: &str) -> Option<std::ffi::OsString> {
     std::env::var_os(name).filter(|v| !v.is_empty())
 }
 
-/// `ConfigManager.get_config_key`: lowercase, spaces to underscores.
+/// The config key of an app or game name: lowercase, spaces to underscores.
 pub fn config_key(name: &str) -> String {
     name.to_lowercase().replace(' ', "_")
 }
@@ -143,7 +146,7 @@ impl ConfigStore {
     /// `getboolean('Settings', key, fallback=...)`. Python raises on a value
     /// that is not a boolean word; the port returns the fallback instead.
     pub fn bool_setting(&self, key: &str, fallback: bool) -> bool {
-        match self.get_boolean(SETTINGS, key) {
+        match self.boolean(SETTINGS, key) {
             Ok(Some(value)) => value,
             _ => fallback,
         }
@@ -155,8 +158,9 @@ impl ConfigStore {
     }
 
     pub fn save(&self) -> io::Result<()> {
-        // Python's text mode writes CRLF line endings. UTF-8 is deliberate
-        // difference 6 in behaviour.md (Python used the ANSI code page).
+        // Python's text mode writes CRLF line endings. UTF-8 is a change from v2.3.2, which used
+        // the ANSI code page (`docs/behaviour.md`, "Changes from v2.3.2": "`config.ini` is
+        // written as UTF-8").
         let text = self.render().replace('\n', "\r\n");
         replace_atomically(&self.dir.join(CONFIG_FILENAME), text.as_bytes())
     }
@@ -178,7 +182,7 @@ impl ConfigStore {
     }
 
     /// `ConfigParser.getboolean`; `Err` where Python raises.
-    fn get_boolean(&self, section: &str, key: &str) -> Result<Option<bool>, ReadError> {
+    fn boolean(&self, section: &str, key: &str) -> Result<Option<bool>, ReadError> {
         let Some(value) = self.get(section, key)? else {
             return Ok(None);
         };
@@ -607,7 +611,7 @@ mod tests {
             }
             for (ident, want) in exp["getboolean"].as_object().unwrap() {
                 let (section, key) = ident.split_once('/').unwrap();
-                let got = store.get_boolean(section, key);
+                let got = store.boolean(section, key);
                 match want {
                     Value::Null => assert_eq!(got, Ok(None), "{name}: getboolean {ident}"),
                     Value::Bool(b) => assert_eq!(got, Ok(Some(*b)), "{name}: getboolean {ident}"),

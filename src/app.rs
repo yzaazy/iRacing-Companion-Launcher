@@ -1,6 +1,6 @@
-//! Ports `ui/main_window.py`: the controller that owns state, handles `UiAction`s and applies worker `Event`s.
+//! The controller: owns the window's state, handles `UiAction`s and applies worker `Event`s.
 //!
-//! The controller is `iRacingLauncherGUI` minus the widgets: [`ViewState`]
+//! It is the Python app's main window (up to v2.3.2) minus the widgets: [`ViewState`]
 //! stands in for the cards and buttons, and every handler makes the same
 //! state changes, config writes, saves and log lines as its Python twin. The
 //! launch and close sequences run in [`crate::worker`].
@@ -8,9 +8,9 @@
 //! ## Buttons across a queue
 //!
 //! [`ButtonState::normal`] is the Python widget state, changed
-//! exactly where Python changes them: `_update_button_text` sets both, a
+//! exactly where Python changes them: recomputing the button labels sets both, a
 //! press disables its own button, and the end of its sequence enables it
-//! unconditionally (even where `_update_button_text` would not have).
+//! unconditionally (even where the label update would not have).
 //! On top of that a button stays disabled while any command of its kind is
 //! queued or running. Python can only re-enable a button mid-sequence through
 //! `update()` re-entrancy (a checkbox clicked while the log repaints), which a
@@ -28,7 +28,7 @@ use crate::model::{AppCard, GameCard, LogLevel, Status, UiAction, ViewState};
 use crate::win::basename;
 use crate::worker::{Command, Dispatch, Event};
 
-/// The calls `main_window.py` makes on `ConfigManager` and its `config` parser.
+/// The calls the controller makes on the config store and its `configparser`-format settings.
 pub trait Settings {
     /// `config.getboolean('Settings', key, fallback=...)`.
     fn bool_setting(&self, key: &str, fallback: bool) -> bool;
@@ -163,8 +163,8 @@ impl Startup {
 }
 
 impl Controller {
-    /// `iRacingLauncherGUI.__init__` up to the first paint: builds the cards
-    /// and runs `_initialize_app_states`. `trace` sees every log line and card
+    /// What the Python window did on creation, up to the first paint: builds the cards
+    /// and runs the initial status check. `trace` sees every log line and card
     /// status this controller produces itself (tests record transcripts with it).
     pub fn startup(
         backend: &mut dyn Backend,
@@ -228,7 +228,8 @@ impl Controller {
         &self.state
     }
 
-    /// `_initialize_app_states` ([main_window.py:140-199]).
+    /// The startup check: each app's and game's status, its log line, the checkboxes and the
+    /// game selection from config, then the button labels.
     fn initialize_app_states(&mut self, backend: &mut dyn Backend) {
         self.emit(Event::Log(log::divider()));
         self.log(LogLevel::Info, "Checking application status...");
@@ -244,7 +245,7 @@ impl Controller {
                 self.settings.set_setting(&key, "False");
             } else {
                 if backend.is_app_running(&app) {
-                    let children = backend.get_child_names(&app);
+                    let children = backend.child_names(&app);
                     self.app_status(&app, Status::Running, children.len());
                     self.log(LogLevel::Success, &format!("{app} - already running"));
                     if !children.is_empty() {
@@ -319,7 +320,7 @@ impl Controller {
         any
     }
 
-    /// `_toggle_select_all` ([main_window.py:201-222]): found apps only.
+    /// The Select All / Deselect All button: found apps only.
     fn toggle_select_all(&mut self) {
         let found: Vec<(String, bool)> = self
             .state
@@ -346,7 +347,7 @@ impl Controller {
         self.update_select_all_button();
     }
 
-    /// `_update_select_all_button`: "Deselect All" only when every found app is checked.
+    /// The Select All button's label: "Deselect All" only when every found app is checked.
     fn update_select_all_button(&mut self) {
         let found: Vec<bool> = self
             .state
@@ -364,7 +365,7 @@ impl Controller {
         .to_owned();
     }
 
-    /// `_update_button_text` ([main_window.py:245-269]).
+    /// The Launch and Close labels and their enabled state, from the checked apps and the game.
     fn update_button_text(&mut self) {
         let count = self.state.apps.iter().filter(|c| c.checked).count();
         self.state.launch_label = match &self.state.selected_game {
@@ -384,7 +385,7 @@ impl Controller {
         self.state.close_enabled = self.close.enabled();
     }
 
-    /// `_on_checkbox_change`: the UI has already flipped the box.
+    /// An app's checkbox changed: the UI has already flipped the box.
     fn on_checkbox_change(&mut self, name: &str, checked: bool) {
         self.set_checked(name, checked);
         self.settings
@@ -395,7 +396,7 @@ impl Controller {
         self.update_select_all_button();
     }
 
-    /// `_on_game_selected`; the None radio passes `""`.
+    /// A game radio was selected; the None radio passes `""`.
     fn on_game_selected(&mut self, game: Option<String>) {
         self.settings
             .set_setting("selected_game", game.as_deref().unwrap_or(""));
@@ -405,7 +406,7 @@ impl Controller {
         self.update_button_text();
     }
 
-    /// `_browse_for_app` ([main_window.py:285-323]): the exact exe name, case-insensitive.
+    /// Browse on an app card: accepts the exact exe name, case-insensitive.
     fn browse_for_app(&mut self, name: &str, dialog: &mut dyn FileDialog) {
         let Some(expected) = self.app_exes.get(name).cloned() else {
             return;
@@ -444,7 +445,7 @@ impl Controller {
         self.update_select_all_button();
     }
 
-    /// `_browse_for_game` ([main_window.py:325-366]): any `.lnk`, otherwise the exact exe name.
+    /// Browse on a game card: accepts any `.lnk`, otherwise the exact exe name.
     fn browse_for_game(&mut self, name: &str, dialog: &mut dyn FileDialog) {
         let Some(expected) = self.game_exes.get(name).cloned() else {
             return;
