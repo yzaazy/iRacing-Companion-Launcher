@@ -19,3 +19,6 @@ config.ini
 
 # Personal Claude Code settings
 .claude/settings.local.json
+
+# Per-issue worktrees (claim skill)
+.claude/worktrees/
