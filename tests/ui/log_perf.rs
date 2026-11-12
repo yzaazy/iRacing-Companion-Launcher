@@ -138,15 +138,17 @@ impl Log {
 /// line in the log is 100 times larger in the long one.
 const SHORT: usize = 100;
 const LONG: usize = 10_000;
-/// Frames measured per log; the cheapest counts.
+/// Frames measured per log in a batch; the cheapest counts.
 const ROUNDS: usize = 30;
+/// Batches measured at most. The first batch within the limit passes: a frame descheduled, or a
+/// whole batch slowed by the tests running beside this one, cannot fail the test, while a cost
+/// that grows with the log's length exceeds the limit in every batch.
+const BATCHES: usize = 5;
 
-#[test]
-fn log_cost_does_not_grow_with_length() {
-    // Short and long frames alternate, so whatever else the machine is doing (other tests run
-    // beside this one) weighs on both alike, and the cheapest of each is compared.
-    let mut short = Log::new(SHORT);
-    let mut long = Log::new(LONG);
+/// The cheapest steady frame and the cheapest frame after a new line, short then long, from
+/// `ROUNDS` frames of each that alternate, so whatever else the machine is doing weighs on both
+/// alike.
+fn batch(short: &mut Log, long: &mut Log) -> [(Duration, Duration); 2] {
     let mut steady = (Duration::MAX, Duration::MAX);
     let mut append = (Duration::MAX, Duration::MAX);
     for _ in 0..ROUNDS {
@@ -157,20 +159,31 @@ fn log_cost_does_not_grow_with_length() {
         append.0 = append.0.min(short.append());
         append.1 = append.1.min(long.append());
     }
+    [steady, append]
+}
+
+#[test]
+fn log_cost_does_not_grow_with_length() {
+    let mut short = Log::new(SHORT);
+    let mut long = Log::new(LONG);
     // A frame costs about 0.5 ms with optimised dependencies, and the long log measures within
     // 5 % of the short one. This limit fails on any per-line cost above about 50 ns.
     let limit = |short: Duration| short * 3 / 2 + Duration::from_micros(250);
-    assert!(
-        steady.1 <= limit(steady.0),
-        "steady frame: {:?} at {SHORT} lines, {:?} at {LONG}",
-        steady.0,
-        steady.1
-    );
-    assert!(
-        append.1 <= limit(append.0),
-        "frame after a new line: {:?} at {SHORT} lines, {:?} at {LONG}",
-        append.0,
-        append.1
+    let mut batches = Vec::new();
+    for _ in 0..BATCHES {
+        let [steady, append] = batch(&mut short, &mut long);
+        if steady.1 <= limit(steady.0) && append.1 <= limit(append.0) {
+            return;
+        }
+        batches.push(format!(
+            "steady frame {:?} at {SHORT} lines, {:?} at {LONG}; \
+             frame after a new line {:?} at {SHORT}, {:?} at {LONG}",
+            steady.0, steady.1, append.0, append.1
+        ));
+    }
+    panic!(
+        "the long log exceeded the limit in every batch:\n{}",
+        batches.join("\n")
     );
 }
 
