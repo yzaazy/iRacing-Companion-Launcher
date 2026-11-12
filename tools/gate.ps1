@@ -15,6 +15,7 @@ $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
 function Test-Installer {
     if (-not (Test-Path -LiteralPath $iscc)) {
         Write-Host "SKIPPED: Inno Setup not installed ($iscc); installer script not compiled"
+        $global:skipped += 'installer check skipped: Inno Setup not found'
         $global:LASTEXITCODE = 0
         return
     }
@@ -43,6 +44,7 @@ if ($Release) {
     $steps['installer'] = { Test-Installer }
 }
 
+$global:skipped = @()
 foreach ($name in $steps.Keys) {
     Write-Host "== $name"
     & $steps[$name]
@@ -51,4 +53,9 @@ foreach ($name in $steps.Keys) {
         exit 1
     }
 }
-Write-Host 'GATE GREEN'
+# 'GATE GREEN' is the exact last line only when every step ran.
+if ($global:skipped) {
+    Write-Host "GATE GREEN ($($global:skipped -join '; '))"
+} else {
+    Write-Host 'GATE GREEN'
+}
