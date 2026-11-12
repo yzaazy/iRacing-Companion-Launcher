@@ -835,9 +835,9 @@
      "status": "idle"
     }
    ],
-   "selected_game": "Assetto Corsa Evo",
+   "selected_game": null,
    "select_all_label": "Select All",
-   "launch_label": "Launch with Assetto Corsa Evo (4)",
+   "launch_label": "Launch apps (4)",
    "close_label": "Close all (4)",
    "launch_enabled": true,
    "close_enabled": true
@@ -9535,17 +9535,6 @@
     "All apps launched!"
    ],
    [
-    "call",
-    "find_game_path",
-    "rFactor 2",
-    null
-   ],
-   [
-    "log",
-    "warning",
-    "Skipping rFactor 2 - not configured"
-   ],
-   [
     "log",
     "success",
     "Launch sequence complete!"
@@ -9618,9 +9607,9 @@
      "status": "not_found"
     }
    ],
-   "selected_game": "rFactor 2",
+   "selected_game": null,
    "select_all_label": "Deselect All",
-   "launch_label": "Launch with rFactor 2 (7)",
+   "launch_label": "Launch apps (7)",
    "close_label": "Close all (7)",
    "launch_enabled": true,
    "close_enabled": true
@@ -21288,17 +21277,6 @@
     "All apps launched!"
    ],
    [
-    "call",
-    "find_game_path",
-    "Assetto Corsa Evo",
-    null
-   ],
-   [
-    "log",
-    "warning",
-    "Skipping Assetto Corsa Evo - not configured"
-   ],
-   [
     "log",
     "success",
     "Launch sequence complete!"
@@ -21371,9 +21349,9 @@
      "status": "idle"
     }
    ],
-   "selected_game": "Assetto Corsa Evo",
+   "selected_game": null,
    "select_all_label": "Deselect All",
-   "launch_label": "Launch with Assetto Corsa Evo (7)",
+   "launch_label": "Launch apps (7)",
    "close_label": "Close all (7)",
    "launch_enabled": true,
    "close_enabled": true

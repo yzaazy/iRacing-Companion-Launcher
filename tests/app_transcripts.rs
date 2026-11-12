@@ -1,7 +1,8 @@
 //! Replays the golden transcripts recorded from the Python controller up to
 //! v2.3.2 (`tests/fixtures/app/transcripts.json`) against the Rust controller
 //! and worker with a fake backend, and asserts identical transcripts and end
-//! states. Sequences run inline here so the order is deterministic.
+//! states, with change 11 in `docs/behaviour.md` applied to every recorded
+//! transcript. Sequences run inline here so the order is deterministic.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] functions; a panic there fails the test
 
@@ -117,6 +118,44 @@ fn replay(scenario: &Value) -> Run {
     }
 }
 
+/// The Python transcript with change 11 in `docs/behaviour.md` applied (#13): a
+/// picked path with a `%`, where v2.3.2's `set_app_path` raised and the Browse
+/// handler stopped, is now saved, so the handler goes on as for any other path.
+fn with_percent_paths_saved(python: &[Value]) -> Vec<Value> {
+    let mut out = Vec::new();
+    let mut step = (String::new(), String::new());
+    for (i, item) in python.iter().enumerate() {
+        out.push(item.clone());
+        if item[0] == "step" {
+            step = (
+                item[1].as_str().unwrap().to_owned(),
+                item[2].as_str().unwrap_or_default().to_owned(),
+            );
+        }
+        let raised =
+            item[0] == "set_app_path" && python.get(i + 1).is_none_or(|next| next[0] == "step");
+        if !raised {
+            continue;
+        }
+        let (key, path) = (item[1].as_str().unwrap(), item[2].as_str().unwrap());
+        assert!(path.contains('%'), "set_app_path raised on {path}");
+        let (action, name) = (&step.0, &step.1);
+        if action == "browse_app" {
+            out.push(json!(["app_status", name, "idle", 0]));
+            out.push(json!(["config_set", format!("{key}_enabled"), "True"]));
+            out.push(json!(["config_save"]));
+        } else {
+            out.push(json!(["game_status", name, "idle"]));
+        }
+        out.push(json!([
+            "log",
+            "success",
+            format!("{name} path configured: {path}")
+        ]));
+    }
+    out
+}
+
 fn first_difference(expected: &[Value], actual: &[Value]) -> Option<usize> {
     (0..expected.len().max(actual.len())).find(|&i| expected.get(i) != actual.get(i))
 }
@@ -129,7 +168,8 @@ fn every_scenario_replays_the_python_transcript() {
     for scenario in &all {
         let name = scenario["name"].as_str().unwrap();
         let run = replay(scenario);
-        let expected = scenario["transcript"].as_array().unwrap();
+        let expected = with_percent_paths_saved(scenario["transcript"].as_array().unwrap());
+        let expected = expected.as_slice();
         if let Some(i) = first_difference(expected, &run.transcript) {
             let from = i.saturating_sub(3);
             failures.push(format!(
@@ -166,4 +206,66 @@ fn startup_saves_config_to_disk() {
         "{saved}"
     );
     assert!(!saved.contains("fanatec_enabled"), "{saved}");
+}
+
+/// A saved game that is not found starts as None, stays in config, and is selected again
+/// at the first startup that finds it (#10).
+#[test]
+fn saved_game_not_found_starts_as_none_and_stays_saved() {
+    let mut scenario = scenarios()
+        .into_iter()
+        .find(|s| s["name"] == "launch_game_not_configured")
+        .unwrap();
+    assert_eq!(scenario["settings"]["selected_game"], "rFactor 2");
+    let dir = tempfile::tempdir().unwrap();
+    let started = |config: ConfigStore, script: &Value| {
+        let mut backend = FakeBackend::new(script.clone(), Recorder::default());
+        let startup = Controller::startup(
+            &mut backend,
+            Box::new(SharedConfig::new(config)),
+            "3.0.0",
+            None,
+        );
+        let sequencer = Sequencer::new(Box::new(backend), startup.game_statuses());
+        startup.attach(Box::new(Inline::new(sequencer, Box::new(|_| {}))))
+    };
+
+    let controller = started(
+        seeded_config(dir.path(), &scenario["settings"]),
+        &scenario["script"],
+    );
+    assert_eq!(controller.state().selected_game, None);
+    assert_eq!(controller.state().launch_label, "Launch apps (7)");
+    let saved = std::fs::read_to_string(dir.path().join("config.ini")).unwrap();
+    assert!(saved.contains("selected_game = rFactor 2"), "{saved}");
+
+    scenario["script"]["find_game_path"]["rFactor 2"] = json!(["steam://rungameid/365960"]);
+    let controller = started(ConfigStore::load(dir.path()), &scenario["script"]);
+    assert_eq!(
+        controller.state().selected_game.as_deref(),
+        Some("rFactor 2")
+    );
+    assert_eq!(controller.state().launch_label, "Launch with rFactor 2 (7)");
+}
+
+/// A selected game that is gone by the time Launch reaches it is skipped with the line
+/// v2.3.2 logged (recorded before #10 made a saved game that is not found start as None).
+#[test]
+fn selected_game_gone_at_launch_is_skipped() {
+    let mut scenario = scenarios()
+        .into_iter()
+        .find(|s| s["name"] == "launch_game_not_configured")
+        .unwrap();
+    scenario["script"]["find_game_path"]["rFactor 2"] = json!(["steam://rungameid/365960", null]);
+    let run = replay(&scenario);
+    let tail = &run.transcript[run.transcript.len() - 3..];
+    assert_eq!(
+        tail,
+        [
+            json!(["call", "find_game_path", "rFactor 2", null]),
+            json!(["log", "warning", "Skipping rFactor 2 - not configured"]),
+            json!(["log", "success", "Launch sequence complete!"]),
+        ],
+    );
+    assert_eq!(run.final_state["selected_game"], "rFactor 2");
 }
