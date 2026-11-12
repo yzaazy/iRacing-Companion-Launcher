@@ -212,7 +212,7 @@ pub enum Event {
 
 ## Tests
 
-`cargo test` runs everything; the gate (`pwsh tools/gate.ps1`) runs format, clippy with warnings as errors, and tests, and ends with `GATE GREEN` or `GATE RED: <step>`. `-Release` adds a release build and compiles the installer script into a temp directory (skipped, and said so, when Inno Setup is not installed).
+`cargo test` runs everything; the gate (`pwsh tools/gate.ps1`) runs format, clippy with warnings as errors, and tests, and ends with `GATE GREEN` or `GATE RED: <step>`. `-Release` adds a release build and compiles the installer script into a temp directory (skipped, and said so, when Inno Setup is not installed). The gate holds a machine-wide named mutex (`tools/build-lock.ps1`), so gates from several worktrees run one at a time; other cargo commands take the same lock with `pwsh tools/build-lock.ps1 cargo ...`.
 
 | Test binary | Covers |
 |---|---|

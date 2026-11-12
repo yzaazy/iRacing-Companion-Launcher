@@ -13007,7 +13007,7 @@
   }
  },
  {
-  "name": "close_not_found_running_double_close",
+  "name": "close_not_found_running",
   "settings": {},
   "script": {
    "find_app_path": {
@@ -13052,6 +13052,15 @@
      "steam://rungameid/365960"
     ]
    },
+   "is_app_running": {
+    "SimHub": [
+     false,
+     true
+    ],
+    "MarvinsAIRA Refactored": [
+     false
+    ]
+   },
    "close_app": {
     "Fanatec": [
      true
@@ -13063,17 +13072,13 @@
      true
     ],
     "SimHub": [
-     true,
-     false
+     true
     ],
     "Garage61": [
      true
     ],
     "Elgato Stream Deck": [
      true
-    ],
-    "MarvinsAIRA Refactored": [
-     false
     ]
    },
    "launch_app": {
@@ -13537,7 +13542,7 @@
    ],
    [
     "call",
-    "close_app",
+    "is_app_running",
     "SimHub",
     true
    ],
@@ -13562,12 +13567,12 @@
     "call",
     "close_app",
     "SimHub",
-    false
+    true
    ],
    [
     "log",
-    "warning",
-    "SimHub was not running"
+    "success",
+    "SimHub closed"
    ],
    [
     "app_status",
@@ -13663,7 +13668,7 @@
    ],
    [
     "call",
-    "close_app",
+    "is_app_running",
     "MarvinsAIRA Refactored",
     false
    ],
@@ -14013,8 +14018,8 @@
    ],
    "selected_game": null,
    "select_all_label": "Deselect All",
-   "launch_label": "Launch apps (7)",
-   "close_label": "Close all (7)",
+   "launch_label": "Launch apps (6)",
+   "close_label": "Close all (6)",
    "launch_enabled": true,
    "close_enabled": true
   }
