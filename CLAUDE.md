@@ -39,6 +39,8 @@ windows installer.iss  Inno Setup script
 
 `pwsh tools/gate.ps1` runs `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test --no-fail-fast`. Work is done when it prints `GATE GREEN` on the final edit. CI runs the same script on every pull request and push to `main`; change the gate there, not in the workflow. Fix lint hits in code; an `#[allow]` needs a reason beside it. Never weaken a test to get green. The `rust-gate` skill has the details.
 
+Several sessions build at once, each in its own worktree. The gate holds a machine-wide build lock, so gates queue instead of running side by side; run every other cargo build or test run under the same lock, as `pwsh tools/build-lock.ps1 cargo test --test ui parity`.
+
 ## Run
 
 `cargo run`. When `cargo` is not found, prepend `$env:USERPROFILE\.cargo\bin` to PATH.

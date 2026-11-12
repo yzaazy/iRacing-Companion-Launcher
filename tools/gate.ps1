@@ -44,14 +44,21 @@ if ($Release) {
     $steps['installer'] = { Test-Installer }
 }
 
+# The whole gate holds the build lock, so gates from other worktrees queue.
+. "$PSScriptRoot\build-lock.ps1"
+$lock = Enter-BuildLock
 $global:skipped = @()
-foreach ($name in $steps.Keys) {
-    Write-Host "== $name"
-    & $steps[$name]
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "GATE RED: $name"
-        exit 1
+try {
+    foreach ($name in $steps.Keys) {
+        Write-Host "== $name"
+        & $steps[$name]
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "GATE RED: $name"
+            exit 1
+        }
     }
+} finally {
+    Exit-BuildLock $lock
 }
 # 'GATE GREEN' is the exact last line only when every step ran.
 if ($global:skipped) {
