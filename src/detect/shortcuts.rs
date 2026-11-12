@@ -24,12 +24,21 @@ const IO_REPARSE_TAG_SYMLINK: u32 = 0xA000_000C;
 /// target comes back truncated and then fails the existence check.
 const MAX_PATH: usize = 260;
 
+/// What a Start Menu hit returns. Python's `is_game` flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShortcutLookup {
+    /// The shortcut's stored target, which must exist (apps, `is_game=False`).
+    Target,
+    /// The `.lnk` path itself (games, `is_game=True`).
+    Shortcut,
+}
+
 /// Searches the user's and then the all-users Start Menu.
 ///
 /// Games get the `.lnk` path itself, apps the shortcut's target, which must
 /// exist. Python's `Path(os.getenv(...))` raises when a variable is unset; a
 /// missing variable skips that root here instead.
-pub fn find_shortcut_target(shortcut_names: &[&str], is_game: bool) -> Option<String> {
+pub fn find_shortcut_target(shortcut_names: &[&str], lookup: ShortcutLookup) -> Option<String> {
     let roots: Vec<PathBuf> = ["APPDATA", "ProgramData"]
         .iter()
         .filter_map(std::env::var_os)
@@ -41,14 +50,14 @@ pub fn find_shortcut_target(shortcut_names: &[&str], is_game: bool) -> Option<St
                 .join("Programs")
         })
         .collect();
-    find_shortcut_target_in(&roots, shortcut_names, is_game)
+    find_shortcut_target_in(&roots, shortcut_names, lookup)
 }
 
 /// [`find_shortcut_target`] over explicit roots, so tests can use a fake tree.
 pub fn find_shortcut_target_in(
     roots: &[PathBuf],
     shortcut_names: &[&str],
-    is_game: bool,
+    lookup: ShortcutLookup,
 ) -> Option<String> {
     for root in roots {
         if !root.exists() {
@@ -56,7 +65,7 @@ pub fn find_shortcut_target_in(
         }
         for name in shortcut_names {
             let hit = rglob_literal(root, name, |candidate| {
-                if is_game {
+                if lookup == ShortcutLookup::Shortcut {
                     candidate
                         .exists()
                         .then(|| candidate.to_string_lossy().into_owned())
@@ -113,7 +122,10 @@ fn rglob_literal<T>(
 fn subdirectories(dir: &Path) -> Vec<PathBuf> {
     let pattern = wide(dir.join("*"));
     let mut data = WIN32_FIND_DATAW::default();
-    let Ok(handle) = (unsafe { FindFirstFileW(PCWSTR(pattern.as_ptr()), &mut data) }) else {
+    // SAFETY: `pattern` is a NUL-terminated UTF-16 string and `data` a live,
+    // writable WIN32_FIND_DATAW, both alive across the call; a returned handle
+    // is owned by `FindHandle` right after, which closes it once.
+    let Ok(handle) = (unsafe { FindFirstFileW(PCWSTR(pattern.as_ptr()), &raw mut data) }) else {
         return Vec::new();
     };
     let find = FindHandle(handle);
@@ -135,7 +147,9 @@ fn subdirectories(dir: &Path) -> Vec<PathBuf> {
         {
             dirs.push(dir.join(name));
         }
-        if unsafe { FindNextFileW(find.0, &mut data) }.is_err() {
+        // SAFETY: `find` holds the open search handle; `data` is the same live,
+        // writable WIN32_FIND_DATAW.
+        if unsafe { FindNextFileW(find.0, &raw mut data) }.is_err() {
             break;
         }
     }
@@ -153,6 +167,9 @@ fn shortcut_path(lnk: &Path) -> Option<String> {
         return Some(text.into_owned());
     }
     let _com = ComApartment::enter()?;
+    // SAFETY: COM is initialised on this thread while `_com` lives; `ShellLink`
+    // is a static CLSID, there is no outer object, and the result is returned
+    // as an owned interface.
     let link: IShellLinkW =
         unsafe { CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER) }.ok()?;
     // winshell only loads when the file exists; an unloaded link has an
@@ -160,9 +177,13 @@ fn shortcut_path(lnk: &Path) -> Option<String> {
     if lnk.exists() {
         let file: IPersistFile = link.cast().ok()?;
         let path = wide(lnk);
+        // SAFETY: `file` is a live interface; `path` is a NUL-terminated UTF-16
+        // string alive across the call.
         unsafe { file.Load(PCWSTR(path.as_ptr()), STGM_READ) }.ok()?;
     }
     let mut buffer = [0u16; MAX_PATH];
+    // SAFETY: `link` is a live interface; the buffer is passed as a slice with
+    // its length, and a null find-data pointer is allowed.
     unsafe { link.GetPath(&mut buffer, std::ptr::null_mut(), SLGP_UNCPRIORITY.0 as u32) }.ok()?;
     let len = buffer.iter().position(|&c| c == 0).unwrap_or(MAX_PATH);
     Some(String::from_utf16_lossy(&buffer[..len]))

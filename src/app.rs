@@ -7,7 +7,7 @@
 //!
 //! ## Buttons across a queue
 //!
-//! `launch_normal` and `close_normal` are the Python widget states, changed
+//! [`ButtonState::normal`] is the Python widget state, changed
 //! exactly where Python changes them: `_update_button_text` sets both, a
 //! press disables its own button, and the end of its sequence enables it
 //! unconditionally (even where `_update_button_text` would not have).
@@ -21,7 +21,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use crate::core::config::{self, SharedConfig, config_key};
+use crate::core::config::{SetPathError, SharedConfig, config_key};
 use crate::core::log;
 use crate::managers::Backend;
 use crate::model::{AppCard, GameCard, LogLevel, Status, UiAction, ViewState};
@@ -36,12 +36,11 @@ pub trait Settings {
     fn setting(&self, key: &str) -> Option<String>;
     /// `config.set('Settings', key, value)`; does not save.
     fn set_setting(&mut self, key: &str, value: &str);
-    /// `save_config()`.
+    /// `save_config()`: true when the file was written.
     fn save(&mut self) -> bool;
-    /// `set_app_path(key, path)`, which saves. False where Python raises
-    /// because `configparser` refuses the value; a failed save is not a
-    /// refusal, because the window ignores `set_app_path`'s return value.
-    fn set_app_path(&mut self, key: &str, path: &str) -> bool;
+    /// `set_app_path(key, path)`, which saves. [`SetPathError::Refused`] is
+    /// where Python raises; [`SetPathError::Save`] is its `False` return.
+    fn set_app_path(&mut self, key: &str, path: &str) -> Result<(), SetPathError>;
 }
 
 impl Settings for SharedConfig {
@@ -59,14 +58,11 @@ impl Settings for SharedConfig {
     }
     fn save(&mut self) -> bool {
         let store = self.lock();
-        store.save()
+        store.save().is_ok()
     }
-    fn set_app_path(&mut self, key: &str, path: &str) -> bool {
+    fn set_app_path(&mut self, key: &str, path: &str) -> Result<(), SetPathError> {
         let mut store = self.lock();
-        // ConfigStore::set_app_path returns false for a refusal and for a
-        // failed save alike; only the refusal stops Browse.
-        store.set_app_path(key, path);
-        config::configparser_accepts(path)
+        store.set_app_path(key, path)
     }
 }
 
@@ -97,6 +93,38 @@ fn enabled_key(name: &str) -> String {
     format!("{}_enabled", config_key(name))
 }
 
+/// The Launch or the Close button: its Python widget state, and how many
+/// commands of its kind are queued or running (see the module doc).
+#[derive(Debug, Clone, Copy)]
+struct ButtonState {
+    normal: bool,
+    pending: usize,
+}
+
+impl ButtonState {
+    /// Enabled, nothing queued: the widgets as Python creates them.
+    const IDLE: Self = Self {
+        normal: true,
+        pending: 0,
+    };
+
+    fn enabled(self) -> bool {
+        self.normal && self.pending == 0
+    }
+
+    /// A press: disables the button and queues its command.
+    fn press(&mut self) {
+        self.normal = false;
+        self.pending += 1;
+    }
+
+    /// The end of its sequence enables the button unconditionally.
+    fn finish(&mut self) {
+        self.pending = self.pending.saturating_sub(1);
+        self.normal = true;
+    }
+}
+
 /// Sees every log line and card status the controller produces itself.
 pub type Trace = Box<dyn FnMut(&Event)>;
 
@@ -108,10 +136,8 @@ pub struct Controller {
     settings: Box<dyn Settings>,
     app_exes: HashMap<String, String>,
     game_exes: HashMap<String, String>,
-    launch_normal: bool,
-    close_normal: bool,
-    launches_pending: usize,
-    closes_pending: usize,
+    launch: ButtonState,
+    close: ButtonState,
     trace: Option<Trace>,
     dispatch: Option<Box<dyn Dispatch>>,
 }
@@ -193,10 +219,8 @@ impl Controller {
             settings,
             app_exes,
             game_exes,
-            launch_normal: true,
-            close_normal: true,
-            launches_pending: 0,
-            closes_pending: 0,
+            launch: ButtonState::IDLE,
+            close: ButtonState::IDLE,
             trace,
             dispatch: None,
         };
@@ -243,7 +267,8 @@ impl Controller {
             }
         }
 
-        self.settings.save();
+        // Python ignores save_config's result too.
+        let _ = self.settings.save();
 
         for game in backend.game_list() {
             if backend.find_game_path(&game).is_none() {
@@ -319,7 +344,8 @@ impl Controller {
                 .set_setting(&enabled_key(name), py_bool(select_all));
         }
 
-        self.settings.save();
+        // Python ignores save_config's result too.
+        let _ = self.settings.save();
         self.update_button_text();
         self.update_select_all_button();
     }
@@ -352,14 +378,14 @@ impl Controller {
         self.state.close_label = format!("Close all ({count})");
 
         let enabled = count != 0 || self.state.selected_game.is_some();
-        self.launch_normal = enabled;
-        self.close_normal = enabled;
+        self.launch.normal = enabled;
+        self.close.normal = enabled;
         self.refresh_buttons();
     }
 
     fn refresh_buttons(&mut self) {
-        self.state.launch_enabled = self.launch_normal && self.launches_pending == 0;
-        self.state.close_enabled = self.close_normal && self.closes_pending == 0;
+        self.state.launch_enabled = self.launch.enabled();
+        self.state.close_enabled = self.close.enabled();
     }
 
     /// `_on_checkbox_change`: the UI has already flipped the box.
@@ -367,7 +393,8 @@ impl Controller {
         self.set_checked(name, checked);
         self.settings
             .set_setting(&enabled_key(name), py_bool(checked));
-        self.settings.save();
+        // Python ignores save_config's result too.
+        let _ = self.settings.save();
         self.update_button_text();
         self.update_select_all_button();
     }
@@ -377,7 +404,8 @@ impl Controller {
         self.settings
             .set_setting("selected_game", game.as_deref().unwrap_or(""));
         self.state.selected_game = game;
-        self.settings.save();
+        // Python ignores save_config's result too.
+        let _ = self.settings.save();
         self.update_button_text();
     }
 
@@ -402,15 +430,15 @@ impl Controller {
             return;
         }
 
-        // Python raises out of the handler here; nothing after it happens.
-        if !self.settings.set_app_path(&config_key(name), &path) {
+        if !self.store_browsed_path(&config_key(name), &path) {
             return;
         }
 
         self.app_status(name, Status::Idle, 0);
         self.set_checked(name, true);
         self.settings.set_setting(&enabled_key(name), py_bool(true));
-        self.settings.save();
+        // Python ignores save_config's result too.
+        let _ = self.settings.save();
 
         self.log(
             LogLevel::Success,
@@ -454,10 +482,7 @@ impl Controller {
             return;
         }
 
-        if !self
-            .settings
-            .set_app_path(&format!("game_{}", config_key(name)), &path)
-        {
+        if !self.store_browsed_path(&format!("game_{}", config_key(name)), &path) {
             return;
         }
 
@@ -467,6 +492,16 @@ impl Controller {
             &format!("{name} path configured: {path}"),
         );
         self.update_button_text();
+    }
+
+    /// `set_app_path` in both Browse handlers. False where Python raises out of
+    /// the handler (configparser refuses the path), so nothing after it happens.
+    /// Python ignores a failed save here.
+    fn store_browsed_path(&mut self, key: &str, path: &str) -> bool {
+        match self.settings.set_app_path(key, path) {
+            Err(SetPathError::Refused) => false,
+            Ok(()) | Err(SetPathError::Save(_)) => true,
+        }
     }
 
     /// The exe-name and existence checks both Browse handlers share, with their error lines.
@@ -493,8 +528,7 @@ impl Controller {
         if !self.state.launch_enabled {
             return;
         }
-        self.launch_normal = false;
-        self.launches_pending += 1;
+        self.launch.press();
         self.refresh_buttons();
         let command = Command::Launch {
             apps: self.checked_apps(),
@@ -508,8 +542,7 @@ impl Controller {
         if !self.state.close_enabled {
             return;
         }
-        self.close_normal = false;
-        self.closes_pending += 1;
+        self.close.press();
         self.refresh_buttons();
         let command = Command::Close {
             apps: self.checked_apps(),
@@ -564,13 +597,11 @@ impl Controller {
             // The end of a sequence enables its button unconditionally; the
             // labels are not recomputed, so a count can go stale, as in Python.
             Event::LaunchFinished => {
-                self.launches_pending = self.launches_pending.saturating_sub(1);
-                self.launch_normal = true;
+                self.launch.finish();
                 self.refresh_buttons();
             }
             Event::CloseFinished => {
-                self.closes_pending = self.closes_pending.saturating_sub(1);
-                self.close_normal = true;
+                self.close.finish();
                 self.refresh_buttons();
             }
         }

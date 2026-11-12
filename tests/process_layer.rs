@@ -13,7 +13,7 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use iracing_companion_launcher::process::tracker::ProcessTracker;
+use iracing_companion_launcher::process::tracker::{LaunchMethod, ProcessTracker};
 use iracing_companion_launcher::process::{
     is_process_running, kill_process, launch_process, shell_open,
 };
@@ -248,7 +248,7 @@ fn launch_and_track_then_close() {
     let exe = d.exe("app");
     let mut t = ProcessTracker::new(d.state_file());
 
-    assert!(t.launch_and_track(KEY, &exe, WAIT, false));
+    assert!(t.launch_and_track(KEY, &exe, WAIT, LaunchMethod::Direct));
     assert!(t.is_tracked(KEY));
     assert_eq!(t.is_tracked_running(KEY), (true, 0));
     assert!(t.get_child_names(KEY).is_empty());
@@ -267,7 +267,7 @@ fn tree_is_counted_named_and_closed_together() {
     let root = d.tree();
     let mut t = ProcessTracker::new(d.state_file());
 
-    assert!(t.launch_and_track(KEY, &root, WAIT, false));
+    assert!(t.launch_and_track(KEY, &root, WAIT, LaunchMethod::Direct));
     assert!(
         wait_until(Duration::from_secs(15), || t.is_tracked_running(KEY)
             == (true, 2)),
@@ -291,7 +291,7 @@ fn process_that_exits_by_itself_is_dropped() {
     let mut d = Dummies::new();
     let exe = d.exe("quits");
     let mut t = ProcessTracker::new(d.state_file());
-    assert!(t.launch_and_track(KEY, &exe, WAIT, false));
+    assert!(t.launch_and_track(KEY, &exe, WAIT, LaunchMethod::Direct));
 
     d.stop("quits");
     assert!(wait_until(Duration::from_secs(10), || !t
@@ -308,7 +308,7 @@ fn launch_that_dies_during_the_wait_fails() {
     let exe = d.exe("dies");
     d.stop("dies"); // the dummy exits as soon as it starts
     let mut t = ProcessTracker::new(d.state_file());
-    assert!(!t.launch_and_track(KEY, &exe, WAIT, false));
+    assert!(!t.launch_and_track(KEY, &exe, WAIT, LaunchMethod::Direct));
     assert!(!t.is_tracked(KEY));
 }
 
@@ -319,7 +319,7 @@ fn pid_reuse_is_detected_by_creation_time() {
     let state = d.state_file();
     {
         let mut t = ProcessTracker::new(state.clone());
-        assert!(t.launch_and_track(KEY, &exe, WAIT, false));
+        assert!(t.launch_and_track(KEY, &exe, WAIT, LaunchMethod::Direct));
     }
     let original = read_state(&state);
     let ct = tracked_create_time(&state, KEY);
@@ -354,7 +354,7 @@ fn state_survives_a_restart() {
     let root = d.tree();
     {
         let mut t = ProcessTracker::new(d.state_file());
-        assert!(t.launch_and_track(KEY, &root, WAIT, false));
+        assert!(t.launch_and_track(KEY, &root, WAIT, LaunchMethod::Direct));
     }
     let mut t = ProcessTracker::new(d.state_file());
     assert!(t.is_tracked(KEY));
@@ -374,7 +374,7 @@ fn shell_launch_finds_the_new_pid() {
     assert!(wait_until(WAIT, || is_process_running(&d.name("shell"))));
 
     let mut t = ProcessTracker::new(d.state_file());
-    assert!(t.launch_and_track(KEY, &exe, WAIT, true));
+    assert!(t.launch_and_track(KEY, &exe, WAIT, LaunchMethod::Shell));
     let pid = read_state(&d.state_file())[KEY]["pid"].as_u64().unwrap();
     assert_ne!(pid, u64::from(d.children[0].id()));
     assert_eq!(t.is_tracked_running(KEY), (true, 0));
@@ -391,20 +391,21 @@ fn shell_launch_without_a_new_process_fails() {
     let mut d = Dummies::new();
     let mut t = ProcessTracker::new(d.state_file());
     let missing = d.dir.path().join("missing.exe");
-    assert!(!t.launch_and_track(KEY, &missing.to_string_lossy(), WAIT, true));
+    assert!(!t.launch_and_track(KEY, &missing.to_string_lossy(), WAIT, LaunchMethod::Shell));
 
     // Starts, but exits before the wait ends: no new PID is found.
     let exe = d.exe("brief");
     d.stop("brief");
-    assert!(!t.launch_and_track(KEY, &exe, WAIT, true));
+    assert!(!t.launch_and_track(KEY, &exe, WAIT, LaunchMethod::Shell));
     assert!(!t.is_tracked(KEY));
 }
 
 fn can_open(pid: u64, access: PROCESS_ACCESS_RIGHTS) -> bool {
-    // SAFETY: plain call; a returned handle is closed at once.
+    // SAFETY: OpenProcess takes only values and returns a new handle or an
+    // error; a returned handle is closed at once, below.
     match unsafe { OpenProcess(access, false, pid as u32) } {
         Ok(h) => {
-            // SAFETY: `h` was just opened.
+            // SAFETY: `h` was just opened by this function and is closed exactly once.
             let _ = unsafe { CloseHandle(h) };
             true
         }
@@ -417,7 +418,7 @@ fn helper_that_refuses_waiting_is_still_closed() {
     let mut d = Dummies::new();
     let exe = d.exe("locked");
     let mut t = ProcessTracker::new(d.state_file());
-    assert!(t.launch_and_track(KEY, &exe, WAIT, false));
+    assert!(t.launch_and_track(KEY, &exe, WAIT, LaunchMethod::Direct));
     let pid = read_state(&d.state_file())[KEY]["pid"].as_u64().unwrap();
     assert!(
         !can_open(pid, PROCESS_SYNCHRONIZE),
@@ -440,7 +441,7 @@ fn process_that_refuses_everything_is_tracked_and_survives_close() {
     let exe = d.exe("opaque");
     let state = d.state_file();
     let mut t = ProcessTracker::new(state.clone());
-    assert!(t.launch_and_track(KEY, &exe, WAIT, false));
+    assert!(t.launch_and_track(KEY, &exe, WAIT, LaunchMethod::Direct));
     let pid = read_state(&state)[KEY]["pid"].as_u64().unwrap();
     assert!(
         !can_open(pid, PROCESS_QUERY_LIMITED_INFORMATION),
@@ -465,7 +466,7 @@ fn failed_direct_launch_tracks_nothing() {
     let d = Dummies::new();
     let mut t = ProcessTracker::new(d.state_file());
     let missing = d.dir.path().join("missing.exe");
-    assert!(!t.launch_and_track(KEY, &missing.to_string_lossy(), WAIT, false));
+    assert!(!t.launch_and_track(KEY, &missing.to_string_lossy(), WAIT, LaunchMethod::Direct));
     assert!(!t.is_tracked(KEY));
     assert!(!d.state_file().exists(), "nothing saved");
 }
@@ -475,7 +476,7 @@ fn forget_leaves_the_process_running() {
     let mut d = Dummies::new();
     let exe = d.exe("forgotten");
     let mut t = ProcessTracker::new(d.state_file());
-    assert!(t.launch_and_track(KEY, &exe, WAIT, false));
+    assert!(t.launch_and_track(KEY, &exe, WAIT, LaunchMethod::Direct));
     t.forget(KEY);
     assert!(!t.is_tracked(KEY));
     assert!(is_process_running(&d.name("forgotten")));
@@ -487,7 +488,7 @@ fn state_file_is_written_like_python() {
     let mut d = Dummies::new();
     let exe = d.exe("format");
     let mut t = ProcessTracker::new(d.state_file());
-    assert!(t.launch_and_track(KEY, &exe, WAIT, false));
+    assert!(t.launch_and_track(KEY, &exe, WAIT, LaunchMethod::Direct));
 
     let text = std::fs::read_to_string(d.state_file()).unwrap();
     assert!(
@@ -587,7 +588,7 @@ fn python_numbers(view: &Value, key: &str) -> Numbers {
 fn live_numbers(d: &Dummies, scratch: &str, key: &str, exe: &str) -> Numbers {
     let scratch = d.dir.path().join(scratch);
     let mut t = ProcessTracker::new(scratch.clone());
-    assert!(t.launch_and_track(key, exe, WAIT, false));
+    assert!(t.launch_and_track(key, exe, WAIT, LaunchMethod::Direct));
     let entry = &read_state(&scratch)[key];
     (entry["pid"].to_string(), entry["create_time"].to_string())
 }

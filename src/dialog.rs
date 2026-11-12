@@ -48,15 +48,18 @@ impl FileDialog for NativeDialog<'_> {
         // Tk calls CoInitialize on its thread before its first dialog.
         let _com = ComApartment::enter();
         let dialog = open_dialog(request)?;
-        // SAFETY: `dialog` is a live IFileOpenDialog; the owner is our window or none.
+        // SAFETY: `dialog` is a live IFileOpenDialog on this thread; the owner
+        // is this app's own window, alive while the modal dialog runs, or none.
         unsafe { dialog.Show(self.owner()) }.ok()?;
-        // SAFETY: Show succeeded, so the dialog holds a result.
+        // SAFETY: `dialog` is live, and Show succeeded, so it holds a result.
         let item = unsafe { dialog.GetResult() }.ok()?;
-        // SAFETY: `item` is a live IShellItem.
+        // SAFETY: `item` is a live IShellItem; the call takes only a value besides it.
         let name = unsafe { item.GetDisplayName(SIGDN_FILESYSPATH) }.ok()?;
-        // SAFETY: GetDisplayName returned a NUL-terminated string we now own.
+        // SAFETY: GetDisplayName succeeded, so `name` points to a NUL-terminated
+        // UTF-16 string that stays valid until it is freed below.
         let path = unsafe { name.to_string() };
-        // SAFETY: the string came from the COM task allocator and is freed once.
+        // SAFETY: `name` was allocated by the COM task allocator for this caller,
+        // is not read after this line and is freed exactly once.
         unsafe { CoTaskMemFree(Some(name.0.cast_const().cast())) };
         // Tk's ConvertExternalFilename turns backslashes into forward slashes,
         // and Python logs and saves the path as returned.
@@ -66,10 +69,12 @@ impl FileDialog for NativeDialog<'_> {
 
 /// `GetFileNameVista` up to `Show`: filters, options, title and folder, in Tk's order.
 fn open_dialog(request: &DialogRequest) -> Option<IFileOpenDialog> {
-    // SAFETY: plain COM creation on a thread with an apartment.
+    // SAFETY: `FileOpenDialog` is a static CLSID, there is no outer object, and
+    // the result is returned as an owned interface; COM is initialised on this
+    // thread, or creation fails and returns an error.
     let dialog: IFileOpenDialog =
         unsafe { CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER) }.ok()?;
-    // SAFETY: `dialog` is live for every call below.
+    // SAFETY: `dialog` is a live interface owned here; the call takes nothing else.
     let defaults = unsafe { dialog.GetOptions() }.ok()?;
 
     // Tk passes each pattern list joined with ';', as the request holds it.
@@ -86,25 +91,31 @@ fn open_dialog(request: &DialogRequest) -> Option<IFileOpenDialog> {
         })
         .collect();
     if !specs.is_empty() {
-        // SAFETY: `specs` points into `texts`, both alive across the call.
+        // SAFETY: `dialog` is live; each spec points to NUL-terminated strings in
+        // `texts`, and both vectors stay alive while the dialog lives (it copies them).
         unsafe { dialog.SetFileTypes(&specs) }.ok()?;
         // No -typevariable: Tk shows the first filter (indices are 1-based).
+        // SAFETY: `dialog` is live; the call takes only a value besides it.
         unsafe { dialog.SetFileTypeIndex(1) }.ok()?;
     }
 
+    // SAFETY: `dialog` is live; the call takes only a value besides it.
     unsafe { dialog.SetOptions(tk_open_options(defaults)) }.ok()?;
 
     let title = wide(&request.title);
-    // SAFETY: `title` is NUL-terminated and alive across the call.
+    // SAFETY: `dialog` is live; `title` is a NUL-terminated UTF-16 string alive
+    // across the call, which copies it.
     unsafe { dialog.SetTitle(PCWSTR(title.as_ptr())) }.ok()?;
 
     // Tk ignores every failure here and opens wherever the dialog would.
     let dir = wide(&request.initial_dir);
-    // SAFETY: `dir` is NUL-terminated and alive across the call.
+    // SAFETY: `dir` is a NUL-terminated UTF-16 string alive across the call,
+    // there is no bind context, and the item is returned as an owned interface.
     let folder: windows::core::Result<IShellItem> =
         unsafe { SHCreateItemFromParsingName(PCWSTR(dir.as_ptr()), None) };
     if let Ok(folder) = folder {
-        // SAFETY: both interfaces are live.
+        // SAFETY: `dialog` and `folder` are live interfaces owned here; the
+        // dialog takes its own reference to the folder.
         let _ = unsafe { dialog.SetFolder(&folder) };
     }
     Some(dialog)
@@ -167,7 +178,7 @@ mod tests {
     fn dialog_is_configured_like_tks() {
         let _com = ComApartment::enter();
         let dialog = open_dialog(&game_request()).expect("dialog configured");
-        // SAFETY: `dialog` is live.
+        // SAFETY: `dialog` is a live interface owned here; the call takes nothing else.
         let flags = unsafe { dialog.GetOptions() }.unwrap();
         for wanted in [
             FOS_FORCEFILESYSTEM,
@@ -179,15 +190,17 @@ mod tests {
             assert_eq!(flags & wanted, wanted, "{wanted:?} set");
         }
         assert_eq!(flags & FOS_NODEREFERENCELINKS, Default::default());
-        // SAFETY: as above.
+        // SAFETY: `dialog` is still live; the call takes nothing else.
         assert_eq!(unsafe { dialog.GetFileTypeIndex() }.unwrap(), 1);
-        // SAFETY: as above.
+        // SAFETY: `dialog` is still live; the folder comes back as an owned interface.
         let folder = unsafe { dialog.GetFolder() }.unwrap();
-        // SAFETY: `folder` is live; the returned string is freed by the allocator below.
+        // SAFETY: `folder` is a live IShellItem; the call takes only a value besides it.
         let name = unsafe { folder.GetDisplayName(super::SIGDN_FILESYSPATH) }.unwrap();
-        // SAFETY: NUL-terminated, owned here.
+        // SAFETY: GetDisplayName succeeded, so `name` points to a NUL-terminated
+        // UTF-16 string that stays valid until it is freed below.
         let path = unsafe { name.to_string() }.unwrap();
-        // SAFETY: allocated by the COM task allocator, freed once.
+        // SAFETY: `name` was allocated by the COM task allocator for this caller,
+        // is not read after this line and is freed exactly once.
         unsafe { super::CoTaskMemFree(Some(name.0.cast_const().cast())) };
         assert_eq!(path.to_lowercase(), "c:\\program files");
     }

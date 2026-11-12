@@ -1,6 +1,6 @@
 //! `ConfigStore` against files written by Python's configparser (tests/fixtures/core).
 
-use iracing_companion_launcher::core::config::{ConfigStore, config_key};
+use iracing_companion_launcher::core::config::{ConfigStore, SetPathError, config_key};
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -61,7 +61,7 @@ fn load_then_save_writes_what_configmanager_writes() {
     for name in &fixtures() {
         let dir = dir_with(name);
         let store = ConfigStore::load(dir.path());
-        assert!(store.save(), "{name}: save");
+        store.save().unwrap_or_else(|e| panic!("{name}: save: {e}"));
         assert_eq!(
             String::from_utf8(config_bytes(dir.path())).unwrap(),
             fs::read_to_string(fixture(&format!("{name}.saved.ini"))).unwrap(),
@@ -160,7 +160,7 @@ fn windows_1252_file_with_non_ascii_paths() {
     let exe = exe_dir.join("CrewChiefV4.exe");
     fs::write(&exe, b"").unwrap();
     let exe = exe.to_str().unwrap();
-    assert!(store.set_app_path("crew_chief_v4", exe));
+    store.set_app_path("crew_chief_v4", exe).unwrap();
     // Written back as UTF-8, read back as UTF-8.
     assert!(
         String::from_utf8(config_bytes(dir.path()))
@@ -205,7 +205,9 @@ fn app_path_only_when_it_exists_on_disk() {
     let mut store = ConfigStore::load(dir.path());
     assert_eq!(store.app_path("fanatec"), None);
 
-    assert!(store.set_app_path("fanatec", exe.to_str().unwrap()));
+    store
+        .set_app_path("fanatec", exe.to_str().unwrap())
+        .unwrap();
     assert_eq!(store.app_path("fanatec"), None, "saved but missing on disk");
 
     fs::write(&exe, b"").unwrap();
@@ -217,10 +219,14 @@ fn app_path_only_when_it_exists_on_disk() {
     );
 
     // os.path.exists is true for a directory too.
-    assert!(store.set_app_path("simhub", dir.path().to_str().unwrap()));
+    store
+        .set_app_path("simhub", dir.path().to_str().unwrap())
+        .unwrap();
     assert_eq!(store.app_path("simhub").as_deref(), dir.path().to_str());
 
-    assert!(store.set_app_path("game_iracing", "steam://rungameid/266410"));
+    store
+        .set_app_path("game_iracing", "steam://rungameid/266410")
+        .unwrap();
     assert_eq!(store.app_path("game_iracing"), None);
 }
 
@@ -229,14 +235,14 @@ fn set_app_path_saves_immediately() {
     let dir = tempfile::tempdir().unwrap();
     let mut store = ConfigStore::load(dir.path());
     assert!(!dir.path().join("config.ini").exists());
-    assert!(store.set_app_path("Fanatec", r"C:\Fanatec.exe"));
+    store.set_app_path("Fanatec", r"C:\Fanatec.exe").unwrap();
     assert_eq!(
         config_bytes(dir.path()),
         b"[AppPaths]\r\nfanatec = C:\\Fanatec.exe\r\n\r\n[Settings]\r\n\r\n"
     );
     // Replacing a value keeps its position.
-    assert!(store.set_app_path("simhub", r"C:\SimHub.exe"));
-    assert!(store.set_app_path("fanatec", r"D:\Fanatec.exe"));
+    store.set_app_path("simhub", r"C:\SimHub.exe").unwrap();
+    store.set_app_path("fanatec", r"D:\Fanatec.exe").unwrap();
     assert_eq!(
         config_bytes(dir.path()),
         b"[AppPaths]\r\nfanatec = D:\\Fanatec.exe\r\nsimhub = C:\\SimHub.exe\r\n\r\n[Settings]\r\n\r\n"
@@ -254,7 +260,7 @@ fn set_setting_does_not_save() {
     assert!(!store.bool_setting("fanatec_enabled", true));
     assert_eq!(store.setting("selected_game").as_deref(), Some("rFactor 2"));
 
-    assert!(store.save());
+    store.save().unwrap();
     let text = String::from_utf8(config_bytes(dir.path())).unwrap();
     assert!(text.contains("\r\nfanatec_enabled = False\r\n"));
     assert!(text.contains("\r\nselected_game = rFactor 2\r\n"));
@@ -285,7 +291,10 @@ fn lone_percent_is_rejected_like_configparser_set() {
     let dir = tempfile::tempdir().unwrap();
     let mut store = ConfigStore::load(dir.path());
     // configparser.set raises ValueError: nothing stored, nothing written.
-    assert!(!store.set_app_path("fanatec", r"C:\100% Racing\Fanatec.exe"));
+    assert!(matches!(
+        store.set_app_path("fanatec", r"C:\100% Racing\Fanatec.exe"),
+        Err(SetPathError::Refused)
+    ));
     assert!(!dir.path().join("config.ini").exists());
     store.set_setting("selected_game", "50% off");
     assert_eq!(store.setting("selected_game"), None);
@@ -294,7 +303,7 @@ fn lone_percent_is_rejected_like_configparser_set() {
     let exe = dir.path().join("100% Racing.exe");
     fs::write(&exe, b"").unwrap();
     let escaped = exe.to_str().unwrap().replace('%', "%%");
-    assert!(store.set_app_path("fanatec", &escaped));
+    store.set_app_path("fanatec", &escaped).unwrap();
     assert_eq!(store.app_path("fanatec").as_deref(), exe.to_str());
 }
 
@@ -304,8 +313,12 @@ fn missing_directory_loads_empty_and_save_fails() {
     let gone = dir.path().join("does-not-exist");
     let mut store = ConfigStore::load(&gone);
     assert_eq!(store.setting("selected_game"), None);
-    assert!(!store.save());
-    assert!(!store.set_app_path("fanatec", r"C:\x.exe"));
+    assert!(store.save().is_err());
+    // configparser accepts the value; only the write fails.
+    assert!(matches!(
+        store.set_app_path("fanatec", r"C:\x.exe"),
+        Err(SetPathError::Save(_))
+    ));
     assert!(!gone.exists());
 }
 
@@ -314,7 +327,7 @@ fn save_replaces_the_file_and_leaves_no_temporary() {
     let dir = dir_with("app_written");
     let mut store = ConfigStore::load(dir.path());
     store.set_setting("selected_game", "iRacing");
-    assert!(store.save());
+    store.save().unwrap();
     let names: Vec<_> = fs::read_dir(dir.path())
         .unwrap()
         .map(|e| e.unwrap().file_name())
@@ -341,14 +354,14 @@ fn failed_save_keeps_the_old_file_and_removes_the_temporary() {
     let mut read_only = writable.clone();
     read_only.set_readonly(true);
     fs::set_permissions(&path, read_only).unwrap();
-    assert!(!store.save());
+    assert!(store.save().is_err());
     assert_eq!(config_bytes(dir.path()), before);
     assert!(!dir.path().join("config.ini.tmp").exists());
     fs::set_permissions(&path, writable).unwrap();
 
     // A directory in the way of the temporary file: nothing is written.
     fs::create_dir(dir.path().join("config.ini.tmp")).unwrap();
-    assert!(!store.save());
+    assert!(store.save().is_err());
     assert_eq!(config_bytes(dir.path()), before);
 }
 

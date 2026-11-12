@@ -22,8 +22,18 @@ pub fn check_steam_game_installed(appid: &str) -> bool {
 pub fn check_steam_game_installed_in(hive: HKEY, uninstall_key: &str, appid: &str) -> bool {
     let path = HSTRING::from(format!(r"{uninstall_key}\Steam App {appid}"));
     let mut key = HKEY::default();
-    let opened =
-        unsafe { RegOpenKeyExW(hive, &path, Some(0), KEY_READ | KEY_WOW64_64KEY, &mut key) };
+    // SAFETY: `path` is a NUL-terminated HSTRING alive across the call and `key`
+    // a live, writable HKEY for the result; an opened key is owned by `RegKey`
+    // below, which closes it once.
+    let opened = unsafe {
+        RegOpenKeyExW(
+            hive,
+            &path,
+            Some(0),
+            KEY_READ | KEY_WOW64_64KEY,
+            &raw mut key,
+        )
+    };
     if opened != ERROR_SUCCESS {
         return false;
     }

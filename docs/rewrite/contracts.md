@@ -115,12 +115,13 @@ impl ConfigStore {
     pub fn load(dir: &Path) -> Self;
     pub fn config_dir(&self) -> &Path;
     pub fn app_path(&self, key: &str) -> Option<String>;      // only if it exists on disk
-    pub fn set_app_path(&mut self, key: &str, path: &str) -> bool; // saves
+    pub fn set_app_path(&mut self, key: &str, path: &str) -> Result<(), SetPathError>; // saves
     pub fn setting(&self, key: &str) -> Option<String>;
     pub fn bool_setting(&self, key: &str, fallback: bool) -> bool;
     pub fn set_setting(&mut self, key: &str, value: &str);     // does not save
-    pub fn save(&self) -> bool;
+    pub fn save(&self) -> io::Result<()>;
 }
+pub enum SetPathError { Refused, Save(io::Error) } // configparser refuses the value; the write failed
 pub struct SharedConfig; // one ConfigStore shared by the controller and the managers
 impl SharedConfig {
     pub fn new(store: ConfigStore) -> Self;
@@ -140,16 +141,18 @@ pub fn shell_open(target: &str) -> std::io::Result<()>;
 // process/tracker.rs
 impl ProcessTracker {
     pub fn new(state_file: PathBuf) -> Self;
-    pub fn launch_and_track(&mut self, key: &str, exe_path: &str, wait: Duration, needs_shell_launch: bool) -> bool;
+    pub fn launch_and_track(&mut self, key: &str, exe_path: &str, wait: Duration, method: LaunchMethod) -> bool;
     pub fn is_tracked(&self, key: &str) -> bool;
     pub fn is_tracked_running(&mut self, key: &str) -> (bool, usize);
     pub fn get_child_names(&mut self, key: &str) -> Vec<String>;
     pub fn close_tracked(&mut self, key: &str) -> bool;
     pub fn forget(&mut self, key: &str);
 }
+pub enum LaunchMethod { Direct, Shell } // CreateProcess, or ShellExecute for needs_shell_launch
 
 // detect/
-pub fn find_shortcut_target(shortcut_names: &[&str], is_game: bool) -> Option<String>;
+pub fn find_shortcut_target(shortcut_names: &[&str], lookup: ShortcutLookup) -> Option<String>;
+pub enum ShortcutLookup { Target, Shortcut } // the resolved target (apps), or the .lnk path itself (games)
 pub fn find_path_in_list(paths: &[String]) -> Option<String>;
 pub fn check_steam_game_installed(appid: &str) -> bool;
 ```
