@@ -267,7 +267,7 @@ $env:UPDATE_SNAPSHOTS = 1; cargo test --test ui parity; Remove-Item Env:UPDATE_S
 - **Version**: `version` in `Cargo.toml` is the single source. The header reads it through `env!("CARGO_PKG_VERSION")`.
 - **`build.rs`** embeds `iRCL.ico` and the Windows version resource with `winresource`: `FileVersion` and `ProductVersion` from `package.version`, the string fields from `[package.metadata.winresource]`, language English (US).
 - **Release exe**: `cargo build --release` writes `target\release\iracing-companion-launcher.exe`, one self-contained file (`opt-level = "s"`, fat LTO, stripped).
-- **Installer**: `windows installer.iss` (Inno Setup 6) reads the version back from the exe's `ProductVersion`, stops with an error when the exe is missing or has none, installs it as `{app}\iRacing Companion Launcher.exe`, and writes `installer_output\iRacing_Companion_Launcher_Setup.exe`. On upgrade it runs the previous version's uninstaller first and removes the `_internal` folder a v2.x PyInstaller install may have left behind.
+- **Installer**: `windows installer.iss` (Inno Setup 6) reads the version back from the exe's `ProductVersion`, stops with an error when the exe is missing or has none, installs it as `{app}\iRacing Companion Launcher.exe`, and writes `installer_output\iRacing_Companion_Launcher_Setup.exe`. On upgrade it asks for confirmation and installs over the previous version (same `AppId`), so Inno Setup keeps the install folder and the selected tasks (the desktop icon); `[InstallDelete]` removes the files older layouts had besides the exe: v2.x's PyInstaller `_internal` folder and v1.5–1.6's icon files.
 - The release procedure is the `release` skill (`.claude/skills/release/SKILL.md`).
 
 ## CI

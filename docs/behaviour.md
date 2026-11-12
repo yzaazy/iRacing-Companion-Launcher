@@ -26,6 +26,7 @@ These are deliberate. Anything else that differs from v2.3.2 is a bug.
 12. **A saved game that is not found starts as None** (after 3.0.1, [#10](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/10)). v2.3.2 restored `selected_game` regardless, so the game's radio showed selected and disabled, Launch read `Launch with <game> (N)` and logged `Skipping <game> - not configured`, and with no app checked both buttons stayed enabled. Now the None radio is selected and the buttons follow from the apps alone. `selected_game` stays in `config.ini`, so the choice comes back at the first startup that finds the game; it changes only when the user picks another radio. A game selected while found and gone by the time Launch reaches it is still skipped with that log line.
 13. **The apps summary in the log reflects the outcome** (after 3.0.1, [#8](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/8)). v2.3.2 logged `All apps launched!` after the app loop and `All apps closed!` at the end of a close whatever had happened, also with no app checked. Now, with no app checked, neither line is logged. After a launch, `All apps launched!` (success) means every checked app was started or already running; otherwise the line is a warning such as `Launched 5 of 7 apps, 1 failed, 1 not configured`, naming only the counts that are not zero (`1 of 1 app` in the singular). `Launch sequence complete!` is unchanged: it marks the end of the sequence, not its success.
 14. **A stopping app has an orange dot** (after 3.0.1, [#9](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/9)). v2.3.2 had no colour for `stopping` and drew the idle grey, so a card being closed looked untouched; since 3.0.0 repaints during a close, the state shows for as long as the close takes. It now uses the `starting` orange (`#ffa726`). `stopped` keeps the idle grey. None of the reference screenshots has a stopping card, so parity is unaffected.
+15. **An upgrade keeps the install folder and the desktop icon** (after 3.0.1, [#14](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/14)). The installer used to run the previous version's uninstaller before its wizard, which erased the remembered folder and tasks: a custom folder fell back to Program Files, and the desktop icon was removed and its box unchecked. It now installs over the previous version, after the same confirmation prompt.
 
 ## Known quirks carried over from v2.3.2
 
@@ -33,7 +34,7 @@ Kept on purpose so 3.0.0 behaves exactly like v2.3.2. Each has a GitHub issue fo
 
 - **[#12](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/12)** The Start Menu shortcut names and install paths listed for games are never consulted. Games are found by saved path or Steam registry only.
 
-Other open issues: [#14](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/14) (the installer forgets a custom install folder and the desktop-icon choice on upgrade) and [#5](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/5) (a panic on the worker thread aborts the app instead of being caught).
+Other open issue: [#5](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/5) (a panic on the worker thread aborts the app instead of being caught).
 
 ## Known differences from v2.3.2 in the activity log, undecided
 
