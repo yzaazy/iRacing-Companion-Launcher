@@ -19,7 +19,7 @@ The seams between agents. Each agent builds its own module against these and nob
 | `src/process/mod.rs`, `tracker.rs` | process | `managers/process_manager.py`, `process_tracker.py` |
 | `src/detect/shortcuts.rs`, `steam.rs`, `paths.rs` | detect | `utils/*.py` |
 | `src/win.rs` (crate-private: `wide`, `basename`, `ComApartment`, `Handle`, `FindHandle`, `RegKey`) | shared | — |
-| `src/ui/theme.rs`, `layout.rs`, `widgets.rs`, `sections.rs`, `mod.rs`, `tests/ui/` | ui | `ui/sections/`, `ui/widgets/`, `ui/constants.py` |
+| `src/ui/theme.rs`, `pack.rs`, `layout.rs`, `widgets.rs`, `geometry.rs`, `sections.rs`, `mod.rs`, `tests/ui/` | ui | `ui/sections/`, `ui/widgets/`, `ui/constants.py` |
 | `src/managers.rs`, `src/app.rs`, `src/worker.rs`, `src/dialog.rs` | controller | `managers/app_manager.py`, `game_manager.py`, `ui/main_window.py` |
 | `build.rs`, `windows installer.iss`, `[package.metadata.winresource]` in `Cargo.toml`, the Rust section of `CLAUDE.md` | packaging (done) | `.spec`, `version.py`, `tools/update_version.py` |
 | `tools/capture_reference.py`, `docs/rewrite/fixtures.json`, `ui-spec.json`, `reference/` | capture (done, frozen) | — |
