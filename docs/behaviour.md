@@ -1,88 +1,106 @@
-# Parity traps
+# Behaviour
 
-The Python source is the spec for the Rust port. This file holds only what reading one Python file at a time will miss: cross-file effects, library behaviour hidden behind a call, and the short list of deliberate differences. Port everything else straight from the source.
+What the launcher does, in the detail that the code alone does not make obvious: the file formats it shares with older versions, the process rules, the detection order and the UI rules. Version 3.0.0 reproduces the Python app (v2.3.2) one to one, except for the changes listed first. Where a rule exists only for compatibility with v2.3.2, or with files it wrote, this file says so. The Python source is in git at tag `v2.3.2`.
 
-## Deliberate differences
+## Changes from v2.3.2
 
-These are the only places Rust may differ from Python. Anything else that differs is a bug in the port.
+These are deliberate. Anything else that differs from v2.3.2 is a bug.
 
-1. **Worker thread.** Launch and close sequences run off the UI thread. Commands queue: a button pressed mid-sequence runs after the current sequence finishes. A sequence uses the app selection and selected game as they were when its button was pressed.
-2. **Version source.** `Cargo.toml` replaces `version.py`.
-3. **Text rasterisation.** Same fonts, drawn by egui.
-4. **Config location in debug builds.** See `contracts.md`.
-5. **`print()` diagnostics are dropped.** They are invisible in the windowed Python build. They never become log lines.
-6. **`config.ini` is written as UTF-8.** See Config below.
-7. **An unset `APPDATA` or `ProgramData` is tolerated.** Python raises there; the case cannot occur on a real Windows session.
-8. **A malformed config value falls back instead of crashing startup.** A non-boolean `*_enabled` value or a broken `%` reference makes Python raise while the window is being built. Rust uses the fallback (`true`, or no saved path). A leading UTF-8 byte-order mark is skipped. A `process_state.json` entry without an integer `pid` is dropped. A detected path containing `%`, which Python cannot save and crashes on, is used unsaved.
-9. **The window opens with the startup log complete.** Python's logger forces a repaint per line, so its window appears during startup and the lines arrive one by one. Rust finishes startup before the window exists.
-10. **Keyboard access, by the owner's decision.** The Python app has none: Tab reaches nothing. The Rust app allows it under these rules: nothing is focused at startup and a mouse click leaves no focus, so a stray key can never launch or close apps; Tab and Shift+Tab move a visible focus indicator through the enabled controls in layout order; Space and Enter activate only the focused control, once per key press. An unfocused window is pixel-identical to the Python reference.
-    - Indicator: a ring drawn on top, outside the control's shape: 1 px gap, 1 px black, 2 px white, following the control's corner radius (a circle for radios).
-    - Tab order: the None radio; each game card's radio, or its Browse button when the game is not found; Select All; each app card's checkbox, or its Browse button when not found; the log, only while it has a scrollbar; Launch; Close. Disabled buttons are skipped. Tab wraps at both ends.
-    - Escape or any mouse press drops the focus.
-    - The focused log scrolls with the arrow, page, Home and End keys. Python's log took those keys after a click on it.
+1. **The window stays responsive during Launch and Close.** Sequences run on a worker thread. Pressing a button while a sequence runs queues its command, which runs after the current one finishes. Each sequence uses the app selection and the selected game as they were when its button was pressed.
+2. **The window opens with the startup log complete.** v2.3.2 showed its window during startup and the log lines arrived one by one; 3.0.0 finishes startup before the window exists.
+3. **Keyboard access.** v2.3.2 took no keys. The rules:
+   - Nothing is focused at startup, and a mouse click leaves no focus, so a stray key can never launch or close apps.
+   - Tab and Shift+Tab move a visible focus ring through the enabled controls in layout order and wrap at both ends: the None radio; each game card's radio, or its Browse button when the game is not found; Select All; each app card's checkbox, or its Browse button when not found; the log, only while it has a scrollbar; Launch; Close. Disabled buttons are skipped.
+   - Space and Enter activate only the focused control, once per key press.
+   - Escape or any mouse press drops the focus.
+   - The focused log scrolls with the arrow keys, Page Up/Down, Home and End (v2.3.2's log took those keys after a click on it).
+   - The ring is drawn on top, outside the control's shape: 1 px gap, 1 px black, 2 px white, following the control's corner radius (a circle for radios). An unfocused window is pixel-identical to v2.3.2.
+4. **`config.ini` is written as UTF-8.** v2.3.2 wrote the locale encoding (Windows-1252 on a typical install). Both are read; see [Config](#config).
+5. **Malformed files no longer stop startup.** A non-boolean `*_enabled` value or a broken `%` reference made v2.3.2 raise while building the window; 3.0.0 uses the fallback (`true`, or no saved path). A leading UTF-8 byte-order mark in `config.ini` is skipped. A `process_state.json` entry without an integer `pid` is dropped. A detected path containing `%`, which v2.3.2 could not save and crashed on, is used without being saved.
+6. **Text is drawn by egui** with the same fonts and the same whole-pixel glyph advances as Tk. Glyph edges can differ by a pixel; positions do not.
+7. **Internal only**: the version comes from `Cargo.toml`; debug builds keep their files under `target/dev-config/` (see [architecture](architecture.md#config-and-state-location)); v2.3.2's `print()` diagnostics, invisible in its windowed build, are gone; an unset `APPDATA` or `ProgramData`, which made v2.3.2 raise and cannot occur in a real Windows session, is tolerated; when replacing `process_state.json` fails, the temporary file is removed, which v2.3.2 left behind.
 
-## Quirks to port unchanged
+## Known quirks carried over from v2.3.2
 
-Each has a GitHub issue for the decision to fix it after v3.0.0, in list order: #7, #8, #9, #10, #11, #12, #13. Until an issue is worked on, the quirk stays.
+Kept on purpose so 3.0.0 behaves exactly like v2.3.2. Each has a GitHub issue for the decision to fix it; until that issue is worked on, the quirk stays.
 
-- Close on an app with no detected path that is running: the first `close_app` kills it, the second returns false, so the log says "was not running" and the card returns to not-found ([main_window.py:470-494](../../iracing_launcher_app/ui/main_window.py)).
-- "All apps launched!" is logged after the app loop regardless of failures or an empty selection.
-- `stopping` has no entry in `STATUS_COLORS`, so the dot shows the idle colour.
-- A saved `selected_game` is restored even when that game is not found: the radio is selected and disabled.
-- At the end of a launch the Launch button is set to enabled unconditionally, and likewise Close after a close, even when `_update_button_text` would have disabled it.
-- `shortcut_names` and `paths` in `RACE_GAMES` are never consulted. Games are found by saved path or Steam registry only.
-- A path containing `%` cannot be saved: `configparser` rejects the value, so `set_app_path` fails and Browse stops before the card is set idle or checked. `ConfigStore::set_app_path` returns `Err(SetPathError::Refused)` in that case; a failed save is `Err(SetPathError::Save(_))`, which Python reports as `False` and its callers ignore.
+- **[#7](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/7)** Close on a running app with no detected path: the first close attempt kills it, the second finds nothing, so the log says "was not running" and the card returns to "Not installed".
+- **[#8](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/8)** "All apps launched!" is logged after the app loop regardless of failures or an empty selection.
+- **[#9](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/9)** The `stopping` status has no colour of its own, so the dot shows the idle colour.
+- **[#10](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/10)** A saved `selected_game` is restored even when that game is not found: the radio is selected and disabled.
+- **[#11](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/11)** At the end of a launch the Launch button is enabled unconditionally, and likewise Close after a close, even when the button rules would have disabled it. The labels are not recomputed then, so a count can be stale.
+- **[#12](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/12)** The Start Menu shortcut names and install paths listed for games are never consulted. Games are found by saved path or Steam registry only.
+- **[#13](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/13)** A path containing `%` cannot be saved: `configparser` (and so v2.3.2) rejects such a value, so Browse stops before the card is set idle or checked. `ConfigStore::set_app_path` returns `SetPathError::Refused` for it; a failed write is `SetPathError::Save`, which v2.3.2 reported as `False` and its callers ignored.
 
-## Known differences, awaiting the owner's decision
+Other open issues: [#14](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/14) (the installer forgets a custom install folder and the desktop-icon choice on upgrade) and [#5](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/5) (a panic on the worker thread aborts the app instead of being caught).
 
-Found by the log gesture tests after the port (`tests/ui/log_gestures.rs`). All are in the activity log and none affects launching or closing. Until the owner decides, they are neither deliberate differences nor to be fixed in passing.
+## Known differences from v2.3.2 in the activity log, undecided
 
-- A drag after a double-click extends the selection by characters. Tk extends by whole words, and by whole lines after a triple-click; Tk also selects the word or line on the press, Rust on the release. Held by an ignored test.
+Found by the log gesture tests (`tests/ui/log_gestures.rs`). All are in the activity log and none affects launching or closing. Until the owner decides, they are neither changes nor bugs to fix in passing.
+
+- A drag after a double-click extends the selection by characters. Tk extends by whole words, and by whole lines after a triple-click; Tk also selects the word or line on the press, 3.0.0 on the release. Held by an ignored test.
 - A double-click selects a run of letters, digits and underscores. Tk on Windows selects a run of non-space characters, so `[19:45:06]` as a whole. Held by an ignored test.
 - A selection dragged past the end stops before the last line's newline. Tk's most likely includes it (read from the Tk source, not observed).
 - A drag held outside the text scrolls one line per frame. Tk scrolls (1 + distance past the edge) pixels every 50 ms.
 - A press on the scrollbar thumb centres the thumb on the pointer at once. CustomTkinter reacts to a press only on the trough.
 - In the focused log a page is the view minus one line, and Home and End go to the top and bottom. In Tk a page is the view minus two lines, Home and End go to the ends of the line, and the arrows scroll only when an invisible cursor leaves the view.
 
-## Config (`core/config_manager.py`)
+## Config
 
-- Python writes `config.ini` with the locale encoding (Windows-1252 on a typical install), not UTF-8. Read as UTF-8 and fall back to the ANSI code page when that fails. Write UTF-8.
-- `configparser` format to reproduce on write: `[Section]`, then `key = value` lines, then one blank line after each section. Section order: `AppPaths`, `Settings`. Keys are lowercased. An empty value is written as `key = ` with the trailing space.
-- Accept on read what `configparser` accepts: `=` or `:` as delimiter, surrounding whitespace, `#` and `;` comment lines, keys in any case, indented continuation lines, `[DEFAULT]`, and `%` interpolation (`%%` is a literal `%`). `src/core/config.rs` is tested byte-for-byte against fixtures produced by the real `configparser`.
-- Booleans are stored as `True` / `False`. `getboolean` accepts `1 yes true on` and `0 no false off`, case-insensitive. The fallback for a missing `*_enabled` key is true.
-- Keys: `ConfigManager.get_config_key(name)` is lowercase with spaces as underscores. App paths live under that key in `[AppPaths]`; game paths under `game_<key>`. Checkbox state is `<key>_enabled` in `[Settings]`; the game choice is `selected_game` (empty string for None).
-- `get_app_path` returns a saved value only when it exists on disk. A saved `steam://rungameid/...` never exists on disk, so every lookup for a Steam game falls through to the registry check and re-saves the URL.
-- `set_app_path` saves the file immediately. `find_app_path` and `find_game_path` therefore write config as a side effect of a successful detection.
+`config.ini` lives in the config directory ([architecture](architecture.md#config-and-state-location)) and is shared with v2.3.2, so its format follows Python's `configparser`. `src/core/config.rs` is tested byte for byte against files the real `configparser` produced (`tests/fixtures/core/`).
 
-## Process tracking (`managers/process_tracker.py`, `process_manager.py`)
+- **Encoding.** Read as UTF-8 (a leading byte-order mark is skipped); when that fails, read with the ANSI code page, which is what v2.3.2 wrote. Written as UTF-8.
+- **Written format.** `[Section]`, then `key = value` lines, then one blank line after each section. Section order `AppPaths`, `Settings`. Keys are lowercased. An empty value is written as `key = ` with the trailing space. Writes are atomic: a `.tmp` file, then replace; the `.tmp` is removed when the replace fails.
+- **Accepted on read**, as `configparser` accepts it: `=` or `:` as delimiter, surrounding whitespace, `#` and `;` comment lines, keys in any case, indented continuation lines, `[DEFAULT]`, and `%` interpolation (`%%` is a literal `%`, `%(name)s` a reference).
+- **Booleans** are stored as `True` / `False`. On read `1 yes true on` and `0 no false off` are accepted, case-insensitive. A missing `*_enabled` key means true.
+- **Keys.** An app's config key is its name lowercased with spaces as underscores (`config_key`). App paths are stored under that key in `[AppPaths]`, game paths under `game_<key>`. Checkbox state is `<key>_enabled` in `[Settings]`; the game choice is `selected_game` (empty string for None; a missing key also means None).
+- A saved path is used only when it exists on disk. A saved `steam://rungameid/...` never exists on disk, so every lookup for a Steam game falls through to the registry check and saves the URL again.
+- Saving a path writes the file immediately, so detecting an app or game writes `config.ini` as a side effect.
 
-- `process_state.json` is `{ "<App Name>": { "pid": int, "create_time": float, "exe_path": str } }`, UTF-8, written atomically (tmp file then replace). When the replace fails Rust removes the tmp file, as it does for `config.ini`; Python left it behind. `create_time` is epoch seconds as a float, derived from the process creation `FILETIME`. Keep sub-second precision: entries written by the Python version must still validate, with the same 0.5 s tolerance.
-- A tracked entry is valid only if the PID is alive and its creation time matches. Every failed validation drops the entry and saves. All entries are revalidated at load.
-- `psutil` `children(recursive=True)`: build the tree from a snapshot of (pid, parent pid). A descendant counts only if it was created at or after the tracked **root**, which guards against a recycled PID. Creation time falls back to `NtQuerySystemInformation` for processes that refuse to be opened.
-- `terminate()` and `kill()` are both `TerminateProcess` on Windows. `close_tracked`: terminate root and descendants, wait up to 3 s for all, kill survivors, drop the entry. Access-denied at any step is swallowed, and when waiting on any one process is refused the kill pass is skipped for the whole tree. It returns true whenever the tracked root was alive at the start.
-- Direct launch: argv is the exe path alone, `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`, stdio to null, inherited working directory. State is saved before the 2 s wait; success is "still alive after the wait".
-- Shell launch (`needs_shell_launch`, used for Stream Deck's `uiAccess` manifest): `ShellExecute` with no verb (the default verb, as `os.startfile` does), wait 2 s, then take a PID with that exe name that was absent before the launch. Python takes an arbitrary one; Rust takes the lowest. No new PID means failure.
-- Name matching (`is_process_running`, `kill_process`) compares exe base names case-insensitively across all processes, and `kill_process` kills every match.
-- `is_app_running`: tracked and alive, otherwise fall back to the name match so apps started outside the launcher still show as running.
-- `close_app`: tracked close when tracked, otherwise kill by exe name.
+Example, as both versions write it:
 
-## Detection (`utils/`, `managers/app_manager.py`, `game_manager.py`)
+```ini
+[AppPaths]
+fanatec = C:\Program Files\Fanatec\FanatecUI\UI\Fanatec.exe
+game_iracing = steam://rungameid/266410
 
-- App order: saved path, Start Menu shortcut, common paths. Game order: saved path, Steam registry.
-- Start Menu search: user Start Menu first, then `ProgramData`. For each root, for each shortcut name in order, recursive match on file name (case-insensitive on Windows). For apps the shortcut is resolved through the shell and the target must exist.
-- When several shortcuts share a name, Python 3.13's `rglob` order decides the winner: the root itself first, then a stack of directories where the directory met last is entered first; junctions are followed, directory symlinks are not. A game-mode hit is returned with the casing of the name searched for, not the casing on disk. `src/detect/shortcuts.rs` reproduces this and is cross-checked against the Python.
-- Garage61's common path is built at runtime: `%APPDATA%\garage61-install\garage61-launcher.exe`.
-- Steam check: `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App <appid>` exists, 64-bit registry view. A hit returns and saves `steam://rungameid/<appid>`.
-- Game launch: `steam://` through the shell then wait 3 s; `.lnk` through the shell then wait 2 s; `.exe` detached then wait 2 s, untracked. Success is "the game's exe name is running afterwards".
+[Settings]
+fanatec_enabled = True
+selected_game = iRacing
 
-## UI behaviour (`ui/`)
+```
 
-- Startup ([main_window.py:140-199](../../iracing_launcher_app/ui/main_window.py)): a not-found app gets `<key>_enabled = False` written to config. A found app's checkbox is restored from config. See deliberate difference 9 for when the window appears.
-- Button labels and enabled state: `_update_button_text`. The count is checked cards only. Both buttons are disabled only when the count is zero and no game is selected.
-- Select All toggles only found apps; its label is "Deselect All" only when every found app is checked.
-- Log lines are `[HH:MM:SS] message` in local time. The divider is 50 `─` characters with no timestamp. The log is read-only, selectable, wraps by character, scrolls to the end on every line, and shows a scrollbar only when needed.
-- Game names longer than 18 characters wrap onto a second line at the last space before the limit ([game_card.py:83](../../iracing_launcher_app/ui/widgets/game_card.py)).
-- Card subtitle: "Not installed" when not found; "N helper process(es)" only when running with a non-zero count; otherwise "No helpers".
-- The status dot is the `●` glyph at 40 px in Python. Draw a circle whose size and position come from the reference capture.
-- Browse: native open dialog, initial directory `C:\Program Files`. Apps require the exact exe name, case-insensitive. Games accept any `.lnk`, otherwise the exact exe name. A valid app pick sets the card idle, checks it and saves. The picked path is logged and saved with forward slashes, as Tk returns it.
-- Tk 8.6's dialog does not set the option that keeps a picked shortcut unresolved, so picking a `.lnk` returns its target and the `.lnk` branch of `_browse_for_game` almost never fires. The Rust dialog uses the same options and behaves the same.
+## Process tracking
+
+- **State file.** `process_state.json` is `{ "<App Name>": { "pid": int, "create_time": float, "exe_path": str } }`, UTF-8, written atomically (`.tmp` then replace), with the bytes Python's `json.dump(state, f, indent=2)` produced: same key order, same float formatting, same escaping of non-ASCII characters. `create_time` is epoch seconds as a float, converted from the process creation `FILETIME` exactly as psutil does, so entries written by v2.3.2 still validate.
+- **Validity.** A tracked entry is valid only while its PID is alive and its creation time matches within 0.5 s. A failed validation drops the entry and saves the file. All entries are revalidated at startup.
+- **Process tree.** Descendants are found from one snapshot of (pid, parent pid). A descendant counts only if it was created at or after the tracked root, which guards against a recycled PID. A process that refuses to be opened still has its creation time read, through `NtQuerySystemInformation`. Descendants that re-parent away from the tree (for example to a system process) are not seen, and so never closed.
+- **Close of a tracked app.** Terminate the root and its descendants, wait up to 3 s for all of them, kill the survivors, drop the entry. Access denied at any step is swallowed; when waiting on any one process is refused, the kill pass is skipped for the whole tree. The close counts as done whenever the root was alive at the start.
+- **Direct launch** (every app except Stream Deck): the exe path alone as the command line, `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`, standard handles on `NUL`, inherited environment and working directory. The entry is saved before the 2 s wait; success is "still alive after the wait".
+- **Shell launch** (Elgato Stream Deck, whose manifest asks for `uiAccess`, which Windows honours only through the shell; `CreateProcess` fails with error 740): `ShellExecute` with the default verb, wait 2 s, then track a PID with that exe name that was absent before the launch, the lowest if there are several. No new PID means failure.
+- **Name matching** compares exe base names case-insensitively across all processes. Killing by name kills every match.
+- **Is an app running?** Tracked and alive; otherwise any process with its exe name, so apps started outside the launcher still show as running.
+- **Close of an app.** The tracked close when tracked; otherwise (or when the tracked root was already gone) kill by exe name.
+
+## Detection
+
+- **Order.** Apps: saved path, Start Menu shortcut, common install paths. Games: saved path, Steam registry. A path found by detection is saved to `config.ini` before it is used.
+- **Start Menu search.** The user's Start Menu (`%APPDATA%\Microsoft\Windows\Start Menu\Programs`) first, then the all-users one under `%ProgramData%`. For each root, for each shortcut name in order, a recursive, case-insensitive match on the file name. For apps the shortcut is resolved through the shell and its target must exist; the target is read into a 260-character buffer, so a longer one fails the existence check.
+- **Which shortcut wins** when several share a name follows Python 3.13's `rglob` order, which v2.3.2 used: the root itself first, then a stack of directories where the directory met last is entered first; junctions are followed, directory symlinks are not. A game-mode hit is returned with the casing of the name searched for, not the casing on disk. `src/detect/shortcuts.rs` reproduces this, and `tests/detect_shortcuts.rs` holds v2.3.2's answers for a fake tree.
+- **Garage61's** common path is built at runtime: `%APPDATA%\garage61-install\garage61-launcher.exe`.
+- **Steam check.** `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App <appid>` can be opened, in the 64-bit registry view. A hit returns and saves `steam://rungameid/<appid>`.
+- **Game launch.** `steam://` through the shell, then wait 3 s; `.lnk` through the shell, then wait 2 s; `.exe` started detached and untracked, then wait 2 s. Success is "the game's exe is running afterwards". Games are never closed by the launcher: Close only reports whether the selected game is still running.
+
+## UI
+
+- **Startup.** A not-found app gets `<key>_enabled = False` written to config. A found app's checkbox is restored from config. The saved game choice is restored (see #10 above).
+- **Buttons.** The labels count checked cards only. Both buttons are disabled only when no card is checked and no game is selected. While a command of a button's kind is queued or running, that button stays disabled.
+- **Select All** toggles only found apps; its label is "Deselect All" only when every found app is checked.
+- **Log.** Lines are `[HH:MM:SS] message` in local time. The divider is 50 `─` characters with no timestamp. The log is read-only, selectable, wraps by character, scrolls to the end on every new line, scrolls 40 px per wheel notch, and shows a scrollbar only when needed. It is never trimmed.
+- **Game names** longer than 18 characters wrap onto a second line at the last space before the limit.
+- **Card subtitle.** "Not installed" when not found; "N helper process(es)" only when running with a non-zero count; otherwise "No helpers".
+- **Status dot.** v2.3.2 drew the `●` glyph at 40 px; 3.0.0 paints a circle whose size and position were taken from v2.3.2's window.
+- **Pointer.** A control acts on the press of the left button, not on release, as CustomTkinter binds it. Hit areas are exact. Controls of not-found entries and disabled buttons do nothing.
+- **Browse** opens the Windows open dialog at `C:\Program Files`. Apps require the exact exe name, case-insensitive. Games accept any `.lnk`, otherwise the exact exe name. A valid app pick sets the card idle, checks it and saves. The picked path is logged and saved with forward slashes, as Tk returned it.
+- **Picked shortcuts.** Tk 8.6's dialog does not set the option that keeps a picked shortcut unresolved, so picking a `.lnk` returns its target and the `.lnk` branch for games almost never fires. The dialog in 3.0.0 uses the same options and behaves the same.
+- **Window.** 1200x700 logical pixels, not resizable, no maximize button. egui's Ctrl+Plus/Minus/0 zoom is turned off.
