@@ -1,4 +1,4 @@
-//! Entry point (ports `iracing_launcher.py`): runs startup, opens the window and draws the UI each frame.
+//! Entry point: runs startup, opens the window and draws the UI each frame.
 
 // Release builds are windowed; debug builds keep a console for diagnostics.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -73,8 +73,8 @@ fn configure_context(ctx: &egui::Context) {
 }
 
 fn main() -> eframe::Result {
-    // iRacingLauncherGUI.__init__: config, tracker, managers, then the startup
-    // checks, all before the window first paints.
+    // Config, tracker, managers, then the startup checks, all before the window first paints,
+    // in the Python app's order.
     let config_dir = resolve_config_dir();
     let config = SharedConfig::new(ConfigStore::load(&config_dir));
     let tracker = ProcessTracker::new(config_dir.join(STATE_FILE));

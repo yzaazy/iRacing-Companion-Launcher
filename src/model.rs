@@ -1,4 +1,5 @@
-//! What the screen shows and what the user did (no single Python file; see docs/rewrite/contracts.md).
+//! What the screen shows and what the user did: the types shared by the controller, the worker
+//! and the UI.
 //!
 //! The serde derives stay because `tests/fixtures/ui/fixtures.json` deserialises
 //! into [`ViewState`] and the controller transcripts are recorded as JSON.

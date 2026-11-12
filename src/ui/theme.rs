@@ -1,6 +1,6 @@
-//! Ports `ui/constants.py`: every colour, corner radius, border width and font the UI uses.
+//! Every colour, corner radius, border width and font the UI uses.
 //!
-//! Values come from the Python source and CustomTkinter's dark `blue.json` theme; `ui-spec.json`
+//! Values come from the Python app (up to v2.3.2) and CustomTkinter's dark `blue.json` theme; `ui-spec.json`
 //! confirms each one against the reference screenshots (`colors`, `shapes`, `fonts`).
 
 use crate::model::{LogLevel, Status};

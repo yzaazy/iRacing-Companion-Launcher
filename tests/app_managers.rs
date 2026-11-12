@@ -333,7 +333,7 @@ fn app_found_nowhere_writes_nothing() {
     assert_eq!(f.config(), None);
 }
 
-/// Deliberate difference 8: Python crashes saving a `%` path; Rust uses it unsaved.
+/// A deliberate difference: the Python app crashed saving a `%` path; Rust uses it unsaved.
 #[test]
 fn detected_path_with_a_percent_is_used_unsaved() {
     let f = Fixture::new("app-percent");
@@ -449,7 +449,7 @@ fn untracked_app_is_found_by_name() {
 }
 
 // ---------------------------------------------------------------------------
-// launch_app, get_child_names, close_app
+// launch_app, child_names, close_app
 // ---------------------------------------------------------------------------
 
 thread_local! {
@@ -516,7 +516,7 @@ fn direct_launch_is_tracked() {
     let state = f.state().unwrap();
     assert_eq!(state[APP]["exe_path"], exe.as_str());
     assert!(state[APP]["pid"].is_u64());
-    assert!(m.get_child_names(APP).is_empty());
+    assert!(m.child_names(APP).is_empty());
     assert!(m.is_app_running(APP));
 }
 
@@ -568,7 +568,7 @@ fn tracked_tree_is_named_and_closed_as_a_tree() {
     assert!(m.launch_app(APP, &root));
     let names = [f.dummies.name("child"), f.dummies.name("grandchild")];
     assert!(
-        wait_until(Duration::from_secs(15), || m.get_child_names(APP) == names),
+        wait_until(Duration::from_secs(15), || m.child_names(APP) == names),
         "expected child and grandchild"
     );
 
@@ -577,7 +577,7 @@ fn tracked_tree_is_named_and_closed_as_a_tree() {
         assert!(exited(&f.dummies.name(role)), "{role} survived");
     }
     assert_eq!(f.state(), Some(json!({})));
-    assert!(m.get_child_names(APP).is_empty());
+    assert!(m.child_names(APP).is_empty());
 }
 
 #[test]
@@ -623,7 +623,7 @@ fn nothing_running_is_not_running_and_not_closed() {
     let mut m = f.app_managers(vec![f.app("never-started", vec![], false)], vec![]);
     assert!(!m.is_app_running(APP));
     assert!(!m.close_app(APP));
-    assert!(m.get_child_names(APP).is_empty());
+    assert!(m.child_names(APP).is_empty());
     assert_eq!(f.state(), None);
 }
 
@@ -759,7 +759,7 @@ fn unknown_names_answer_like_python() {
     assert_eq!(managers.app_exe(name), None);
     assert_eq!(managers.find_app_path(name), None);
     assert!(!managers.is_app_running(name));
-    assert!(managers.get_child_names(name).is_empty());
+    assert!(managers.child_names(name).is_empty());
     assert!(!managers.launch_app(name, "C:/x.exe"));
     assert!(!managers.close_app(name));
     assert_eq!(managers.game_exe(name), None);

@@ -1,6 +1,6 @@
-//! Ports `managers/process_manager.py`: name-based process checks, kills and launches.
+//! Name-based process checks, kills and launches.
 //!
-//! The Python delegates to `psutil`; [`sys`] reproduces what psutil does on
+//! The Python app (up to v2.3.2) delegated these to `psutil`; [`sys`] reproduces what psutil does on
 //! Windows (which Win32 calls, which access rights, which error counts as "no
 //! such process" and which as "access denied"), because those details decide
 //! what the launcher sees.
@@ -85,7 +85,7 @@ pub fn shell_open(target: &str) -> std::io::Result<()> {
     }
 }
 
-/// PIDs of every process named `exe_name`, case-insensitive (`_pids_by_exe`).
+/// PIDs of every process named `exe_name`, case-insensitive.
 fn pids_by_exe(exe_name: &str) -> Vec<u32> {
     let wanted = exe_name.to_lowercase();
     snapshot()

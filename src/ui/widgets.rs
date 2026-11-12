@@ -1,5 +1,5 @@
-//! Ports how CustomTkinter paints the widgets of `ui/widgets/status_card.py` and
-//! `ui/widgets/game_card.py`: rounded frames, checkbox, radio button, status dot and buttons.
+//! Paints the app and game cards' widgets as CustomTkinter painted them in the Python app:
+//! rounded frames, checkbox, radio button, status dot and buttons.
 //! Every shape is painted at a rect from `layout`, in colours from `theme`.
 
 use crate::ui::pack::Bounds;

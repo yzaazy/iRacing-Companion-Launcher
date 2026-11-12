@@ -1,4 +1,4 @@
-//! `resolve_config_dir` (contracts.md, "Config and state location").
+//! `resolve_config_dir`: where `config.ini` and `process_state.json` live.
 //!
 //! One test in its own binary: it sets an environment variable, which is only
 //! sound while no other thread reads the environment.

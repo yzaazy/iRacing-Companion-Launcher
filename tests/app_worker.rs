@@ -59,8 +59,8 @@ impl Backend for HookedBackend {
     fn is_app_running(&mut self, app: &str) -> bool {
         self.inner.is_app_running(app)
     }
-    fn get_child_names(&mut self, app: &str) -> Vec<String> {
-        self.inner.get_child_names(app)
+    fn child_names(&mut self, app: &str) -> Vec<String> {
+        self.inner.child_names(app)
     }
     fn launch_app(&mut self, app: &str, path: &str) -> bool {
         (self.on_launch)();

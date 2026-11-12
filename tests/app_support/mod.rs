@@ -147,7 +147,8 @@ impl Backend for FakeBackend {
     fn is_app_running(&mut self, app: &str) -> bool {
         flag(self.call("is_app_running", &[app], json!(false)))
     }
-    fn get_child_names(&mut self, app: &str) -> Vec<String> {
+    // The transcripts record this call under the Python app's method name.
+    fn child_names(&mut self, app: &str) -> Vec<String> {
         serde_json::from_value(self.call("get_child_names", &[app], json!([]))).unwrap()
     }
     fn launch_app(&mut self, app: &str, path: &str) -> bool {

@@ -1,4 +1,5 @@
-//! The Browse dialog: the Windows open dialog as Tk 8.6's `tk_getOpenFile` opens it (`filedialog.askopenfilename` in `ui/main_window.py`).
+//! The Browse dialog: the Windows open dialog as Tk 8.6's `tk_getOpenFile` opens it, which the
+//! Python app (up to v2.3.2) used through `filedialog.askopenfilename`.
 //!
 //! The controller asks for a file through [`FileDialog`]; this is the real
 //! implementation, kept apart so the controller holds no Win32 code.

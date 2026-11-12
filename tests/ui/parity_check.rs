@@ -1,5 +1,5 @@
 //! Compares a render with the Python reference screenshot of the same state, in the three classes
-//! of the parity criteria (`docs/rewrite/contracts.md`, "Parity criteria"):
+//! of the parity criteria:
 //!
 //! - **flat**: every pixel outside the two classes below. Passes with zero pixels whose channels
 //!   differ by more than [`TOLERANCE`].
@@ -25,7 +25,8 @@
 //! differences inside zones in orange, and for each failing text element its reference ink box in
 //! green and the render's in yellow.
 //!
-//! This is a port of the retired `tools/ui_diff.py`, number for number.
+//! The criteria and thresholds are those of the Python diff tool used while porting the UI,
+//! number for number.
 
 use image::{Rgb, RgbImage};
 use serde_json::Value;

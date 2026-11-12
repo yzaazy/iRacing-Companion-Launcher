@@ -1,4 +1,4 @@
-//! Ports the activity log's CTkTextbox (`ui/sections/log_section.py`): a read-only Tk Text
+//! The activity log, as the Python app's CustomTkinter `CTkTextbox` behaved: a read-only Tk Text
 //! widget that wraps by character, scrolls to the end on every new line, scrolls 40 px per wheel
 //! notch, shows a scrollbar only when needed, and lets the user select and copy text.
 //!

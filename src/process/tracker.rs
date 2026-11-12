@@ -1,4 +1,4 @@
-//! Ports `managers/process_tracker.py`: launches apps and tracks their process trees across restarts.
+//! Launches apps and tracks their process trees across restarts.
 //!
 //! State lives in `process_state.json` (see [`super::state_file`]), shared with
 //! the Python version so an upgrade keeps tracking the apps the old launcher
@@ -142,7 +142,7 @@ impl ProcessTracker {
     }
 
     /// Exe names of the tracked process's descendants, depth first, or empty.
-    pub fn get_child_names(&mut self, key: &str) -> Vec<String> {
+    pub fn child_names(&mut self, key: &str) -> Vec<String> {
         let Some(root) = self.proc_for(key) else {
             return Vec::new();
         };

@@ -41,7 +41,7 @@ fn apps_match_python_in_order() {
             app.name
         );
         if app.name == "Garage61" {
-            // Empty in app_definitions.py; AppManager fills it from %APPDATA%.
+            // Empty in the Python definitions; its app manager filled it from %APPDATA%.
             assert!(strings(&py["paths"]).is_empty());
         } else {
             assert_eq!(app.paths, strings(&py["paths"]), "{}: paths", app.name);
