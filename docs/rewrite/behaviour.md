@@ -31,6 +31,17 @@ These are the only places Rust may differ from Python. Anything else that differ
 - `shortcut_names` and `paths` in `RACE_GAMES` are never consulted. Games are found by saved path or Steam registry only.
 - A path containing `%` cannot be saved: `configparser` rejects the value, so `set_app_path` fails and Browse stops before the card is set idle or checked. `ConfigStore::set_app_path` returns `Err(SetPathError::Refused)` in that case; a failed save is `Err(SetPathError::Save(_))`, which Python reports as `False` and its callers ignore.
 
+## Known differences, awaiting the owner's decision
+
+Found by the log gesture tests after the port (`tests/ui/log_gestures.rs`). All are in the activity log and none affects launching or closing. Until the owner decides, they are neither deliberate differences nor to be fixed in passing.
+
+- A drag after a double-click extends the selection by characters. Tk extends by whole words, and by whole lines after a triple-click; Tk also selects the word or line on the press, Rust on the release. Held by an ignored test.
+- A double-click selects a run of letters, digits and underscores. Tk on Windows selects a run of non-space characters, so `[19:45:06]` as a whole. Held by an ignored test.
+- A selection dragged past the end stops before the last line's newline. Tk's most likely includes it (read from the Tk source, not observed).
+- A drag held outside the text scrolls one line per frame. Tk scrolls (1 + distance past the edge) pixels every 50 ms.
+- A press on the scrollbar thumb centres the thumb on the pointer at once. CustomTkinter reacts to a press only on the trough.
+- In the focused log a page is the view minus one line, and Home and End go to the top and bottom. In Tk a page is the view minus two lines, Home and End go to the ends of the line, and the arrows scroll only when an invisible cursor leaves the view.
+
 ## Config (`core/config_manager.py`)
 
 - Python writes `config.ini` with the locale encoding (Windows-1252 on a typical install), not UTF-8. Read as UTF-8 and fall back to the ANSI code page when that fails. Write UTF-8.
