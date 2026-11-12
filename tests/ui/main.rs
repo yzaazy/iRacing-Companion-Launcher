@@ -9,6 +9,7 @@ mod fonts;
 mod interaction;
 mod keyboard;
 mod layout;
+mod log_gestures;
 mod log_perf;
 mod parity;
 mod parity_check;

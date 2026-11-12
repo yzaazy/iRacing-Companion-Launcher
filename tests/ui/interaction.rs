@@ -3,9 +3,8 @@
 //! flash and the redraw after a toggle match CustomTkinter's; the log wheel jumps as Tk's does.
 
 use crate::support::{
-    Probe, button_event, fixture, geometry, harness, live, pixel_now as pixel, wheel,
+    button_event, copied, fixture, geometry, harness, live, pixel_now as pixel, wheel,
 };
-use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
 use iracing_companion_launcher::model::{LogLevel, LogLine, UiAction};
 use iracing_companion_launcher::ui::pack::Bounds;
@@ -393,19 +392,6 @@ fn a_wheel_notch_jumps_40_px_at_once() {
     }
     assert_ne!(before, after);
 }
-fn copied(h: &mut Harness<'static, Probe>) -> Option<String> {
-    h.event(egui::Event::Copy);
-    h.step();
-    h.output()
-        .platform_output
-        .commands
-        .iter()
-        .find_map(|c| match c {
-            egui::OutputCommand::CopyText(text) => Some(text.clone()),
-            _ => None,
-        })
-}
-
 #[test]
 fn log_selection_copies_across_lines_and_survives_scrolling() {
     let state = fixture("log-full");

@@ -230,3 +230,17 @@ pub(crate) fn wheel(h: &Harness<'static, Probe>, notches: f32) {
         source: egui::MouseWheelSource::Wheel,
     });
 }
+
+/// Send a copy (what Ctrl+C becomes) and return the text the window put on the clipboard.
+pub(crate) fn copied(h: &mut Harness<'static, Probe>) -> Option<String> {
+    h.event(egui::Event::Copy);
+    h.step();
+    h.output()
+        .platform_output
+        .commands
+        .iter()
+        .find_map(|c| match c {
+            egui::OutputCommand::CopyText(text) => Some(text.clone()),
+            _ => None,
+        })
+}
