@@ -57,10 +57,25 @@ fn u32_at(b: &[u8], at: usize) -> Option<u32> {
 /// Code point ranges (inclusive) that map to a glyph.
 type Coverage = Vec<(u32, u32)>;
 
-/// What is known about a file: per face, its names and coverage.
+/// A face's names and coverage.
+type Face = (Vec<String>, Coverage);
+
+/// What is known about a file: per face, its names and coverage. Faces that share a table
+/// directory in a collection share one read.
 struct Faces {
-    faces: Vec<(Vec<String>, Coverage)>,
+    faces: Vec<Arc<Face>>,
 }
+
+/// The most faces a collection may name. The largest collections ship a few dozen; a header
+/// naming more is refused, so a corrupt one cannot cost a read per claimed face.
+const MAX_FACES: usize = 256;
+
+/// The most glyph lookups a format 4 subtable may cost. Format 4 covers the 65,536 code points
+/// of the BMP and a valid table's segments do not overlap, so a valid table looks each code up
+/// at most once and never reaches this. With it a format 4 read makes at most 65,536 lookups,
+/// visits at most 32,767 segments, and returns at most 65,536 ranges from lookups plus two per
+/// segment without them.
+const MAX_FORMAT4_LOOKUPS: usize = 0x1_0000;
 
 static PROBED: OnceLock<Mutex<HashMap<PathBuf, Option<Arc<Faces>>>>> = OnceLock::new();
 
@@ -83,9 +98,9 @@ pub fn probe_file(path: &Path, face: &str, c: char) -> Option<(u32, bool)> {
     let index = faces
         .faces
         .iter()
-        .position(|(names, _)| names.iter().any(|n| n.eq_ignore_ascii_case(face)))
+        .position(|f| f.0.iter().any(|n| n.eq_ignore_ascii_case(face)))
         .unwrap_or(0);
-    let (_, coverage) = faces.faces.get(index)?;
+    let (_, coverage) = &**faces.faces.get(index)?;
     Some((index as u32, contains(coverage, c)))
 }
 
@@ -93,7 +108,7 @@ pub fn probe_file(path: &Path, face: &str, c: char) -> Option<(u32, bool)> {
 pub(super) fn covers(mut bytes: &[u8], index: u32, c: char) -> bool {
     read_faces(&mut bytes)
         .and_then(|f| f.faces.into_iter().nth(index as usize))
-        .is_some_and(|(_, coverage)| contains(&coverage, c))
+        .is_some_and(|face| contains(&face.1, c))
 }
 
 fn contains(coverage: &Coverage, c: char) -> bool {
@@ -105,6 +120,9 @@ fn read_faces(src: &mut impl Source) -> Option<Faces> {
     let head = src.bytes(0, 12)?;
     let offsets = if head.get(0..4)? == b"ttcf" {
         let n = u32_at(&head, 8)? as usize;
+        if n > MAX_FACES {
+            return None;
+        }
         let table = src.bytes(12, 4 * n)?;
         (0..n)
             .map(|i| u32_at(&table, 4 * i).map(u64::from))
@@ -112,14 +130,22 @@ fn read_faces(src: &mut impl Source) -> Option<Faces> {
     } else {
         vec![0]
     };
+    let mut read: HashMap<u64, Arc<Face>> = HashMap::new();
     let faces = offsets
         .into_iter()
-        .map(|offset| read_face(src, offset))
+        .map(|offset| match read.get(&offset) {
+            Some(face) => Some(Arc::clone(face)),
+            None => {
+                let face = Arc::new(read_face(src, offset)?);
+                read.insert(offset, Arc::clone(&face));
+                Some(face)
+            }
+        })
         .collect::<Option<Vec<_>>>()?;
     Some(Faces { faces })
 }
 
-fn read_face(src: &mut impl Source, offset: u64) -> Option<(Vec<String>, Coverage)> {
+fn read_face(src: &mut impl Source, offset: u64) -> Option<Face> {
     let head = src.bytes(offset, 12)?;
     let n = usize::from(u16_at(&head, 4)?);
     let records = src.bytes(offset + 12, 16 * n)?;
@@ -220,6 +246,7 @@ fn format4(sub: &[u8]) -> Option<Coverage> {
     let deltas = starts + 2 * segs;
     let range_offsets = deltas + 2 * segs;
     let mut out = Vec::new();
+    let mut lookups = 0;
     for s in 0..segs {
         let end = u32::from(u16_at(sub, ends + 2 * s)?);
         let start = u32::from(u16_at(sub, starts + 2 * s)?);
@@ -245,9 +272,15 @@ fn format4(sub: &[u8]) -> Option<Coverage> {
             continue;
         }
         for code in start..=end {
+            // A table whose segments overlap: without this, 32,767 segments of 65,535 codes cost
+            // two billion lookups and up to a billion ranges. The rest of the table is not read.
+            if lookups == MAX_FORMAT4_LOOKUPS {
+                return Some(out);
+            }
+            lookups += 1;
             let at = ro_at + ro + 2 * (code - start) as usize;
             // Each code's glyph lies further on than the last, so the first one past the end of
-            // the table ends the segment: a lying table cannot cost two billion lookups.
+            // the table ends the segment.
             let Some(glyph) = u16_at(sub, at) else {
                 break;
             };
@@ -415,5 +448,87 @@ mod tests {
             "took {:?}",
             started.elapsed()
         );
+    }
+
+    /// `segs` segments each spanning 0..=0xFFFE with in-range offsets into one shared glyph
+    /// array of 65,535 entries, `glyph(code)` each.
+    fn overlapping_format4(segs: u16, glyph: impl Fn(u16) -> u16) -> Vec<u8> {
+        let segments: Vec<_> = (0..segs).map(|s| (0, 0xFFFE, 2 * (segs - s))).collect();
+        let glyphs: Vec<u16> = (0..=0xFFFE).map(glyph).collect();
+        font_with(1, &format4_table(&segments, &glyphs), None)
+    }
+
+    #[test]
+    fn overlapping_format4_segments_stop_after_one_bmp_of_lookups() {
+        // 32,767 segments of 65,535 codes, each found in the table: two billion lookups.
+        let bytes = overlapping_format4(32_767, |_| 1);
+        let started = std::time::Instant::now();
+        let faces = read_faces(&mut bytes.as_slice()).unwrap();
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "took {:?}",
+            started.elapsed()
+        );
+        // The first segment, and one code of the second.
+        assert_eq!(faces.faces[0].1, [(0, 0xFFFE), (0, 0)]);
+    }
+
+    #[test]
+    fn overlapping_format4_segments_cannot_allocate_a_billion_ranges() {
+        // Every other code mapped: a range per code, a billion ranges over all segments.
+        let bytes = overlapping_format4(32_767, |code| code % 2);
+        let started = std::time::Instant::now();
+        let faces = read_faces(&mut bytes.as_slice()).unwrap();
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "took {:?}",
+            started.elapsed()
+        );
+        assert_eq!(faces.faces[0].1.len(), 32_767);
+        assert!(covers(&bytes, 0, 'A'));
+        assert!(!covers(&bytes, 0, 'B'));
+    }
+
+    /// A collection header naming `n` faces, every offset pointing at the one face of `face`.
+    fn collection(n: u32, face: &[u8]) -> Vec<u8> {
+        let header = 12 + 4 * n;
+        let mut bytes = b"ttcf\0\x01\0\0".to_vec();
+        bytes.extend(n.to_be_bytes());
+        bytes.extend((0..n).flat_map(|_| header.to_be_bytes()));
+        // The face's table offsets are relative to the file: shift them past the header.
+        let mut face = face.to_vec();
+        let at = u32_at(&face, 20).unwrap() + header;
+        face[20..24].copy_from_slice(&at.to_be_bytes());
+        bytes.extend(face);
+        bytes
+    }
+
+    #[test]
+    fn collection_faces_sharing_a_directory_are_read_once() {
+        let bytes = collection(3, &font(&[(0x41, 0x41, 5)], None));
+        let faces = read_file("shared", &bytes).unwrap();
+        assert_eq!(faces.faces.len(), 3);
+        assert!(faces.faces.iter().all(|f| Arc::ptr_eq(f, &faces.faces[0])));
+        assert!(covers(&bytes, 2, 'A'));
+    }
+
+    #[test]
+    fn collection_naming_too_many_faces_is_refused() {
+        let face = font(&[(0x41, 0x41, 5)], None);
+        assert_eq!(
+            read_faces(&mut collection(256, &face).as_slice())
+                .unwrap()
+                .faces
+                .len(),
+            256
+        );
+        // A million faces, each a full format 4 walk with 32,767 ranges: a read per face was
+        // minutes and gigabytes.
+        let face = overlapping_format4(1, |code| code % 2);
+        let bytes = collection(1_000_000, &face);
+        let started = std::time::Instant::now();
+        assert!(read_file("many", &bytes).is_none());
+        assert!(!covers(&bytes, 0, 'A'));
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
     }
 }
