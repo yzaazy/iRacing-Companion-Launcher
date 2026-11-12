@@ -38,15 +38,25 @@ pub enum LaunchMethod {
 pub struct ProcessTracker {
     state_file: PathBuf,
     state: State,
+    /// The launch wait: `std::thread::sleep`, as Python's `time.sleep`.
+    sleep: fn(Duration),
 }
 
 impl ProcessTracker {
     /// Loads the state file and drops every entry whose process is gone or whose
     /// PID was recycled. A missing or unreadable file means nothing is tracked.
     pub fn new(state_file: PathBuf) -> Self {
+        Self::with_sleep(state_file, std::thread::sleep)
+    }
+
+    /// [`Self::new`] with `sleep` in place of `std::thread::sleep` for the wait
+    /// after a launch, for tests: a test can then wait for an event instead of
+    /// a fixed time. `sleep` receives the `wait` passed to the launch.
+    pub fn with_sleep(state_file: PathBuf, sleep: fn(Duration)) -> Self {
         let mut tracker = Self {
             state: load(&state_file),
             state_file,
+            sleep,
         };
         let keys: Vec<String> = tracker.state.0.iter().map(|(k, _)| k.clone()).collect();
         for key in keys {
@@ -76,7 +86,7 @@ impl ProcessTracker {
             if shell_open(exe_path).is_err() {
                 return false;
             }
-            std::thread::sleep(wait);
+            (self.sleep)(wait);
             // Python takes `next(iter(new_pids))`, an arbitrary member of a set;
             // the lowest PID is the deterministic equivalent.
             let Some(pid) = pids_by_exe(exe_name)
@@ -104,7 +114,7 @@ impl ProcessTracker {
         self.set(key, pid, create_time, exe_path);
         self.save();
 
-        std::thread::sleep(wait);
+        (self.sleep)(wait);
         self.proc_for(key).is_some()
     }
 

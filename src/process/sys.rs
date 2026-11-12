@@ -611,4 +611,70 @@ mod tests {
         assert_eq!(create_time(0xFFFF_FFF1), Err(ProcError::NoSuchProcess));
         assert_eq!(nt_create_time(0xFFFF_FFF1), Err(ProcError::NoSuchProcess));
     }
+
+    mod props {
+        use super::*;
+        use proptest::prelude::*;
+        use windows::Win32::Foundation::{HLOCAL, LocalFree};
+        use windows::Win32::UI::Shell::CommandLineToArgvW;
+
+        /// Windows' own split of a command line into arguments.
+        fn argv(cmdline: &str) -> Vec<String> {
+            let line = wide(cmdline);
+            let mut argc = 0i32;
+            // SAFETY: `line` is a NUL-terminated UTF-16 string alive across the
+            // call and `argc` a live i32; the result is freed below.
+            let args = unsafe { CommandLineToArgvW(PCWSTR(line.as_ptr()), &raw mut argc) };
+            assert!(!args.is_null());
+            let out = (0..usize::try_from(argc).unwrap())
+                // SAFETY: the call returned `argc` NUL-terminated strings.
+                .map(|i| unsafe { (*args.add(i)).to_string() }.unwrap())
+                .collect();
+            // SAFETY: `args` came from CommandLineToArgvW, which allocates it with
+            // LocalAlloc as one block; it is freed once and not used after.
+            let _ = unsafe { LocalFree(Some(HLOCAL(args.cast()))) };
+            out
+        }
+
+        /// Characters that the quoting rules treat specially, and any other.
+        fn arg() -> impl Strategy<Value = String> {
+            let c = prop_oneof![
+                3 => prop::sample::select(vec!['\\', '"', ' ', '\t', 'a']),
+                1 => any::<char>().prop_filter("a C string ends at NUL", |c| *c != '\0'),
+            ];
+            prop::collection::vec(c, 0..24).prop_map(String::from_iter)
+        }
+
+        /// Characters a Windows file path may hold, weighted towards the ones
+        /// the quoting treats specially.
+        fn exe_path() -> impl Strategy<Value = String> {
+            let c = prop_oneof![
+                3 => prop::sample::select(vec!['\\', ' ', 'a', '.']),
+                1 => any::<char>().prop_filter("not in a file name", |c| !c.is_control() && *c != '"'),
+            ];
+            prop::collection::vec(c, 0..24)
+                .prop_map(String::from_iter)
+                .prop_filter("an exe path", |p| !p.ends_with('\\'))
+        }
+
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases(4096))]
+
+            /// Any argument after the first comes back as it was.
+            #[test]
+            fn list2cmdline_round_trips(arg in arg()) {
+                let line = format!("x {}", list2cmdline(&arg));
+                prop_assert_eq!(argv(&line), ["x".to_owned(), arg]);
+            }
+
+            /// `spawn_detached` passes the exe path alone, which Windows reads by
+            /// the first argument's rules: up to the closing quote, no escapes,
+            /// and unquoted up to any control character. A file path holds no
+            /// `"` and no control character, and an exe path never ends in `\`.
+            #[test]
+            fn exe_path_comes_back_as_the_first_argument(path in exe_path()) {
+                prop_assert_eq!(argv(&list2cmdline(&path)), [path]);
+            }
+        }
+    }
 }
