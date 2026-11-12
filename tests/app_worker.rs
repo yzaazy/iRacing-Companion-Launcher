@@ -197,6 +197,50 @@ fn commands_queue_in_order_with_their_own_selection() {
     );
 }
 
+/// The end of a sequence applies the button rule: with nothing selected any
+/// more, Launch and Close stay disabled (#11; Python enabled them).
+#[test]
+fn buttons_stay_disabled_after_sequences_when_nothing_is_selected() {
+    let dir = tempfile::tempdir().unwrap();
+    let rec = Recorder::default();
+    let config = SharedConfig::new(ConfigStore::load(dir.path()));
+    let script = json!({
+        "find_app_path": every_app(json!("C:/fake/app.exe")),
+        "find_game_path": {},
+        "launch_app": every_app(json!(true)),
+        "close_app": every_app(json!(true)),
+    });
+    let (open_gate, gate) = channel();
+    let mut backend = gated(FakeBackend::new(script, rec.clone()), gate);
+    let startup = Controller::startup(&mut backend, Box::new(config), "3.0.0", None);
+    let sequencer = Sequencer::new(Box::new(backend), startup.game_statuses());
+    let mut controller = startup.attach(Box::new(Worker::spawn(sequencer, || {})));
+    let mut dialog = FakeDialog::new([], rec);
+
+    controller.handle(UiAction::Launch, &mut dialog);
+    controller.handle(UiAction::Close, &mut dialog);
+    controller.handle(UiAction::ToggleSelectAll, &mut dialog);
+    assert!(controller.state().apps.iter().all(|c| !c.checked));
+    assert_eq!(controller.state().selected_game, None);
+
+    open_gate.send(()).unwrap();
+    wait_until(&mut controller, |c| {
+        c.state()
+            .log
+            .last()
+            .is_some_and(|l| l.text.ends_with("All apps closed!"))
+    });
+    // `CloseFinished` follows the last log line.
+    std::thread::sleep(Duration::from_millis(50));
+    controller.pump();
+
+    let state = controller.state();
+    assert_eq!(state.launch_label, "Launch apps (0)");
+    assert_eq!(state.close_label, "Close all (0)");
+    assert!(!state.launch_enabled, "Launch stays disabled");
+    assert!(!state.close_enabled, "Close stays disabled");
+}
+
 /// Runs one Close with every app found and checked, inline, and returns the
 /// log lines after "Closing applications..." without their timestamps.
 /// `config` is the test's `config.ini`.

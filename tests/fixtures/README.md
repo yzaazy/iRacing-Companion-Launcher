@@ -48,7 +48,7 @@ configparser input and output, and the app definitions, written on 2026-11-11 (c
 
 The transcripts name the backend calls by the Python method names (`get_child_names`, ...); `tests/app_support/mod.rs` maps them to the Rust names. `files/` holds the files the browse scenarios pick in the file dialog; the paths in `transcripts.json` point at them.
 
-`tests/app_transcripts.rs` replays every scenario against the Rust controller and requires the same transcript and end state.
+`tests/app_transcripts.rs` replays every scenario against the Rust controller and requires the same transcript and end state. One end state is edited by hand for a deliberate change ([#11](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/11)): in `close_not_found_running_double_close` the labels read `(6)` where Python left them stale at `(7)`, because the end of a sequence now recomputes them.
 
 ## ui/
 
