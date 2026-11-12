@@ -24,17 +24,6 @@ const APP_DIR_NAME: &str = "iRacingCompanionLauncher";
 /// Key/value pairs in file order, values raw (not interpolated).
 type Items = Vec<(String, String)>;
 
-/// Why [`ConfigStore::set_app_path`] did not store and save a path.
-#[derive(Debug)]
-pub enum SetPathError {
-    /// `configparser` refuses the value (a `%` that is neither `%%` nor a
-    /// `%(name)s` reference). Python raises `ValueError` before saving:
-    /// nothing is stored or written.
-    Refused,
-    /// The value is stored, but writing `config.ini` failed.
-    Save(io::Error),
-}
-
 /// Where `ConfigParser.get` or `getboolean` raises.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ReadError {
@@ -130,13 +119,13 @@ impl ConfigStore {
         Path::new(&saved).exists().then_some(saved)
     }
 
-    /// Saves.
-    pub fn set_app_path(&mut self, key: &str, path: &str) -> Result<(), SetPathError> {
-        // Python raises ValueError before saving; nothing is stored or written.
-        if !self.set(APP_PATHS, key, path) {
-            return Err(SetPathError::Refused);
-        }
-        self.save().map_err(SetPathError::Save)
+    /// Saves. Every `%` is written as `%%`, configparser's own escape, so any
+    /// path is stored and reads back as it was, in v2.3.2 too. v2.3.2 wrote
+    /// the path raw and raised on a lone `%` (`docs/behaviour.md`, change 11).
+    pub fn set_app_path(&mut self, key: &str, path: &str) -> io::Result<()> {
+        // An escaped value is always accepted and `[AppPaths]` always exists.
+        self.set(APP_PATHS, key, &path.replace('%', "%%"));
+        self.save()
     }
 
     pub fn setting(&self, key: &str) -> Option<String> {

@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)] // strategies outside #[test] functions; a panic there fails the test
 
-use iracing_companion_launcher::core::config::{ConfigStore, SetPathError};
+use iracing_companion_launcher::core::config::ConfigStore;
 use iracing_companion_launcher::ui::geometry::wrap_game_name;
 use proptest::prelude::*;
 
@@ -85,6 +85,11 @@ fn accepted_value() -> impl Strategy<Value = String> {
 fn refused_value() -> impl Strategy<Value = String> {
     ("[^%\\p{Cc}]{0,8}", "([^%(\\p{Cc}][^%\\p{Cc}]{0,7})?")
         .prop_map(|(before, after)| format!("{before}%{after}"))
+}
+
+/// A file name heavy in `%`, `(`, `)` and `s`; Windows drops a trailing space.
+fn path_name() -> impl Strategy<Value = String> {
+    "[a-z%()s ]{0,11}[a-z%()s]"
 }
 
 fn key() -> impl Strategy<Value = String> {
@@ -169,15 +174,27 @@ proptest! {
         prop_assert_eq!(read, Some(value.replace("%%", "%")));
     }
 
-    /// A value configparser refuses is neither stored nor saved.
+    /// A setting configparser refuses is not stored.
     #[test]
-    fn refused_value_is_refused(key in key(), value in refused_value()) {
+    fn refused_setting_is_dropped(key in key(), value in refused_value()) {
         let dir = tempfile::tempdir().unwrap();
         let mut store = ConfigStore::load(dir.path());
-        prop_assert!(matches!(store.set_app_path(&key, &value), Err(SetPathError::Refused)));
-        prop_assert!(!dir.path().join(CONFIG).exists());
         store.set_setting(&key, &value);
         prop_assert_eq!(store.setting(&key), None);
+    }
+
+    /// Any path is saved, `%` and `%(name)s` included, and reads back as it was.
+    #[test]
+    fn any_path_round_trips(key in key(), name in path_name()) {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join(&name);
+        std::fs::write(&exe, b"").unwrap();
+        let exe = exe.to_str().unwrap();
+        let mut store = ConfigStore::load(dir.path());
+        store.set_app_path(&key, exe).unwrap();
+        prop_assert_eq!(store.app_path(&key), Some(exe.to_owned()));
+        let reloaded = ConfigStore::load(dir.path()).app_path(&key);
+        prop_assert_eq!(reloaded, Some(exe.to_owned()));
     }
 }
 
