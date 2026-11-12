@@ -1,6 +1,6 @@
 //! Fakes for the controller tests: a scripted backend that records every call
 //! and never touches a process, recording config and dialog wrappers, and the
-//! transcript format `tests/fixtures/app/capture_transcripts.py` writes.
+//! format of the recorded transcripts in `tests/fixtures/app/transcripts.json`.
 
 #![allow(dead_code)] // each test binary uses a different part of this module
 #![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] functions; a panic there fails the test

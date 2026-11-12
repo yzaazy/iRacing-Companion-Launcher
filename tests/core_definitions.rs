@@ -1,4 +1,4 @@
-//! The definitions equal `core/app_definitions.py`, dumped by tests/fixtures/core/generate.py.
+//! The definitions equal the Python app's up to v2.3.2, dumped into `tests/fixtures/core/definitions.json`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] functions; a panic there fails the test
 
