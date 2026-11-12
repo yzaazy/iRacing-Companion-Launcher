@@ -38,6 +38,18 @@ configparser input and output, written by `core/generate.py`.
 
 Controller transcripts, written by `app/capture_transcripts.py`.
 
+## ui/
+
+The window as the Python app v2.3.2 drew it, at 1200x700 and 96 DPI. The layout tests (`tests/ui/layout.rs`) and the screenshot parity tests (`tests/ui/parity.rs`) compare the Rust window against these files.
+
+| File | What it is |
+|---|---|
+| `fixtures.json` | The five fixture states (`idle`, `mixed`, `none-selected`, `all-missing`, `log-full`): what every card, checkbox, radio button and log line shows. Written by hand; the capture script and the Rust tests both drive the window into these states. |
+| `ui-spec.json` | Everything measured from the running Python window per state: widget rectangles, painted boxes, text placement and ink, fonts, colours, shape geometry, and notes on what the numbers alone do not explain. `_readme` inside describes the structure, `environment` the machine (Windows 11, Python 3.13.14, CustomTkinter 5.2.2, Tk 8.6.15). |
+| `reference/<state>.png` | The window's client area in each state, captured with `PrintWindow`. |
+
+`ui-spec.json` and the screenshots were measured and captured on 2026-11-11 from the running Python app v2.3.2 by `tools/capture_reference.py`, which built the window from the app's own UI modules, drove it into each state of `fixtures.json` and closed it again. That script needed the Python app, so it was deleted with it; its last version is in commit `d0a9ffb` (`git show d0a9ffb:tools/capture_reference.py`). The paths inside `_readme` are where the files lived then (`docs/rewrite/`).
+
 ## Frozen answers in test code
 
 `mixed_tree_matches_python_answers` in `tests/detect_shortcuts.rs` holds the Python `find_shortcut_target` answers for a fake Start Menu tree, from the last run of the former `tests/detect_python_crosscheck.rs` (`cargo test --test detect_python_crosscheck -- --ignored --nocapture`, 2026-11-12, Python 3.13.14, commit `e45ffe5`).

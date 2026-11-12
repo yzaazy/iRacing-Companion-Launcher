@@ -1,6 +1,6 @@
 //! What the screen shows and what the user did (no single Python file; see docs/rewrite/contracts.md).
 //!
-//! The serde derives stay because `docs/rewrite/fixtures.json` deserialises
+//! The serde derives stay because `tests/fixtures/ui/fixtures.json` deserialises
 //! into [`ViewState`] and the controller transcripts are recorded as JSON.
 
 use serde::{Deserialize, Serialize};
