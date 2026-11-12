@@ -1,4 +1,4 @@
-//! The shared types read the fixture shape from `docs/rewrite/contracts.md` and round-trip.
+//! The shared types in `model.rs` read the fixture shape from `docs/rewrite/contracts.md` and round-trip.
 
 use iracing_companion_launcher::model::{
     AppCard, GameCard, LogLevel, LogLine, Status, UiAction, ViewState,
