@@ -3,6 +3,7 @@
 //! transcript format `tests/fixtures/app/capture_transcripts.py` writes.
 
 #![allow(dead_code)] // each test binary uses a different part of this module
+#![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] functions; a panic there fails the test
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -17,21 +18,21 @@ use serde_json::{Value, json};
 
 /// The ordered transcript shared by every fake.
 #[derive(Clone, Default)]
-pub struct Recorder(Arc<Mutex<Vec<Value>>>);
+pub(crate) struct Recorder(Arc<Mutex<Vec<Value>>>);
 
 impl Recorder {
-    pub fn push(&self, item: Value) {
+    pub(crate) fn push(&self, item: Value) {
         self.0
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .push(item);
     }
 
-    pub fn take(&self) -> Vec<Value> {
+    pub(crate) fn take(&self) -> Vec<Value> {
         std::mem::take(&mut *self.0.lock().unwrap_or_else(PoisonError::into_inner))
     }
 
-    pub fn snapshot(&self) -> Vec<Value> {
+    pub(crate) fn snapshot(&self) -> Vec<Value> {
         self.0
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -39,7 +40,7 @@ impl Recorder {
     }
 
     /// Records what the Python `StatusCard`/`GameCard`/`ActivityLogger` wrappers record.
-    pub fn event(&self, event: &Event) {
+    pub(crate) fn event(&self, event: &Event) {
         match event {
             Event::Log(line) => {
                 let level = serde_json::to_value(line.level).unwrap();
@@ -81,14 +82,14 @@ fn strip_timestamp(text: &str) -> &str {
 /// Scripted answers: `script[method][name]` is a list consumed in order, the
 /// last value sticky; a missing entry gives the method's default. Defaults
 /// match the Python fakes.
-pub struct FakeBackend {
+pub(crate) struct FakeBackend {
     script: Value,
     counters: HashMap<(String, String), usize>,
     rec: Recorder,
 }
 
 impl FakeBackend {
-    pub fn new(script: Value, rec: Recorder) -> Self {
+    pub(crate) fn new(script: Value, rec: Recorder) -> Self {
         Self {
             script,
             counters: HashMap::new(),
@@ -179,13 +180,13 @@ impl Backend for FakeBackend {
 }
 
 /// The real `ConfigStore` (in a temp dir) behind the real `Settings` impl, recording writes.
-pub struct RecordingSettings {
-    pub inner: SharedConfig,
+pub(crate) struct RecordingSettings {
+    pub(crate) inner: SharedConfig,
     rec: Recorder,
 }
 
 impl RecordingSettings {
-    pub fn new(inner: SharedConfig, rec: Recorder) -> Self {
+    pub(crate) fn new(inner: SharedConfig, rec: Recorder) -> Self {
         Self { inner, rec }
     }
 }
@@ -212,13 +213,13 @@ impl Settings for RecordingSettings {
 }
 
 /// Returns scripted picks (`""` is a cancelled dialog) and records each request.
-pub struct FakeDialog {
-    pub picks: VecDeque<String>,
+pub(crate) struct FakeDialog {
+    pub(crate) picks: VecDeque<String>,
     rec: Recorder,
 }
 
 impl FakeDialog {
-    pub fn new(picks: impl IntoIterator<Item = String>, rec: Recorder) -> Self {
+    pub(crate) fn new(picks: impl IntoIterator<Item = String>, rec: Recorder) -> Self {
         Self {
             picks: picks.into_iter().collect(),
             rec,

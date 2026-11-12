@@ -9,6 +9,7 @@ The seams between agents. Each agent builds its own module against these and nob
 - The module named `core` shadows nothing as long as code writes `crate::core::...`, never a bare `core::...`.
 - Crates: `eframe`/`egui` for the UI, `windows` for every Win32 call, the Browse dialog opened as `IFileOpenDialog` through `windows` with Tk's exact options (`raw-window-handle` supplies the owner window), `serde` + `serde_json`, `winresource` as a build dependency, `egui_kittest` and `image` as dev dependencies. The INI reader/writer is hand-written because the file format must match Python's `configparser`.
 - `#![windows_subsystem = "windows"]` in release builds.
+- Lints live in the `[lints]` table of `Cargo.toml` and the gate denies their warnings. Fix a hit in code. Test code may `unwrap` and `expect`: `clippy.toml` allows it in `#[test]` functions, and an integration-test file whose helpers need it carries a file-level `#![allow(clippy::unwrap_used, clippy::expect_used)]` with its reason.
 
 ## Layout and ownership
 

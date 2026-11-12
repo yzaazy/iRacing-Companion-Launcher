@@ -161,7 +161,7 @@ pub(super) fn text_origin(
 // ---------------------------------------------------------------------------------------------
 // The window.
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Column {
     pub column: Bounds,
     pub heading_row: Bounds,
@@ -170,7 +170,7 @@ pub struct Column {
     pub cards: Vec<Bounds>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogColumn {
     pub column: Bounds,
     /// The parcel the heading label is packed into (side top, anchor w).
@@ -188,7 +188,7 @@ pub struct LogText {
     pub scrollbar: Option<Bounds>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Layout {
     window: Vec2,
     pub header: Bounds,

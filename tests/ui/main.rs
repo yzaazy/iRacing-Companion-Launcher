@@ -3,6 +3,8 @@
 //!
 //! Tests that render share one wgpu device (`support`), so they run in parallel.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] functions; a panic there fails the test
+
 mod fonts;
 mod interaction;
 mod keyboard;

@@ -1,6 +1,6 @@
 //! Ports `core/app_definitions.py`: the companion apps and racing games the launcher knows.
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppDef {
     pub name: &'static str,
     pub exe: &'static str,
@@ -9,7 +9,7 @@ pub struct AppDef {
     pub needs_shell_launch: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GameDef {
     pub name: &'static str,
     pub exe: &'static str,

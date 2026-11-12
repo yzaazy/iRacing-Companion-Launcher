@@ -78,10 +78,10 @@ impl Sequencer {
         };
         match command {
             Command::Launch { apps, game } => {
-                launch_apps(self.backend.as_mut(), &mut out, &apps, game.as_deref())
+                launch_apps(self.backend.as_mut(), &mut out, &apps, game.as_deref());
             }
             Command::Close { apps, game } => {
-                close_apps(self.backend.as_mut(), &mut out, &apps, game.as_deref())
+                close_apps(self.backend.as_mut(), &mut out, &apps, game.as_deref());
             }
         }
     }

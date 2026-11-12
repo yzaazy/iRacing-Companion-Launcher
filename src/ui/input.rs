@@ -215,7 +215,7 @@ impl Controls {
             self.memory.no_hover.remove(&c.id);
         }
         if c.enabled && hovered && self.primary_pressed {
-            self.pressed(&c.id, c.action.clone(), c.kind);
+            self.pressed(c.id, c.action.clone(), c.kind);
         }
         let flashing = match self.memory.flash.get(&c.id) {
             Some(&until) if until > self.time => {
@@ -257,14 +257,14 @@ impl Controls {
         ));
     }
 
-    fn pressed(&mut self, id: &Id, action: Option<UiAction>, kind: Kind) {
+    fn pressed(&mut self, id: Id, action: Option<UiAction>, kind: Kind) {
         match kind {
             Kind::Button => {
-                self.memory.flash.insert(*id, self.time + FLASH_SECONDS);
+                self.memory.flash.insert(id, self.time + FLASH_SECONDS);
             }
             Kind::Toggle { changes_state } => {
                 if changes_state {
-                    self.memory.no_hover.insert(*id);
+                    self.memory.no_hover.insert(id);
                 }
             }
         }
@@ -310,7 +310,7 @@ impl Controls {
                         && let Some(Activate { action, kind }) = stops[i].activate.clone()
                     {
                         let id = stops[i].id;
-                        self.pressed(&id, action, kind);
+                        self.pressed(id, action, kind);
                     }
                 }
                 Press::Drop => {

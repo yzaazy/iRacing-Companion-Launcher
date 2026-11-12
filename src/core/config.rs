@@ -44,7 +44,7 @@ enum ReadError {
 }
 
 /// `ConfigManager`: the parsed `config.ini` plus the directory it lives in.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConfigStore {
     dir: PathBuf,
     defaults: Items,
@@ -600,7 +600,7 @@ mod tests {
                 match want {
                     Value::Null => assert_eq!(got, Ok(None), "{name}: get {ident}"),
                     Value::String(s) => {
-                        assert_eq!(got, Ok(Some(s.clone())), "{name}: get {ident}")
+                        assert_eq!(got, Ok(Some(s.clone())), "{name}: get {ident}");
                     }
                     _ => assert_eq!(got, Err(ReadError::Interpolation), "{name}: get {ident}"),
                 }

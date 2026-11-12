@@ -3,6 +3,8 @@
 //! Name-based running checks and kills would match the developer's real
 //! apps, so they are covered by the transcript tests through the fake backend.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] functions; a panic there fails the test
+
 use iracing_companion_launcher::core::config::{ConfigStore, SharedConfig};
 use iracing_companion_launcher::managers::{Backend, Managers};
 use iracing_companion_launcher::process::tracker::ProcessTracker;

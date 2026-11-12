@@ -13,12 +13,12 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 /// The Python window's size, at which the reference screenshots were taken.
-pub const WINDOW: Vec2 = egui::vec2(1200.0, 700.0);
+pub(crate) const WINDOW: Vec2 = egui::vec2(1200.0, 700.0);
 
 /// The fixture states every reference image has, in `fixtures.json`.
-pub const STATES: [&str; 5] = ["all-missing", "idle", "log-full", "mixed", "none-selected"];
+pub(crate) const STATES: [&str; 5] = ["all-missing", "idle", "log-full", "mixed", "none-selected"];
 
-pub fn repo_path(rel: &str) -> PathBuf {
+pub(crate) fn repo_path(rel: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
 }
 
@@ -28,7 +28,7 @@ fn read_repo_file(rel: &str) -> String {
 }
 
 /// `docs/rewrite/fixtures.json`, read once.
-pub fn fixtures() -> &'static BTreeMap<String, ViewState> {
+pub(crate) fn fixtures() -> &'static BTreeMap<String, ViewState> {
     static FIXTURES: OnceLock<BTreeMap<String, ViewState>> = OnceLock::new();
     FIXTURES.get_or_init(|| {
         let all: BTreeMap<String, ViewState> =
@@ -43,7 +43,7 @@ pub fn fixtures() -> &'static BTreeMap<String, ViewState> {
     })
 }
 
-pub fn fixture(name: &str) -> ViewState {
+pub(crate) fn fixture(name: &str) -> ViewState {
     fixtures()
         .get(name)
         .unwrap_or_else(|| panic!("no fixture state {name}"))
@@ -51,7 +51,7 @@ pub fn fixture(name: &str) -> ViewState {
 }
 
 /// `docs/rewrite/ui-spec.json`, read once.
-pub fn spec() -> &'static Value {
+pub(crate) fn spec() -> &'static Value {
     static SPEC: OnceLock<Value> = OnceLock::new();
     SPEC.get_or_init(|| serde_json::from_str(&read_repo_file("docs/rewrite/ui-spec.json")).unwrap())
 }
@@ -83,7 +83,7 @@ fn renderer() -> LazyRenderer {
 }
 
 /// The window at 1200x700 and one pixel per point, with the app's fonts and the shared device.
-pub fn builder<S>() -> HarnessBuilder<S> {
+pub(crate) fn builder<S>() -> HarnessBuilder<S> {
     HarnessBuilder::default()
         .with_size(WINDOW)
         .with_pixels_per_point(1.0)
@@ -93,9 +93,9 @@ pub fn builder<S>() -> HarnessBuilder<S> {
 }
 
 /// What a harness shows and what the user did in it.
-pub struct Probe {
-    pub state: ViewState,
-    pub actions: Vec<UiAction>,
+pub(crate) struct Probe {
+    pub(crate) state: ViewState,
+    pub(crate) actions: Vec<UiAction>,
 }
 
 fn probe_harness(
@@ -121,12 +121,12 @@ fn probe_harness(
 }
 
 /// The window on `state`, collecting the actions it emits.
-pub fn harness(state: ViewState) -> Harness<'static, Probe> {
+pub(crate) fn harness(state: ViewState) -> Harness<'static, Probe> {
     probe_harness(builder(), state, false)
 }
 
 /// A harness whose state follows the actions, as the controller would, with frames 25 ms apart.
-pub fn live(state: ViewState) -> Harness<'static, Probe> {
+pub(crate) fn live(state: ViewState) -> Harness<'static, Probe> {
     probe_harness(builder().with_step_dt(0.025), state, true)
 }
 
@@ -147,7 +147,11 @@ fn follow_actions(state: &mut ViewState, actions: &[UiAction]) {
 }
 
 /// `state` rendered at `window` and `pixels_per_point`.
-pub fn render_at(state: &ViewState, window: Vec2, pixels_per_point: f32) -> image::RgbaImage {
+pub(crate) fn render_at(
+    state: &ViewState,
+    window: Vec2,
+    pixels_per_point: f32,
+) -> image::RgbaImage {
     let state = state.clone();
     let mut h = builder()
         .with_size(window)
@@ -161,12 +165,12 @@ pub fn render_at(state: &ViewState, window: Vec2, pixels_per_point: f32) -> imag
 }
 
 /// `state` rendered at 1200x700, one pixel per point.
-pub fn render(state: &ViewState) -> image::RgbaImage {
+pub(crate) fn render(state: &ViewState) -> image::RgbaImage {
     render_at(state, WINDOW, 1.0)
 }
 
 /// Run `f` inside a frame of a context with the app's fonts installed, without a renderer.
-pub fn with_ctx<R>(f: impl FnOnce(&egui::Context) -> R) -> R {
+pub(crate) fn with_ctx<R>(f: impl FnOnce(&egui::Context) -> R) -> R {
     let ctx = egui::Context::default();
     ui::install_fonts(&ctx);
     let mut f = Some(f);
@@ -182,32 +186,32 @@ pub fn with_ctx<R>(f: impl FnOnce(&egui::Context) -> R) -> R {
 }
 
 /// The geometry `draw` paints `state` with at 1200x700.
-pub fn geometry(state: &ViewState) -> geometry::Geometry {
+pub(crate) fn geometry(state: &ViewState) -> geometry::Geometry {
     with_ctx(|ctx| geometry::geometry(ctx, state, WINDOW))
 }
 
-pub fn pixel(image: &image::RgbaImage, p: Pos2) -> Color32 {
+pub(crate) fn pixel(image: &image::RgbaImage, p: Pos2) -> Color32 {
     let q = image.get_pixel(p.x as u32, p.y as u32);
     Color32::from_rgb(q[0], q[1], q[2])
 }
 
 /// The colour at `p` in a fresh render of the harness.
-pub fn pixel_now(h: &mut Harness<'static, Probe>, p: Pos2) -> Color32 {
+pub(crate) fn pixel_now(h: &mut Harness<'static, Probe>, p: Pos2) -> Color32 {
     pixel(&h.render().expect("headless render"), p)
 }
 
-pub fn press(h: &mut Harness<'static, Probe>, key: Key) {
+pub(crate) fn press(h: &mut Harness<'static, Probe>, key: Key) {
     h.key_press(key);
     h.run();
 }
 
-pub fn tabs(h: &mut Harness<'static, Probe>, n: usize) {
+pub(crate) fn tabs(h: &mut Harness<'static, Probe>, n: usize) {
     for _ in 0..n {
         press(h, Key::Tab);
     }
 }
 
-pub fn button_event(h: &Harness<'static, Probe>, pos: Pos2, pressed: bool) {
+pub(crate) fn button_event(h: &Harness<'static, Probe>, pos: Pos2, pressed: bool) {
     h.event(egui::Event::PointerButton {
         pos,
         button: egui::PointerButton::Primary,
@@ -217,7 +221,7 @@ pub fn button_event(h: &Harness<'static, Probe>, pos: Pos2, pressed: bool) {
 }
 
 /// `notches` wheel notches; positive scrolls towards the top.
-pub fn wheel(h: &Harness<'static, Probe>, notches: f32) {
+pub(crate) fn wheel(h: &Harness<'static, Probe>, notches: f32) {
     h.event(egui::Event::MouseWheel {
         unit: egui::MouseWheelUnit::Line,
         delta: egui::vec2(0.0, notches),

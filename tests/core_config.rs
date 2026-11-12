@@ -1,5 +1,7 @@
 //! `ConfigStore` against files written by Python's configparser (tests/fixtures/core).
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] functions; a panic there fails the test
+
 use iracing_companion_launcher::core::config::{ConfigStore, SetPathError, config_key};
 use serde_json::Value;
 use std::fs;

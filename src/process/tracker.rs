@@ -157,12 +157,9 @@ impl ProcessTracker {
         let Some(root) = self.proc_for(key) else {
             return false;
         };
-        let descendants = match children(root.pid) {
-            Ok(d) => d,
-            Err(_) => {
-                self.drop_key(key);
-                return false;
-            }
+        let Ok(descendants) = children(root.pid) else {
+            self.drop_key(key);
+            return false;
         };
 
         let targets: Vec<Target> = std::iter::once(root)

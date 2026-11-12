@@ -33,7 +33,7 @@ use std::collections::HashMap;
 use std::fmt::Write as _;
 
 /// Per-channel tolerance for flat and edges.
-pub const TOLERANCE: i32 = 8;
+pub(crate) const TOLERANCE: i32 = 8;
 
 const FLAT_COLOR: Rgb<u8> = Rgb([255, 40, 60]);
 const EDGE_COLOR: Rgb<u8> = Rgb([255, 140, 0]);
@@ -44,8 +44,8 @@ const NEW_INK_COLOR: Rgb<u8> = Rgb([255, 230, 0]);
 /// Pixels; beyond this, attribution of flat differences samples.
 const MAX_ATTRIBUTED: usize = 50_000;
 
-pub const WINDOW_BG: Px = [0x24, 0x24, 0x24];
-pub const CARD_BG: Px = [0x2d, 0x2d, 0x30];
+pub(crate) const WINDOW_BG: Px = [0x24, 0x24, 0x24];
+pub(crate) const CARD_BG: Px = [0x2d, 0x2d, 0x30];
 /// Max channel distance from the background that counts as ink.
 const INK_THRESHOLD: i32 = 48;
 /// Pixels the text window extends left and right of its region.
@@ -59,9 +59,9 @@ const TEXT_TOL_COLOR: i32 = 16;
 /// Min channel distance from the background that counts towards the ink colour.
 const AA_THRESHOLD: i32 = 16;
 
-pub type Px = [u8; 3];
+pub(crate) type Px = [u8; 3];
 
-pub fn hex(s: &str) -> Px {
+pub(crate) fn hex(s: &str) -> Px {
     let h = s.trim_start_matches('#');
     let c = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).unwrap();
     [c(0), c(2), c(4)]
@@ -80,15 +80,15 @@ fn px(img: &RgbImage, x: i32, y: i32) -> Px {
 
 /// `(x0, y0, x1, y1)`, the right and bottom edges exclusive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Box4 {
-    pub x0: i32,
-    pub y0: i32,
-    pub x1: i32,
-    pub y1: i32,
+pub(crate) struct Box4 {
+    pub(crate) x0: i32,
+    pub(crate) y0: i32,
+    pub(crate) x1: i32,
+    pub(crate) y1: i32,
 }
 
 impl Box4 {
-    pub fn new(x0: i32, y0: i32, x1: i32, y1: i32) -> Self {
+    pub(crate) fn new(x0: i32, y0: i32, x1: i32, y1: i32) -> Self {
         Self { x0, y0, x1, y1 }
     }
 
@@ -132,7 +132,7 @@ impl std::fmt::Display for Opt {
 }
 
 /// A spec rect `{x, y, w, h}`, when the value is a non-empty object.
-pub fn rect(v: Option<&Value>) -> Option<(i32, i32, i32, i32)> {
+pub(crate) fn rect(v: Option<&Value>) -> Option<(i32, i32, i32, i32)> {
     let v = v?.as_object().filter(|o| !o.is_empty())?;
     let n = |k: &str| v[k].as_i64().unwrap_or_else(|| panic!("{k} in {v:?}")) as i32;
     Some((n("x"), n("y"), n("w"), n("h")))
@@ -153,10 +153,10 @@ fn truthy(v: Option<&Value>) -> bool {
 
 // ------------------------------------------------------------------------------------------ zones
 
-pub struct Zone {
-    pub name: String,
-    pub bx: Box4,
-    pub bg: Px,
+pub(crate) struct Zone {
+    pub(crate) name: String,
+    pub(crate) bx: Box4,
+    pub(crate) bg: Px,
 }
 
 /// Four square zones over the corners of a box CustomTkinter paints floored to even width and
@@ -182,7 +182,7 @@ fn corner_zones(name: &str, (x, y, w, h): (i32, i32, i32, i32), radius: f32, bg:
 }
 
 /// Every zone of the edges class for one state, from the element rects in `ui-spec.json`.
-pub fn edge_zones(st: &Value) -> Vec<Zone> {
+pub(crate) fn edge_zones(st: &Value) -> Vec<Zone> {
     let mut zones = Vec::new();
     for (name, e) in st["elements"].as_object().unwrap() {
         let Some(r) = rect(e.get("rect")) else {
@@ -240,13 +240,13 @@ fn shape_bbox(img: &RgbImage, bx: Box4, bg: Px, tol: i32) -> Option<Box4> {
     found
 }
 
-pub struct ZoneResult {
-    pub name: String,
-    pub bx: Box4,
-    pub non_edge: Vec<(i32, i32)>,
-    pub ref_bbox: Option<Box4>,
-    pub new_bbox: Option<Box4>,
-    pub ok: bool,
+pub(crate) struct ZoneResult {
+    pub(crate) name: String,
+    pub(crate) bx: Box4,
+    pub(crate) non_edge: Vec<(i32, i32)>,
+    pub(crate) ref_bbox: Option<Box4>,
+    pub(crate) new_bbox: Option<Box4>,
+    pub(crate) ok: bool,
 }
 
 fn check_zone(zone: &Zone, reference: &RgbImage, new: &RgbImage, tol: i32) -> ZoneResult {
@@ -279,14 +279,14 @@ fn check_zone(zone: &Zone, reference: &RgbImage, new: &RgbImage, tol: i32) -> Zo
 
 // ------------------------------------------------------------------------------------------- text
 
-pub struct TextItem {
-    pub name: String,
-    pub region: (i32, i32, i32, i32),
-    pub bg: Px,
+pub(crate) struct TextItem {
+    pub(crate) name: String,
+    pub(crate) region: (i32, i32, i32, i32),
+    pub(crate) bg: Px,
 }
 
 /// The text regions of a state by name, without the status dots' glyph regions.
-pub fn text_regions(st: &Value) -> HashMap<String, (i32, i32, i32, i32)> {
+pub(crate) fn text_regions(st: &Value) -> HashMap<String, (i32, i32, i32, i32)> {
     st["text_regions"]
         .as_array()
         .unwrap()
@@ -302,7 +302,7 @@ pub fn text_regions(st: &Value) -> HashMap<String, (i32, i32, i32, i32)> {
 }
 
 /// Every text element and visible log line with ink: name, region, background.
-pub fn text_items(st: &Value) -> Vec<TextItem> {
+pub(crate) fn text_items(st: &Value) -> Vec<TextItem> {
     let regions = text_regions(st);
     let mut items = Vec::new();
     for (name, t) in st["text"].as_object().unwrap() {
@@ -364,12 +364,12 @@ fn ink_color(img: &RgbImage, window: Box4, bg: Px) -> Option<Px> {
     }))
 }
 
-pub struct TextResult {
-    pub name: String,
-    pub reference: Option<Box4>,
-    pub new: Option<Box4>,
-    pub why: String,
-    pub ok: bool,
+pub(crate) struct TextResult {
+    pub(crate) name: String,
+    pub(crate) reference: Option<Box4>,
+    pub(crate) new: Option<Box4>,
+    pub(crate) why: String,
+    pub(crate) ok: bool,
 }
 
 fn hex_color(c: Px) -> String {
@@ -429,7 +429,7 @@ fn check_text(item: &TextItem, reference: &RgbImage, new: &RgbImage) -> TextResu
 // ------------------------------------------------------------------------------------------- flat
 
 /// One element's share of the flat differences: name, pixel count, bounding box `(x, y, w, h)`.
-pub type Owner = (String, usize, (i32, i32, i32, i32));
+pub(crate) type Owner = (String, usize, (i32, i32, i32, i32));
 
 /// Group the flat difference pixels (raster indices) by the smallest element containing them.
 fn attribute(on: &[usize], width: usize, elements: &Value) -> Vec<Owner> {
@@ -485,58 +485,58 @@ fn attribute(on: &[usize], width: usize, elements: &Value) -> Vec<Owner> {
 
 // ------------------------------------------------------------------------------------------ state
 
-pub struct Flat {
-    pub px: usize,
-    pub bbox: Option<Box4>,
-    pub elements: Vec<Owner>,
+pub(crate) struct Flat {
+    pub(crate) px: usize,
+    pub(crate) bbox: Option<Box4>,
+    pub(crate) elements: Vec<Owner>,
     /// Raster indices of the differing pixels.
-    pub on: Vec<usize>,
+    pub(crate) on: Vec<usize>,
 }
 
-pub struct Diff {
-    pub state: String,
-    pub flat: Flat,
-    pub zones: usize,
-    pub edges_failed: Vec<ZoneResult>,
-    pub text_items: usize,
-    pub text_failed: Vec<TextResult>,
+pub(crate) struct Diff {
+    pub(crate) state: String,
+    pub(crate) flat: Flat,
+    pub(crate) zones: usize,
+    pub(crate) edges_failed: Vec<ZoneResult>,
+    pub(crate) text_items: usize,
+    pub(crate) text_failed: Vec<TextResult>,
 }
 
 impl Diff {
-    pub fn flat_ok(&self) -> bool {
+    pub(crate) fn flat_ok(&self) -> bool {
         self.flat.px == 0
     }
 
-    pub fn edges_ok(&self) -> bool {
+    pub(crate) fn edges_ok(&self) -> bool {
         self.edges_failed.is_empty()
     }
 
-    pub fn text_ok(&self) -> bool {
+    pub(crate) fn text_ok(&self) -> bool {
         self.text_failed.is_empty()
     }
 
-    pub fn ok(&self) -> bool {
+    pub(crate) fn ok(&self) -> bool {
         self.flat_ok() && self.edges_ok() && self.text_ok()
     }
 
-    pub fn edges_failed_names(&self) -> Vec<&str> {
+    pub(crate) fn edges_failed_names(&self) -> Vec<&str> {
         self.edges_failed.iter().map(|z| z.name.as_str()).collect()
     }
 
-    pub fn text_failed_names(&self) -> Vec<&str> {
+    pub(crate) fn text_failed_names(&self) -> Vec<&str> {
         self.text_failed.iter().map(|t| t.name.as_str()).collect()
     }
 }
 
 /// The spec of one state.
-pub fn state_spec<'a>(spec: &'a Value, state: &str) -> &'a Value {
+pub(crate) fn state_spec<'a>(spec: &'a Value, state: &str) -> &'a Value {
     let st = &spec["states"][state];
     assert!(st.is_object(), "state {state} not in ui-spec.json");
     st
 }
 
 /// Compare `new` with `reference` for `state`, at per-channel tolerance `tol`.
-pub fn compare(
+pub(crate) fn compare(
     state: &str,
     st: &Value,
     reference: &RgbImage,
@@ -642,7 +642,7 @@ fn outline(img: &mut RgbImage, b: Box4, color: Rgb<u8>) {
 }
 
 /// The reference dimmed, with the classes' areas outlined and every failure highlighted.
-pub fn diff_image(diff: &Diff, st: &Value, reference: &RgbImage) -> RgbImage {
+pub(crate) fn diff_image(diff: &Diff, st: &Value, reference: &RgbImage) -> RgbImage {
     let mut img = reference.clone();
     for p in img.pixels_mut() {
         for c in &mut p.0 {
@@ -678,7 +678,7 @@ pub fn diff_image(diff: &Diff, st: &Value, reference: &RgbImage) -> RgbImage {
 }
 
 /// The per-class summary line and up to `detail` failures per class, one per line.
-pub fn report(diff: &Diff, detail: usize) -> String {
+pub(crate) fn report(diff: &Diff, detail: usize) -> String {
     let flag = |ok: bool| if ok { "ok  " } else { "FAIL" };
     let mut out = format!(
         "{:<14} flat {} {:>6} px   edges {} {:>3}/{:<3} zones   text {} {:>3}/{:<3} elements\n",

@@ -34,7 +34,7 @@ const BUTTON_TEXT: Color32 = hex(0xdce4ee);
 pub(super) const BUTTON_TEXT_DISABLED: Color32 = hex(0x999999);
 
 /// Fill and hover fill of a CTkButton.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ButtonColors {
     pub fill: Color32,
     pub hover: Color32,

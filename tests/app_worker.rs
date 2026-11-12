@@ -2,6 +2,8 @@
 //! order, each with the selection captured at its press, and buttons stay
 //! disabled while their command is queued or running.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] functions; a panic there fails the test
+
 mod app_support;
 
 use std::sync::Arc;

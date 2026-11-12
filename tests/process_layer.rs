@@ -7,6 +7,8 @@
 //! directory on drop, also when a test fails, and every dummy exits by itself
 //! after two minutes.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] functions; a panic there fails the test
+
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::OnceLock;

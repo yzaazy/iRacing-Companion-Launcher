@@ -68,7 +68,7 @@ impl Settings for SharedConfig {
 
 /// An `askopenfilename` call: title, `(label, pattern)` filters with Tk's
 /// `*.exe;*.lnk` patterns, and the initial directory.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DialogRequest {
     pub title: String,
     pub filters: Vec<(String, String)>,

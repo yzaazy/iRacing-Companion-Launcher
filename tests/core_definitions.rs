@@ -1,5 +1,7 @@
 //! The definitions equal `core/app_definitions.py`, dumped by tests/fixtures/core/generate.py.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] functions; a panic there fails the test
+
 use iracing_companion_launcher::core::definitions::{apps, games};
 use serde_json::Value;
 use std::path::Path;

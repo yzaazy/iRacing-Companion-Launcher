@@ -3,6 +3,8 @@
 //! and worker with a fake backend, and asserts identical transcripts and end
 //! states. Sequences run inline here so the order is deterministic.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] functions; a panic there fails the test
+
 mod app_support;
 
 use app_support::{FakeBackend, FakeDialog, Recorder, RecordingSettings};
