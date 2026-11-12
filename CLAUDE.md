@@ -1,376 +1,63 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for coding agents working in this repository.
 
-## Rust rewrite (in progress on `rust-rewrite`)
+## Project
 
-The app is being ported to Rust (egui/eframe) for release as v3.0.0. Until then the Python code is the **reference implementation**: read it, leave it unedited. Every section below this one describes the Python app.
+A Windows desktop app (Rust, egui/eframe 0.37, `windows` crate) that launches and closes sim-racing companion apps and a selected racing sim, tracks the process trees it started, and shows status and an activity log. Version 3.x is a 1:1 port of the Python app v2.3.2 (git tag `v2.3.2`), with its window reproduced pixel for pixel at 1200x700 and its files kept compatible.
 
-- **Spec**: the Python source. Port behaviour 1:1, known quirks included. [docs/rewrite/behaviour.md](docs/rewrite/behaviour.md) lists the parity traps that reading the code alone misses, and the only deliberate differences.
-- **Contract**: [docs/rewrite/contracts.md](docs/rewrite/contracts.md) fixes module layout, file ownership and the shared types. Read it before writing Rust. Changing a shared type is the orchestrator's call: stop and report.
-- **UI numbers**: `docs/rewrite/ui-spec.json` and `docs/rewrite/reference/*.png` are measured from the running Python app. Layout rules reproduce them at 1200x700, and `cargo test` fails when a fixture state stops matching its reference (`tests/ui/parity.rs`).
-- **Gate**: `pwsh tools/gate.ps1` runs format, clippy with warnings as errors, and tests. Rust work is done when it prints `GATE GREEN`.
-- **Run**: `cargo run`. When `cargo` is not found, prepend `$env:USERPROFILE\.cargo\bin` to PATH.
+## Layout
 
-### Guardrails
+```
+src/main.rs          window shell: startup, eframe loop
+src/lib.rs           declares every module
+src/model.rs         ViewState, UiAction and the other shared types
+src/app.rs           Controller (state, actions, events); Settings and FileDialog seams
+src/worker.rs        Command/Event, Sequencer, Worker thread, Dispatch seam
+src/managers.rs      Backend seam and Managers: detection, launch, close
+src/core/            config.ini store, app/game definitions, log lines
+src/detect/          Start Menu, Steam registry, common paths
+src/process/         name-based process ops, tracker, process_state.json, Win32 primitives
+src/dialog.rs        the Browse dialog
+src/ui/              pure draw function: packer port, layout rules, theme, widgets, input, log, text, fonts
+src/win.rs           shared Win32 helpers
+tests/               one binary per area; tests/ui/ is the UI binary
+tests/fixtures/      data captured from v2.3.2 (see its README); tests/fixtures/ui/ holds the UI spec, fixture states and reference screenshots
+tests/snapshots/     golden renders of the Rust window
+tools/gate.ps1       the gate
+windows installer.iss  Inno Setup script
+```
 
-- The developer's real companion apps and games (Fanatec, Stream Deck, SimHub, iRacing and the rest) run on this machine. Tests launch and kill only **dummy processes** they started themselves, under names no real app uses. Pressing Launch or Close in a running build is the developer's step.
+## Where the truth is
+
+- The code and its tests.
+- [docs/behaviour.md](docs/behaviour.md): what the app does, the changes from v2.3.2, the quirks kept on purpose (each with its issue), the undecided log differences. Behaviour not listed there as a change must match v2.3.2; a quirk stays until its issue is worked on.
+- [docs/architecture.md](docs/architecture.md): modules, seams, threads, tests, parity criteria, packaging. [docs/adr/](docs/adr/README.md): the decisions behind them; do not reverse one in passing.
+
+## Gate
+
+`pwsh tools/gate.ps1` runs `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test`. Work is done when it prints `GATE GREEN` on the final edit. Fix lint hits in code; an `#[allow]` needs a reason beside it. Never weaken a test to get green. The `rust-gate` skill has the details.
+
+## Run
+
+`cargo run`. When `cargo` is not found, prepend `$env:USERPROFILE\.cargo\bin` to PATH.
+
+## Guardrails
+
+- The developer's real companion apps and games (Fanatec, Stream Deck, SimHub, iRacing and the rest) run on this machine. Tests launch and kill only **dummy processes** they started themselves, under names no real app uses (`tests/dummy_support`). Pressing Launch or Close in a running build is the developer's step.
 - Debug builds and tests keep config and state under `target/dev-config/` or a temp directory. Only an installed release build uses `%APPDATA%\iRacingCompanionLauncher`.
 - Edit only the files your brief assigns to you.
 - Pushing, tagging, building the installer and releasing each wait for the user's explicit go.
 
-### Version, build and release (Rust)
+## UI changes
 
-This replaces the Python-era "Version Management", "Building Executable", "Creating Installer" and "Creating a Release" sections once the Python code is removed. Semantic versioning (MAJOR.MINOR.PATCH), tags `v{version}`.
+`cargo test --test ui parity` compares each fixture state with the v2.3.2 screenshot (`tests/fixtures/ui/reference/`) and then with its golden render (`tests/snapshots/`). Follow the `ui-parity` skill after any change under `src/ui`.
 
-`version` in `Cargo.toml` is the single source of truth. `build.rs` embeds it, with the icon `iRCL.ico` and the version-resource strings from `[package.metadata.winresource]`, into the exe; the app header reads it through `env!("CARGO_PKG_VERSION")`; `windows installer.iss` reads it back from the built exe's `ProductVersion`. Nothing is propagated by a script.
+- Parity must pass. The reference screenshots are fixed data from v2.3.2; a change meant to make the window differ from them is the owner's decision and goes into `docs/behaviour.md`.
+- Re-approve golden renders (`UPDATE_SNAPSHOTS=1`) only for an intended visible change that still passes parity, after looking at the new images; commit them with the change.
 
-**Bump version** (when the user says "bump version"; ask bug/feature/major if they didn't say):
-1. Edit `version` in `Cargo.toml`: patch `x.y.Z` for fixes, minor `x.Y.0` for features, major `X.0.0` for breaking changes.
-2. `cargo check`, so `Cargo.lock` picks up the new version. Commit both files.
-3. Build the release exe (below), then `git tag v{version}`.
+## Version, build and release
 
-**Build**: `cargo build --release` writes `target\release\iracing-companion-launcher.exe`, a single self-contained exe. Check the embedded version with `(Get-Item target\release\iracing-companion-launcher.exe).VersionInfo`.
+The version lives only in `version` in `Cargo.toml`; tags are `v{version}`. For bumping the version, building the installer or releasing, use the `release` skill. Each outward step waits for the owner's explicit go.
 
-**Installer** (after the release build): `& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "windows installer.iss"` writes `installer_output\iRacing_Companion_Launcher_Setup.exe` (fixed name, not versioned). It installs the exe as `{app}\iRacing Companion Launcher.exe`. ISCC stops with an error when the release exe is missing or has no version. To compile only for validation, add `/O<temp dir>` so `installer_output\` stays untouched.
-
-**Release** (when the user says "release"):
-1. Ask whether the installer has been compiled from the tagged build.
-2. `git push origin v{version}`
-3. `gh release create v{version} "installer_output/iRacing_Companion_Launcher_Setup.exe" --title "v{version}" --generate-notes`
-4. `gh release edit v{version} --notes "..."` with a short changelog: 🚀 New Features, 🐛 Bug Fixes, ⚡ Improvements, then `**Full Changelog**: https://github.com/yzaazy/iRacing-Companion-Launcher/compare/v{prev}...v{version}`. Most important changes only, user-facing wording.
-
-**When the Python code is removed**: delete `version.py`, `tools/update_version.py`, `iracing_companion_launcher.spec` and the `version_info.txt` line in `.gitignore` (the file itself is generated and untracked); `requirements.txt` and the PyInstaller `dist/`/`build/` ignores go with them. Replace the four Python-era sections named above with this one.
-
-## Project Overview
-
-This is a Windows desktop GUI application that launches and manages iRacing companion applications (Fanatec, Crew Chief V4, Trading Paints, and Garage61). Built with Python and Tkinter, it provides a modern dark-themed interface for batch launching/closing these applications with real-time status monitoring.
-
-## Architecture
-
-The application follows a clean, modular architecture with clear separation of concerns:
-
-### Package Structure
-```
-iracing_launcher_app/
-├── core/                    # Core business logic
-│   ├── activity_logger.py   # Logging abstraction
-│   ├── app_definitions.py   # App/game configuration data
-│   └── config_manager.py    # Configuration file management
-│
-├── managers/                # Application managers
-│   ├── process_manager.py   # Shared process operations
-│   ├── app_manager.py       # Companion app management
-│   └── game_manager.py      # Racing game management
-│
-├── ui/                      # User interface
-│   ├── constants.py         # UI constants (colors, sizes)
-│   ├── main_window.py       # Main application window
-│   ├── sections/            # UI section components
-│   │   ├── header.py
-│   │   ├── apps_section.py
-│   │   ├── games_section.py
-│   │   ├── log_section.py
-│   │   ├── buttons_section.py
-│   │   └── footer.py
-│   └── widgets/             # Custom widgets
-│       ├── status_card.py
-│       └── game_card.py
-│
-└── utils/                   # Utilities
-    ├── path_finder.py       # Path detection logic
-    └── steam_registry.py    # Steam registry utilities
-```
-
-### Key Components
-
-**Main Window (`ui/main_window.py`)**
-- `iRacingLauncherGUI`: Main application orchestrator
-  - Coordinates UI sections and business logic
-  - Manages application and game state
-  - Handles user interactions and callbacks
-
-**Managers (`managers/`)**
-- `ProcessManager`: Low-level process operations (launch, kill, check)
-- `AppManager`: Companion application management and path detection
-- `GameManager`: Racing game management with Steam integration
-
-**UI Components (`ui/`)**
-- `StatusCard`: Widget displaying companion app status with colored indicators
-- `GameCard`: Widget displaying racing game with radio selection
-- Section classes: Modular UI components for different screen areas
-
-**Core Logic (`core/`)**
-- `ActivityLogger`: Centralized logging with color-coded messages
-- `ConfigManager`: INI file management for storing paths and settings
-- `app_definitions.py`: Configuration data for all apps and games
-
-### Application Detection System
-The app uses a multi-tier path detection system:
-1. **Saved paths**: Checks config.ini for previously configured paths
-2. **Start Menu shortcuts**: Searches Windows Start Menu for application shortcuts
-3. **Common paths**: Falls back to hardcoded installation directories
-4. **Steam Registry**: For games, checks Windows Registry for Steam installations
-5. **Manual browse**: Users can manually select executables if auto-detection fails
-
-### Build System
-- **PyInstaller**: Used to create standalone Windows executables
-  - Spec file: `iracing_companion_launcher.spec`
-  - Bundles the `iRCL.ico` and `iRCL.png` icons with the executable
-  - Creates a windowed (non-console) application
-  - Uses UPX compression
-
-- **Inno Setup**: Creates Windows installer
-  - Script: `windows installer.iss`
-  - Outputs to `installer_output/` directory
-  - Creates 64-bit installer with desktop icon option
-
-## Development Commands
-
-### Getting Started (First-time Setup)
-```bash
-# 1. Clone the repository
-git clone https://github.com/yzaazy/iRacing-Companion-Launcher.git
-cd iRacing-Companion-Launcher
-
-# 2. Create a virtual environment (recommended)
-python -m venv venv
-venv\Scripts\activate
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Generate version_info.txt (required for building)
-python tools/update_version.py
-
-# 5. Run the application
-python iracing_launcher.py
-```
-
-### Running the Application
-```bash
-python iracing_launcher.py
-```
-
-### Converting Icon (if needed)
-```bash
-python tools/convert_icon.py
-```
-
-### Version Management
-The application uses centralized version management with semantic versioning (MAJOR.MINOR.PATCH).
-
-#### Automated Version Bump Workflow
-When the user says "bump version", follow this workflow:
-
-1. **Determine Version Type** (if not specified, ask the user):
-   - **bug/bugfix/patch** → Increment patch version (x.x.Y) - for bug fixes
-   - **feature/minor** → Increment minor version (x.Y.0) - for new features
-   - **major/breaking** → Increment major version (Y.0.0) - for breaking changes
-
-2. **Update version.py** with the new version number
-
-3. **Run the update script** to propagate the version:
-   ```bash
-   python tools/update_version.py
-   ```
-
-4. **Build the executable automatically**:
-   ```bash
-   python -m PyInstaller iracing_companion_launcher.spec
-   ```
-
-5. **Create a git tag** with the version number:
-   ```bash
-   git tag v{version}
-   ```
-
-This will automatically update:
-- `version.py` - Source of truth for version
-- `version_info.txt` - Windows version info for the executable
-- `windows installer.iss` - Inno Setup installer script AppVersion
-- The application will display the version in the header
-- A fresh executable will be built in `dist/` directory
-- A git tag will be created for the version
-
-#### Manual Version Update
-To manually update the version:
-
-1. Edit `version.py` and change the `__version__` variable
-2. Run the update script to propagate the version:
-```bash
-python tools/update_version.py
-```
-
-### Building Executable
-```bash
-# First, ensure versions are up to date
-python tools/update_version.py
-
-# Build with PyInstaller using the spec file
-python -m PyInstaller iracing_companion_launcher.spec
-
-# Output will be in dist/ directory
-```
-
-### Creating Installer
-After building the executable, compile the Inno Setup script:
-```bash
-# Use Inno Setup Compiler (ISCC) to build installer
-iscc "windows installer.iss"
-
-# Output installer will be in installer_output/
-```
-
-### Creating a Release
-When the user says "release", follow these steps to publish a release:
-
-1. **Ask if the Inno Setup installer has been compiled**:
-   - Before proceeding, confirm with the user that they have compiled the installer using Inno Setup Compiler (ISCC)
-   - The installer should be available in the `installer_output/` directory
-
-2. **Push the git tag to remote**:
-   ```bash
-   git push origin v{version}
-   ```
-
-3. **Create a GitHub release**:
-   ```bash
-   # Using GitHub CLI (recommended)
-   gh release create v{version} "installer_output/iRacing_Companion_Launcher_Setup.exe" --title "v{version}" --generate-notes
-   ```
-
-4. **Add a changelog to the release**:
-   - Edit the release notes to include a concise changelog
-   - Focus on the **most important changes only**:
-     - New features (🚀)
-     - Bug fixes (🐛)
-     - Major improvements (⚡)
-   - Use clear, user-friendly language
-   - Include emoji sections for better readability
-   ```bash
-   gh release edit v{version} --notes "## What's New
-
-   ### 🚀 New Features
-   - Feature description here
-
-   ### 🐛 Bug Fixes
-   - Fix description here
-
-   ### ⚡ Improvements
-   - Improvement description here
-
-   **Full Changelog**: https://github.com/{user}/{repo}/compare/v{prev}...v{version}"
-   ```
-
-Note: The installer filename in `installer_output/` is always `iRacing_Companion_Launcher_Setup.exe` (not versioned).
-
-### Discord Release Notifications
-
-To automatically post release notifications to Discord, use **GitTrack.me** - a free service that integrates GitHub with Discord.
-
-**Setup Steps:**
-
-1. **Invite GitTrack Bot**:
-   - Visit https://gittrack.me/
-   - Click "Add to Discord" and select your server
-   - Grant necessary permissions
-
-2. **Connect Your Repository**:
-   - In your Discord server, run: `/setup`
-   - Follow the prompts to connect your GitHub repository
-   - Choose the channel where release notifications should be posted
-
-3. **Configure Notifications**:
-   - GitTrack will provide a webhook URL and secret
-   - Add the webhook to your GitHub repository settings:
-     - Go to: Repository Settings → Webhooks → Add webhook
-     - Paste the webhook URL from GitTrack
-     - Add the secret token
-     - Select events to trigger (at minimum: "Releases")
-
-4. **Test It**:
-   - Publish a new release
-   - GitTrack will automatically post a formatted notification to your Discord channel
-
-**Features:**
-- Automatic, beautifully formatted release notifications
-- Real-time updates with rich embeds
-- No coding or GitHub Actions required
-- Free and easy to maintain
-- Can also track commits, PRs, and issues if desired
-
-## Dependencies
-Required Python packages (install with `pip install -r requirements.txt`):
-- `customtkinter` - Modern GUI framework (extends tkinter)
-- `psutil` - Process management and monitoring
-- `pywin32` - Windows API access (required by winshell)
-- `winshell` - Windows shell integration (Start Menu shortcut reading)
-- `pyinstaller` - Build tool for creating Windows executables
-
-## Key Implementation Details
-
-### Process Management
-- Uses `psutil.process_iter()` to check if processes are running by name
-- Launches apps with `subprocess.Popen()` with `shell=False` for security
-- Implements 2-second wait after launching to verify process started
-- Kill operations use `proc.kill()` for immediate termination
-
-### UI Layout
-- Log text widget height is dynamically calculated based on number of status cards
-- Each StatusCard has fixed 50px height to maintain alignment with log
-- Uses dark theme colors consistent across all components
-- Activity log uses timestamp tags and color-coded message levels
-
-### Special Cases
-- Garage61 has both a launcher (`garage61-launcher.exe`) and an agent (`garage61-agent.exe`)
-- The agent process is included in the close operation but not in status cards
-- All paths use raw strings (r"") to properly handle Windows backslashes
-
-## File Structure
-```
-Scripts/
-├── iracing_launcher.py              # Main application entry point
-├── version.py                       # Single source of truth for version number
-├── iRCL.png / iRCL.ico             # Application icons
-├── iracing_companion_launcher.spec # PyInstaller build specification
-├── windows installer.iss            # Inno Setup installer script
-├── version_info.txt                 # Windows version info (auto-generated)
-│
-├── iracing_launcher_app/           # Main application package
-│   ├── core/                       # Core business logic
-│   │   ├── activity_logger.py      # Logging abstraction
-│   │   ├── app_definitions.py      # App/game configuration data
-│   │   └── config_manager.py       # Configuration file management
-│   │
-│   ├── managers/                   # Application managers
-│   │   ├── process_manager.py      # Shared process operations
-│   │   ├── app_manager.py          # Companion app management
-│   │   └── game_manager.py         # Racing game management
-│   │
-│   ├── ui/                         # User interface
-│   │   ├── constants.py            # UI constants (colors, sizes)
-│   │   ├── main_window.py          # Main application window
-│   │   ├── sections/               # UI section components
-│   │   │   ├── header.py
-│   │   │   ├── apps_section.py
-│   │   │   ├── games_section.py
-│   │   │   ├── log_section.py
-│   │   │   ├── buttons_section.py
-│   │   │   └── footer.py
-│   │   └── widgets/                # Custom widgets
-│   │       ├── status_card.py
-│   │       └── game_card.py
-│   │
-│   └── utils/                      # Utilities
-│       ├── path_finder.py          # Path detection logic
-│       └── steam_registry.py       # Steam registry utilities
-│
-├── tools/                           # Development tools
-│   ├── convert_icon.py             # Icon conversion utility
-│   └── update_version.py           # Version update script
-│
-├── dist/                            # PyInstaller output directory
-├── build/                           # PyInstaller temporary build files
-└── installer_output/                # Final installer output directory
-```
+Release notifications reach Discord through GitTrack (gittrack.me), connected to the repository by a GitHub webhook on "Releases"; publishing a release is all it needs.

@@ -1,24 +1,22 @@
 ---
 name: rust-ui
-description: Builds and adjusts the egui UI of the launcher in src/ui against the measured UI spec and reference screenshots. Use for any layout, painting, theme or snapshot-test work.
+description: Changes and fixes the launcher's egui UI in src/ui (layout rules, packer, theme, widgets, input and focus, log view, text, fonts) and its tests in tests/ui, keeping pixel parity with the v2.3.2 reference screenshots. Use for any layout, painting, theme, keyboard or snapshot work.
 model: opus
 ---
 
-You build the launcher's window in egui so that it matches the CustomTkinter original at 1200x700 and can flex later.
+You maintain the launcher's window: egui, painted by hand, matching the v2.3.2 window pixel for pixel at 1200x700 through rules that work at other sizes too.
 
-Before writing code, read `docs/rewrite/contracts.md` (the UI seam and fixtures), the UI section of `docs/rewrite/behaviour.md`, `docs/rewrite/ui-spec.json`, the reference images in `docs/rewrite/reference/`, and the Python under `iracing_launcher_app/ui/`.
+Before writing code, read the UI section of `docs/architecture.md`, the UI rules and keyboard access in `docs/behaviour.md`, and the code under `src/ui/` you are changing. Follow the `ui-parity` skill to check the window and the `rust-gate` skill for the definition of done.
 
-Follow the `ui-parity` skill (`.claude/skills/ui-parity/SKILL.md`) to compare against the reference and the `rust-gate` skill for the definition of done.
+## How the UI is built
 
-## How to build it
-
-- `draw(ui, &ViewState) -> Vec<UiAction>` is pure: everything shown comes from `ViewState`, every interaction leaves as a `UiAction`.
-- Geometry is rules evaluated for a window size: `pack.rs` is the port of Tk's packer, `layout.rs` holds the launcher's rules built on it (margins, card height, gaps, column shares, minimum sizes), and `geometry.rs` resolves the whole window. Colours, radii and font sizes live in `theme.rs`. Widgets and sections read from those and hold no numbers of their own.
-- Paint with egui's painter at exact rects from the resolved geometry; the UI keeps its own focus, hit areas and log selection (`input.rs`, `log.rs`) rather than egui's.
-- Take widget colours from the Python source and CustomTkinter's theme file (`customtkinter/assets/themes/blue.json`, dark values), including hover and disabled states.
+- `ui::draw(ui, &ViewState) -> Vec<UiAction>` is pure: everything shown comes from `ViewState`, every interaction leaves as a `UiAction`. Labels and enabled flags are the controller's job.
+- Geometry is rules evaluated for a window size: `pack.rs` is the port of Tk's packer, `layout.rs` the launcher's rules on it, `geometry.rs` resolves the whole window including measured text. `sections.rs` paints that geometry and the layout test reads the same geometry.
+- Colours, radii, border widths and font sizes live in `theme.rs`. Widgets and sections hold no numbers of their own.
+- The UI keeps its own focus, hit areas and log selection (`input.rs`, `log.rs`) rather than egui's. Text goes through `text.rs` for GDI-style whole-pixel advances.
 - Card lists follow `state.apps` and `state.games` at any length.
-- A test asserts `layout` at 1200x700 equals `ui-spec.json`. A snapshot test renders every fixture state.
+- The measured spec and fixture states are in `tests/fixtures/ui/`; `ui-spec.json` is large, so query it with a short script.
 
 ## Report
 
-End with: the files you changed, the gate output's last line, the parity test's result per fixture state and class, and every region that still differs with your reading of why.
+End with: the files you changed, the gate's last line, the parity result per fixture state and class, whether golden renders were re-approved and why, and every region that still differs with your reading of why.
