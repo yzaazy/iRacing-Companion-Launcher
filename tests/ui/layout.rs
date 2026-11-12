@@ -1,12 +1,12 @@
 //! The layout at 1200x700 reproduces every measured element of every fixture state in
 //! `docs/rewrite/ui-spec.json`: widget rects, painted boxes, text placement, the log's wrapping,
-//! scroll position and scrollbar. It reads `ui::sections::geometry`, the same geometry `draw` paints.
+//! scroll position and scrollbar. It reads `ui::geometry::geometry`, the same geometry `draw` paints.
 
 use crate::support::{WINDOW, fixtures, spec, with_ctx};
 use iracing_companion_launcher::model::ViewState;
+use iracing_companion_launcher::ui::geometry::{self, Geometry, TextGeom};
 use iracing_companion_launcher::ui::layout;
 use iracing_companion_launcher::ui::pack::Bounds;
-use iracing_companion_launcher::ui::sections::{self, Geometry, TextGeom};
 use iracing_companion_launcher::ui::{self as ui, theme};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -148,7 +148,7 @@ fn layout_matches_spec_for_every_state() {
         let st = &spec()["states"][name];
         assert!(st.is_object(), "state {name} missing from ui-spec.json");
         let (geom, rows) = with_ctx(|ctx| {
-            let geom = sections::geometry(ctx, state, WINDOW);
+            let geom = geometry::geometry(ctx, state, WINDOW);
             let rows = ui::log::row_texts(ctx, state, geom.log.inner.w as f32);
             (geom, rows)
         });
@@ -322,19 +322,19 @@ fn layout_flexes_with_the_window() {
 #[test]
 fn game_names_wrap_like_python() {
     assert_eq!(
-        sections::wrap_game_name("Assetto Corsa Competizione"),
+        geometry::wrap_game_name("Assetto Corsa Competizione"),
         "Assetto Corsa\nCompetizione"
     );
     assert_eq!(
-        sections::wrap_game_name("Automobilista 2"),
+        geometry::wrap_game_name("Automobilista 2"),
         "Automobilista 2"
     );
     assert_eq!(
-        sections::wrap_game_name("ABCDEFGHIJKLMNOPQRSTU"),
+        geometry::wrap_game_name("ABCDEFGHIJKLMNOPQRSTU"),
         "ABCDEFGHIJKLMNOPQR\nSTU"
     );
     assert_eq!(
-        sections::wrap_game_name("Exactly eighteen!!"),
+        geometry::wrap_game_name("Exactly eighteen!!"),
         "Exactly eighteen!!"
     );
 }

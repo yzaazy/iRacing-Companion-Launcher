@@ -1,6 +1,7 @@
 //! Ports `ui/sections/` and `ui/widgets/` entry point: draws the whole window from a `ViewState`.
 
 pub mod fonts;
+pub mod geometry;
 pub mod input;
 pub mod layout;
 pub mod log;

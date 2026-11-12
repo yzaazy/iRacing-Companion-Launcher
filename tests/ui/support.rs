@@ -6,7 +6,7 @@ use egui::{Color32, Key, Pos2, Vec2};
 use egui_kittest::wgpu::{WgpuTestRenderer, create_render_state, default_wgpu_setup};
 use egui_kittest::{Harness, HarnessBuilder, LazyRenderer};
 use iracing_companion_launcher::model::{UiAction, ViewState};
-use iracing_companion_launcher::ui::{self, sections};
+use iracing_companion_launcher::ui::{self, geometry};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -182,8 +182,8 @@ pub fn with_ctx<R>(f: impl FnOnce(&egui::Context) -> R) -> R {
 }
 
 /// The geometry `draw` paints `state` with at 1200x700.
-pub fn geometry(state: &ViewState) -> sections::Geometry {
-    with_ctx(|ctx| sections::geometry(ctx, state, WINDOW))
+pub fn geometry(state: &ViewState) -> geometry::Geometry {
+    with_ctx(|ctx| geometry::geometry(ctx, state, WINDOW))
 }
 
 pub fn pixel(image: &image::RgbaImage, p: Pos2) -> Color32 {
