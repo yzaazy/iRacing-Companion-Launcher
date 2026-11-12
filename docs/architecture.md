@@ -9,7 +9,7 @@ One package at the repo root, `iracing-companion-launcher`, edition 2024, with a
 - Pinned in `Cargo.toml`: eframe, egui and egui_kittest 0.37, `windows` 0.62. The toolchain is pinned in `rust-toolchain.toml`.
 - Dependencies: `eframe`/`egui` (UI), `windows` (every Win32 call), `raw-window-handle` (the dialog's owner window), `serde` + `serde_json`. Build: `winresource`. Dev: `egui_kittest`, `image`, `proptest`, `tempfile`.
 - The module named `core` is always written `crate::core::...`, never bare `core::...`, so it shadows nothing.
-- Release builds use `windows_subsystem = "windows"` (no console) and `panic = "abort"`.
+- Release builds use `windows_subsystem = "windows"` (no console) and `panic = "unwind"`, so the worker thread can catch a panic in a sequence (see [Threads](#threads)).
 - Visibility: an item is `pub` only when `main.rs` or a test uses it; the `unreachable_pub` lint keeps everything else `pub(crate)` or narrower. An item public only for tests says so in its doc comment.
 - Lints are in `[lints]` of `Cargo.toml`; the gate denies their warnings. Fix a hit in code. Test code may `unwrap`/`expect` (`clippy.toml`); an integration-test file whose helpers need it carries a file-level `#![allow(clippy::unwrap_used, clippy::expect_used)]` with its reason.
 
@@ -111,6 +111,7 @@ sequenceDiagram
 - **Worker thread**: started by `Worker::spawn` once the window exists, inside a COM apartment. It owns the `Managers` (and so the `ProcessTracker`) and runs one `Command` at a time, in the order sent. Waits (2 s after a launch, 3 s after a Steam launch, up to 3 s during a close) block only this thread.
 - **What crosses**: `Command` goes UI → worker over an `mpsc` channel; `Event` goes worker → UI over another. The config is the only shared state: `SharedConfig` is an `Arc<Mutex<ConfigStore>>` used by the controller and the managers; its lock tolerates poisoning.
 - **Waking the UI**: after each event the worker calls the `notify` closure given to `Worker::spawn`, which is `egui::Context::request_repaint`. The next frame's `logic` calls `Controller::pump`, which drains the channel.
+- **Panics**: `Sequencer::run` runs each command under `catch_unwind`. A panic ends that command with an error log line and its `LaunchFinished` or `CloseFinished`, and the thread takes the next command. The managers and tracker carry on in whatever state the panic left them; the tracker has saved its state before each wait. A panic on the UI thread is not caught.
 - A button stays disabled while a command of its kind is queued or running (`ButtonState` in `app.rs`). Dropping the `Worker` ends the thread after its current sequence; the process exiting first ends it mid-sequence.
 - No async runtime ([ADR 0003](adr/0003-one-worker-thread-no-async.md)).
 
@@ -224,7 +225,7 @@ pub enum Event {
 | `process_layer` | Launch, track, tree walk, close and name matching against dummy processes; reading and rewriting state files written by v2.3.2 (`tests/fixtures/process/`) to the same bytes. |
 | `app_managers` | The real `Managers` over dummy definitions and a `TestHost`: detection order and its config saves, tracked-then-by-name fallbacks, game launch routing. |
 | `app_transcripts` | Golden transcripts recorded from the v2.3.2 controller (`tests/fixtures/app/transcripts.json`), replayed against `Controller` + `Sequencer` with the fake backend through `Inline`: same log lines, statuses, config writes and end state. |
-| `app_worker` | The real worker thread with the fake backend: queueing, order, selection captured at the press, buttons disabled while pending. |
+| `app_worker` | The real worker thread with the fake backend: queueing, order, selection captured at the press, buttons disabled while pending, a panic in a sequence caught and logged. |
 | `model_serde` | The shared types read the fixture shape and round-trip. |
 | `properties` | Property tests: `ConfigStore::load` never panics, saving is stable, accepted values round-trip, the game-name wrap. More sit beside private code in `src/process/state_file.rs` and `src/process/sys.rs`. |
 | `ui` (`tests/ui/main.rs`) | One binary: `layout` (geometry at 1200x700 equals `ui-spec.json` in every fixture state), `parity` and `parity_check` (pixels), `interaction`, `keyboard`, `log_gestures`, `log_perf`, `fonts`, `renders`. Renders share one wgpu device (`support`). |

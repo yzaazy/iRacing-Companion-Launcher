@@ -83,5 +83,6 @@ opt-level = 2
 opt-level = "s"
 lto = "fat"
 codegen-units = 1
-panic = "abort"
+# Unwind, so the worker thread can catch a panic in a sequence (src/worker.rs, issue #5).
+panic = "unwind"
 strip = true

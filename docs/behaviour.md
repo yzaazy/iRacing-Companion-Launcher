@@ -27,14 +27,13 @@ These are deliberate. Anything else that differs from v2.3.2 is a bug.
 13. **The apps summary in the log reflects the outcome** (after 3.0.1, [#8](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/8)). v2.3.2 logged `All apps launched!` after the app loop and `All apps closed!` at the end of a close whatever had happened, also with no app checked. Now, with no app checked, neither line is logged. After a launch, `All apps launched!` (success) means every checked app was started or already running; otherwise the line is a warning such as `Launched 5 of 7 apps, 1 failed, 1 not configured`, naming only the counts that are not zero (`1 of 1 app` in the singular). `Launch sequence complete!` is unchanged: it marks the end of the sequence, not its success.
 14. **A stopping app has an orange dot** (after 3.0.1, [#9](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/9)). v2.3.2 had no colour for `stopping` and drew the idle grey, so a card being closed looked untouched; since 3.0.0 repaints during a close, the state shows for as long as the close takes. It now uses the `starting` orange (`#ffa726`). `stopped` keeps the idle grey. None of the reference screenshots has a stopping card, so parity is unaffected.
 15. **An upgrade keeps the install folder and the desktop icon** (after 3.0.1, [#14](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/14)). The installer used to run the previous version's uninstaller before its wizard, which erased the remembered folder and tasks: a custom folder fell back to Program Files, and the desktop icon was removed and its box unchecked. It now installs over the previous version, after the same confirmation prompt.
+16. **An internal error in a sequence is logged instead of closing the window** (after 3.0.1, [#5](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/5)). v2.3.2 had no such case; up to 3.0.1 a panic in a launch or close sequence ended the process. Now the sequence stops where it was, the log ends it with the error line `Launch sequence stopped by an internal error: <message>` (or `Close sequence ...`), and the buttons follow the rule as at a normal end (item 9). The next command runs as usual. A card the sequence had set to "Starting..." or "Stopping..." keeps that status until a later sequence sets it.
 
 ## Known quirks carried over from v2.3.2
 
 Kept on purpose so 3.0.0 behaves exactly like v2.3.2. Each has a GitHub issue for the decision to fix it; until that issue is worked on, the quirk stays.
 
 - **[#12](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/12)** The Start Menu shortcut names and install paths listed for games are never consulted. Games are found by saved path or Steam registry only.
-
-Other open issue: [#5](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/5) (a panic on the worker thread aborts the app instead of being caught).
 
 ## Known differences from v2.3.2 in the activity log, undecided
 
