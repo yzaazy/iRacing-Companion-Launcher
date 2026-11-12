@@ -46,18 +46,18 @@ impl Bounds {
     }
 
     /// Tk unmaps a packed widget whose width or height comes out zero or less.
-    pub fn is_mapped(&self) -> bool {
+    pub(super) fn is_mapped(&self) -> bool {
         self.w > 0 && self.h > 0
     }
 
     /// Shrink by `d` on every side.
-    pub fn inset(&self, d: i32) -> Self {
+    pub(super) fn inset(&self, d: i32) -> Self {
         Self::new(self.x + d, self.y + d, self.w - 2 * d, self.h - 2 * d)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Side {
+pub(super) enum Side {
     Top,
     Bottom,
     Left,
@@ -65,7 +65,7 @@ pub enum Side {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Fill {
+pub(super) enum Fill {
     None,
     X,
     Y,
@@ -73,27 +73,27 @@ pub enum Fill {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Anchor {
+pub(super) enum Anchor {
     Center,
     W,
 }
 
 /// One `widget.pack(...)` call: the widget's requested size and its pack options.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Slave {
-    pub side: Side,
-    pub req: (i32, i32),
+pub(super) struct Slave {
+    side: Side,
+    req: (i32, i32),
     /// (left, right)
-    pub padx: (i32, i32),
+    padx: (i32, i32),
     /// (top, bottom)
-    pub pady: (i32, i32),
-    pub expand: bool,
-    pub fill: Fill,
-    pub anchor: Anchor,
+    pady: (i32, i32),
+    expand: bool,
+    fill: Fill,
+    anchor: Anchor,
 }
 
 impl Slave {
-    pub const fn new(side: Side, w: i32, h: i32) -> Self {
+    pub(super) const fn new(side: Side, w: i32, h: i32) -> Self {
         Self {
             side,
             req: (w, h),
@@ -105,27 +105,27 @@ impl Slave {
         }
     }
 
-    pub const fn padx(mut self, left: i32, right: i32) -> Self {
+    pub(super) const fn padx(mut self, left: i32, right: i32) -> Self {
         self.padx = (left, right);
         self
     }
 
-    pub const fn pady(mut self, top: i32, bottom: i32) -> Self {
+    pub(super) const fn pady(mut self, top: i32, bottom: i32) -> Self {
         self.pady = (top, bottom);
         self
     }
 
-    pub const fn expand(mut self) -> Self {
+    pub(super) const fn expand(mut self) -> Self {
         self.expand = true;
         self
     }
 
-    pub const fn fill(mut self, fill: Fill) -> Self {
+    pub(super) const fn fill(mut self, fill: Fill) -> Self {
         self.fill = fill;
         self
     }
 
-    pub const fn anchor(mut self, anchor: Anchor) -> Self {
+    pub(super) const fn anchor(mut self, anchor: Anchor) -> Self {
         self.anchor = anchor;
         self
     }
@@ -188,7 +188,7 @@ fn y_expansion(slaves: &[Slave], mut cavity_h: i32) -> i32 {
 }
 
 /// Tk's `ArrangePacking`: place `slaves`, in packing order, inside `master`.
-pub fn pack(master: Bounds, slaves: &[Slave]) -> Vec<Bounds> {
+pub(super) fn pack(master: Bounds, slaves: &[Slave]) -> Vec<Bounds> {
     let (mut cx, mut cy, mut cw, mut ch) = (master.x, master.y, master.w, master.h);
     let mut out = Vec::with_capacity(slaves.len());
     for (i, s) in slaves.iter().enumerate() {
@@ -253,7 +253,7 @@ pub fn pack(master: Bounds, slaves: &[Slave]) -> Vec<Bounds> {
 }
 
 /// Tk's `ComputePackSize`: the size a master with pack propagation on requests for its slaves.
-pub fn pack_req(slaves: &[Slave]) -> (i32, i32) {
+pub(super) fn pack_req(slaves: &[Slave]) -> (i32, i32) {
     let (mut width, mut height, mut max_w, mut max_h) = (0, 0, 0, 0);
     for s in slaves {
         if s.horizontal() {

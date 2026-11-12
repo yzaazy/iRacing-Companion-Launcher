@@ -126,7 +126,7 @@ impl ButtonState {
 }
 
 /// Sees every log line and card status the controller produces itself.
-pub type Trace = Box<dyn FnMut(&Event)>;
+type Trace = Box<dyn FnMut(&Event)>;
 
 /// The controller. Built in two steps because startup needs the managers on
 /// this thread before they move to the worker: [`Controller::startup`], then

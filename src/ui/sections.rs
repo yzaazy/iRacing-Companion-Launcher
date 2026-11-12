@@ -242,7 +242,7 @@ fn app_card(ui: &Ui, controls: &mut Controls, id: Id, geom: &AppCardGeom, app: &
 }
 
 /// Paint the whole window for `state` and collect what the user did.
-pub fn show(ui: &mut Ui, state: &ViewState) -> Vec<UiAction> {
+pub(super) fn show(ui: &mut Ui, state: &ViewState) -> Vec<UiAction> {
     let ctx = ui.ctx().clone();
     let window = ui.max_rect().size();
     let geom = geometry(&ctx, state, window);

@@ -121,7 +121,7 @@ impl Cache {
 
 /// The height of the whole log at text width `width`: every line's rows and the empty line
 /// after the last newline.
-pub fn content_height(ctx: &egui::Context, state: &ViewState, width: f32) -> f32 {
+pub(super) fn content_height(ctx: &egui::Context, state: &ViewState, width: f32) -> f32 {
     let cache = cache(ctx);
     let mut cache = cache
         .lock()
@@ -131,7 +131,7 @@ pub fn content_height(ctx: &egui::Context, state: &ViewState, width: f32) -> f32
 }
 
 /// The text of every row the log shows at text width `width`, as Tk wraps it: each line's rows,
-/// then the empty row after the last newline.
+/// then the empty row after the last newline. Public for tests.
 pub fn row_texts(ctx: &egui::Context, state: &ViewState, width: f32) -> Vec<String> {
     let mut rows: Vec<String> = state
         .log
@@ -309,9 +309,9 @@ fn selected_text(log: &[LogLine], (a, b): (At, At)) -> String {
 }
 
 /// What the log draws inside its box.
-pub struct LogGeom<'a> {
-    pub log_box: Bounds,
-    pub text: &'a LogText,
+pub(super) struct LogGeom<'a> {
+    pub(super) log_box: Bounds,
+    pub(super) text: &'a LogText,
 }
 
 /// How far the log scrolls this frame.
@@ -325,7 +325,7 @@ struct Extent {
 
 /// Paint the log box, its visible lines, the selection and the scrollbar, and handle the
 /// pointer, the wheel, copying and (when the log has focus) the keyboard.
-pub fn show(ui: &mut Ui, controls: &mut Controls, geom: LogGeom<'_>, state: &ViewState) {
+pub(super) fn show(ui: &mut Ui, controls: &mut Controls, geom: LogGeom<'_>, state: &ViewState) {
     let ctx = ui.ctx().clone();
     let id = ui.scope_id().with("activity_log");
     let memory_id = id.with("memory");

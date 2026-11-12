@@ -1,15 +1,17 @@
 //! Ports `ui/sections/` and `ui/widgets/` entry point: draws the whole window from a `ViewState`.
 
+// `fonts`, `geometry`, `layout`, `log`, `pack`, `text` and `theme` are public so the UI tests
+// can measure the window against the spec; only `draw` and `install_fonts` are the app's seam.
 pub mod fonts;
 pub mod geometry;
-pub mod input;
+mod input;
 pub mod layout;
 pub mod log;
 pub mod pack;
-pub mod sections;
+mod sections;
 pub mod text;
 pub mod theme;
-pub mod widgets;
+mod widgets;
 
 use crate::model::{UiAction, ViewState};
 

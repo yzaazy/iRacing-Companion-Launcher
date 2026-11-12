@@ -101,6 +101,8 @@ pub fn layout(window: egui::Vec2, n_apps: usize, n_games: usize) -> Layout;
 
 Names mirror the Python methods so the mapping stays obvious. Signatures may gain parameters that make them testable (a root directory, a state file path); they keep their meaning.
 
+An item is `pub` only when `src/main.rs` or a test under `tests/` uses it; everything else is `pub(crate)`, `pub(super)` or private, and the `unreachable_pub` lint keeps it that way. An item that is public only for tests says so in its doc comment.
+
 ```rust
 // core/definitions.rs
 pub struct AppDef { pub name: &'static str, pub exe: &'static str, pub shortcut_names: &'static [&'static str], pub paths: Vec<String>, pub needs_shell_launch: bool }
@@ -125,7 +127,7 @@ pub enum SetPathError { Refused, Save(io::Error) } // configparser refuses the v
 pub struct SharedConfig; // one ConfigStore shared by the controller and the managers
 impl SharedConfig {
     pub fn new(store: ConfigStore) -> Self;
-    pub fn lock(&self) -> MutexGuard<'_, ConfigStore>; // tolerates a poisoned lock
+    pub(crate) fn lock(&self) -> MutexGuard<'_, ConfigStore>; // tolerates a poisoned lock
 }
 
 // core/log.rs

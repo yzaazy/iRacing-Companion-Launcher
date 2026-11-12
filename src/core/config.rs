@@ -64,7 +64,7 @@ impl SharedConfig {
 
     /// The store, for one call. A panic elsewhere must not take config access
     /// down with it, so a poisoned lock is taken over as it is.
-    pub fn lock(&self) -> MutexGuard<'_, ConfigStore> {
+    pub(crate) fn lock(&self) -> MutexGuard<'_, ConfigStore> {
         self.0.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }

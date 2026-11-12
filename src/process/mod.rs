@@ -86,7 +86,7 @@ pub fn shell_open(target: &str) -> std::io::Result<()> {
 }
 
 /// PIDs of every process named `exe_name`, case-insensitive (`_pids_by_exe`).
-pub(crate) fn pids_by_exe(exe_name: &str) -> Vec<u32> {
+fn pids_by_exe(exe_name: &str) -> Vec<u32> {
     let wanted = exe_name.to_lowercase();
     snapshot()
         .into_iter()

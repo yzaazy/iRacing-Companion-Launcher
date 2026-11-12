@@ -12,13 +12,13 @@ fn radius(r: f32) -> CornerRadius {
 }
 
 /// A CTk rounded rectangle without border.
-pub fn rounded(painter: &Painter, painted: Bounds, corner_radius: f32, fill: Color32) {
+pub(super) fn rounded(painter: &Painter, painted: Bounds, corner_radius: f32, fill: Color32) {
     painter.rect_filled(painted.rect(), radius(corner_radius), fill);
 }
 
 /// A CTk frame with a border: the outer shape in the border colour, the inner one inset by the
 /// border width with the corner radius reduced by the same amount.
-pub fn bordered(
+pub(super) fn bordered(
     painter: &Painter,
     painted: Bounds,
     corner_radius: f32,
@@ -42,7 +42,7 @@ const CHECKMARK_WIDTH: f32 = 2.9;
 
 /// A CTkCheckBox square: filled blue with a checkmark when checked, otherwise a grey 3 px ring
 /// around the card colour (or the hover blue while hovered).
-pub fn checkbox(painter: &Painter, b: Bounds, checked: bool, hovered: bool, bg: Color32) {
+pub(super) fn checkbox(painter: &Painter, b: Bounds, checked: bool, hovered: bool, bg: Color32) {
     if checked {
         rounded(painter, b, theme::CHECKBOX_RADIUS, theme::CHECK_FILL);
         let points = CHECKMARK
@@ -67,7 +67,7 @@ pub fn checkbox(painter: &Painter, b: Bounds, checked: bool, hovered: bool, bg: 
 }
 
 /// A CTkRadioButton circle: a ring 3 px wide (grey) or 6 px (blue, checked) around the card colour.
-pub fn radio(painter: &Painter, b: Bounds, checked: bool, hovered: bool, bg: Color32) {
+pub(super) fn radio(painter: &Painter, b: Bounds, checked: bool, hovered: bool, bg: Color32) {
     let (ring, width) = if checked {
         (theme::RADIO_FILL, theme::RADIO_BORDER_CHECKED)
     } else {
@@ -86,7 +86,7 @@ const DOT_RADIUS: f32 = 8.5;
 const DOT_CENTRE_ABOVE_BASELINE: f32 = 11.5;
 
 /// The status dot, painted as the disk the `●` glyph draws in its label.
-pub fn dot(painter: &Painter, label: Bounds, color: Color32) {
+pub(super) fn dot(painter: &Painter, label: Bounds, color: Color32) {
     if !label.is_mapped() {
         return;
     }
@@ -101,21 +101,21 @@ pub fn dot(painter: &Painter, label: Bounds, color: Color32) {
 }
 
 /// How a button is drawn this frame.
-pub struct ButtonLook<'a> {
-    pub rect: Bounds,
+pub(super) struct ButtonLook<'a> {
+    pub(super) rect: Bounds,
     /// The Tk label holding the text, from `layout::button_label`.
-    pub label: Bounds,
-    pub text: &'a str,
-    pub font: &'a Font,
-    pub corner_radius: f32,
-    pub colors: ButtonColors,
-    pub enabled: bool,
-    pub hovered: bool,
+    pub(super) label: Bounds,
+    pub(super) text: &'a str,
+    pub(super) font: &'a Font,
+    pub(super) corner_radius: f32,
+    pub(super) colors: ButtonColors,
+    pub(super) enabled: bool,
+    pub(super) hovered: bool,
 }
 
 /// A CTkButton: the hover colour replaces the fill while hovered; a disabled button keeps its
 /// fill and greys its text.
-pub fn button(ctx: &egui::Context, painter: &Painter, look: &ButtonLook<'_>) {
+pub(super) fn button(ctx: &egui::Context, painter: &Painter, look: &ButtonLook<'_>) {
     let fill = if look.enabled && look.hovered {
         look.colors.hover
     } else {
@@ -174,7 +174,13 @@ fn corner_overhang(painter: &Painter, painted: Bounds, corner_radius: f32, fill:
 
 /// The log's CTkScrollbar thumb for the visible fraction `start..end` of the content: a pill as
 /// wide as the bar, its ends rounded by half the width, on the even-floored canvas.
-pub fn scrollbar_thumb(painter: &Painter, bar: Bounds, start: f32, end: f32, color: Color32) {
+pub(super) fn scrollbar_thumb(
+    painter: &Painter,
+    bar: Bounds,
+    start: f32,
+    end: f32,
+    color: Color32,
+) {
     let canvas = bar.painted();
     let r = canvas.w as f32 / 2.0;
     let travel = canvas.h as f32 - 2.0 * r;

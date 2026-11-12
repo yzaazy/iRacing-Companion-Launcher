@@ -19,7 +19,7 @@ use egui::Vec2;
 /// A CTkFrame's default requested width; frames with propagation off keep it.
 const FRAME_DEFAULT_W: i32 = 200;
 /// A CTkLabel's default height.
-pub const LABEL_H: i32 = 28;
+const LABEL_H: i32 = 28;
 const HEADER_H: i32 = 70;
 const HEADER_GAP: i32 = 10;
 const TITLE_PADY: i32 = 20;
@@ -31,7 +31,7 @@ const COLUMN_GAP: i32 = 10;
 const HEADING_ROW_H: i32 = 30;
 const HEADING_GAP: i32 = 10;
 /// `STATUS_CARD_HEIGHT`.
-pub const CARD_H: i32 = 55;
+const CARD_H: i32 = 55;
 /// Cards are packed with 5 px above and below, none above the first or below the last.
 const CARD_PAD: i32 = 5;
 /// The log's CTkTextbox requests 400 px of width.
@@ -40,15 +40,15 @@ const LOG_REQ_W: i32 = 400;
 const BUTTONS_PAD_TOP: i32 = 35;
 const BUTTONS_PAD_BOTTOM: i32 = 10;
 const ACTION_PADX: i32 = 10;
-pub const ACTION_BUTTON: (i32, i32) = (200, 60);
-pub const SELECT_ALL_BUTTON: (i32, i32) = (100, 30);
-pub const BROWSE_BUTTON: (i32, i32) = (80, 36);
+pub(super) const ACTION_BUTTON: (i32, i32) = (200, 60);
+pub(super) const SELECT_ALL_BUTTON: (i32, i32) = (100, 30);
+const BROWSE_BUTTON: (i32, i32) = (80, 36);
 /// A CTkCheckBox with `text=""`: the 24 px box, 6 px of text spacing and a 1 px empty label.
 const CHECKBOX_WIDGET: (i32, i32) = (31, 24);
-pub const CHECKBOX_BOX: i32 = 24;
+const CHECKBOX_BOX: i32 = 24;
 /// A CTkRadioButton with `text=""`: the 22 px circle, spacing and empty label.
 const RADIO_WIDGET: (i32, i32) = (29, 22);
-pub const RADIO_BOX: i32 = 22;
+const RADIO_BOX: i32 = 22;
 /// The status dot label: the advance and line height of `●` in Segoe UI 40.
 const DOT_LABEL: (i32, i32) = (24, 54);
 /// The subtitle CTkLabel is created with `height=12`.
@@ -87,13 +87,17 @@ fn card_slave(pady: (i32, i32)) -> Slave {
 }
 
 /// The requested size of a CTkLabel showing `lines` lines of text `text_w` wide.
-pub fn label_req(text_w: i32, lines: i32, linespace: i32) -> (i32, i32) {
+fn label_req(text_w: i32, lines: i32, linespace: i32) -> (i32, i32) {
     (text_w, LABEL_H.max(lines * linespace))
 }
 
 /// The requested size of a CTkButton: its declared size, grown to fit the label plus the
 /// grid's outer columns (`max(corner_radius, border_width + 1, border_spacing)` each).
-pub fn button_req(declared: (i32, i32), label: (i32, i32), corner_radius: i32) -> (i32, i32) {
+pub(super) fn button_req(
+    declared: (i32, i32),
+    label: (i32, i32),
+    corner_radius: i32,
+) -> (i32, i32) {
     (
         declared.0.max(label.0 + 2 * button_col_min(corner_radius)),
         declared.1.max(label.1 + 2 * BUTTON_ROW_MIN),
@@ -110,7 +114,7 @@ const BUTTON_ROW_MIN: i32 = 2;
 /// The text label of a CTkButton: Tk's grid gives the outer rows and columns weight 1000 and the
 /// middle ones weight 1 or 0, so the spare space at the requested size is split almost evenly,
 /// and when pack squeezes the button the outer cells give it back the same way.
-pub fn button_label(
+pub(super) fn button_label(
     button: Bounds,
     req: (i32, i32),
     label: (i32, i32),
@@ -133,13 +137,13 @@ pub fn button_label(
 }
 
 /// The width and height of a plain Tk label inside a CTkButton (1 px `padx`/`pady`).
-pub fn button_text_req(text_w: i32, linespace: i32) -> (i32, i32) {
+pub(super) fn button_text_req(text_w: i32, linespace: i32) -> (i32, i32) {
     (text_w + 2, linespace + 2)
 }
 
 /// Where Tk draws a block of `lines` lines `text_w` wide inside a label: centred with C integer
 /// division (`TkComputeAnchor`), or flush left for `anchor="w"`. Returns (left x, top y).
-pub fn text_origin(
+pub(super) fn text_origin(
     label: Bounds,
     text_w: i32,
     lines: i32,
@@ -186,7 +190,7 @@ pub struct LogText {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Layout {
-    pub window: Vec2,
+    window: Vec2,
     pub header: Bounds,
     pub footer: Bounds,
     pub content: Bounds,
@@ -201,12 +205,12 @@ pub struct Layout {
 pub struct ButtonRow {
     pub row: Bounds,
     pub launch: Bounds,
-    pub close: Bounds,
+    pub(super) close: Bounds,
 }
 
 /// What sits at a card's right edge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Trailing {
+pub(super) enum Trailing {
     /// The status dot.
     Dot,
     /// The Browse button, whose label is this wide (text plus label padding).
@@ -225,7 +229,7 @@ pub struct CardParts {
     /// The dot label or the Browse button.
     pub trailing: Bounds,
     /// The Browse button's requested size, when it is a Browse button.
-    pub browse_req: Option<(i32, i32)>,
+    pub(super) browse_req: Option<(i32, i32)>,
 }
 
 /// A heading row: the label packed left, then the optional button packed right, which gets
@@ -373,7 +377,7 @@ pub fn layout(window: Vec2, n_apps: usize, n_games: usize) -> Layout {
 
 impl Layout {
     /// The header title label, `pady=20`, centred.
-    pub fn title(&self, text_w: i32, linespace: i32) -> Bounds {
+    pub(super) fn title(&self, text_w: i32, linespace: i32) -> Bounds {
         let req = label_req(text_w, 1, linespace);
         pack(
             self.header,
@@ -382,12 +386,12 @@ impl Layout {
     }
 
     /// The footer label, packed to the right.
-    pub fn footer_label(&self, text_w: i32) -> Bounds {
+    pub(super) fn footer_label(&self, text_w: i32) -> Bounds {
         pack(self.footer, &[Slave::new(Side::Right, text_w, LABEL_H)])[0]
     }
 
     /// The heading label of a card column, and the button packed to its right (Select All).
-    pub fn heading_row(
+    pub(super) fn heading_row(
         &self,
         column: &Column,
         heading_w: i32,
@@ -398,7 +402,7 @@ impl Layout {
     }
 
     /// The "Activity Log" label.
-    pub fn log_heading(&self, text_w: i32) -> Bounds {
+    pub(super) fn log_heading(&self, text_w: i32) -> Bounds {
         pack(
             self.log.heading_frame,
             &[Slave::new(Side::Top, text_w, LABEL_H)
@@ -408,7 +412,7 @@ impl Layout {
     }
 
     /// The Text widget inside the log box, without or with the scrollbar beside it.
-    pub fn log_text(&self, scrollbar: bool) -> LogText {
+    pub(super) fn log_text(&self, scrollbar: bool) -> LogText {
         let b = self.log.log_box;
         let mut text = b.inset(LOG_TEXT_INSET);
         let scrollbar = scrollbar.then(|| {
@@ -455,7 +459,12 @@ impl Layout {
     }
 
     /// The parts of an app card: checkbox, name over subtitle, then the dot or Browse button.
-    pub fn app_card(card: Bounds, name_w: i32, subtitle_w: i32, trailing: Trailing) -> CardParts {
+    pub(super) fn app_card(
+        card: Bounds,
+        name_w: i32,
+        subtitle_w: i32,
+        trailing: Trailing,
+    ) -> CardParts {
         let text_slaves = [
             Slave::new(Side::Top, name_w, LABEL_H).anchor(Anchor::W),
             Slave::new(Side::Top, subtitle_w, SUBTITLE_H).anchor(Anchor::W),
@@ -486,7 +495,7 @@ impl Layout {
     }
 
     /// The parts of a game card (and the None card, which has no trailing widget).
-    pub fn game_card(
+    pub(super) fn game_card(
         card: Bounds,
         name_w: i32,
         name_lines: i32,

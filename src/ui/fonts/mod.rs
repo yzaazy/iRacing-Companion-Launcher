@@ -67,7 +67,7 @@ fn fonts_dir() -> PathBuf {
 /// Load Segoe UI (regular and bold) and Consolas and register the families the theme refers to,
 /// then install the fallback provider. Without the Windows files the families fall back to
 /// egui's bundled fonts, so a missing file never fails.
-pub fn install(ctx: &egui::Context) {
+pub(super) fn install(ctx: &egui::Context) {
     let mut defs = FontDefinitions::default();
     let builtin = |family: FontFamily| defs.families.get(&family).cloned().unwrap_or_default();
     let builtin_proportional = builtin(FontFamily::Proportional);
@@ -237,7 +237,7 @@ mod files {
 
     static FILES: OnceLock<Mutex<HashMap<PathBuf, egui::epaint::text::Blob>>> = OnceLock::new();
 
-    pub fn load(path: &Path) -> Option<egui::epaint::text::Blob> {
+    pub(super) fn load(path: &Path) -> Option<egui::epaint::text::Blob> {
         let files = FILES.get_or_init(Default::default);
         let mut files = files
             .lock()
@@ -251,7 +251,7 @@ mod files {
     }
 
     /// The fallback files read from disk so far.
-    pub fn loaded() -> Vec<PathBuf> {
+    pub(super) fn loaded() -> Vec<PathBuf> {
         FILES.get().map_or_else(Vec::new, |files| {
             files
                 .lock()
@@ -263,7 +263,7 @@ mod files {
     }
 }
 
-/// The fallback font files this process has read in full, for tests and diagnostics.
+/// The fallback font files this process has read in full. Public for tests.
 pub fn loaded_fallback_files() -> Vec<PathBuf> {
     files::loaded()
 }
@@ -276,7 +276,7 @@ mod registry {
     const KEY: &str = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\FontLink\SystemLink";
 
     /// The entries of one `REG_MULTI_SZ` value, or none when it is missing.
-    pub fn system_link(value: &str) -> Vec<String> {
+    pub(super) fn system_link(value: &str) -> Vec<String> {
         let (key, name) = (HSTRING::from(KEY), HSTRING::from(value));
         let mut size = 0u32;
         // SAFETY: `key` and `name` are NUL-terminated UTF-16 strings that live until the call

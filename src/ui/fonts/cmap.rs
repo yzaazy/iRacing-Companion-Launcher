@@ -90,7 +90,7 @@ pub fn probe_file(path: &Path, face: &str, c: char) -> Option<(u32, bool)> {
 }
 
 /// Whether face `index` of the font in `bytes` has `c`.
-pub fn covers(mut bytes: &[u8], index: u32, c: char) -> bool {
+pub(super) fn covers(mut bytes: &[u8], index: u32, c: char) -> bool {
     read_faces(&mut bytes)
         .and_then(|f| f.faces.into_iter().nth(index as usize))
         .is_some_and(|(_, coverage)| contains(&coverage, c))

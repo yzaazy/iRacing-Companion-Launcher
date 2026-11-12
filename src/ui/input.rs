@@ -26,7 +26,7 @@ const FLASH_SECONDS: f64 = 0.1;
 
 /// The outline the focus ring follows.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Ring {
+pub(super) enum Ring {
     /// A painted rectangle and its corner radius.
     Rounded { rect: Bounds, radius: f32 },
     /// A painted circle, by its bounding box.
@@ -35,7 +35,7 @@ pub enum Ring {
 
 /// How a control looks after a press.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Kind {
+pub(super) enum Kind {
     /// A CTkButton: flashes its normal colour.
     Button,
     /// A CTkCheckBox or CTkRadioButton: loses its hover look if the press changed its state.
@@ -43,24 +43,24 @@ pub enum Kind {
 }
 
 /// One control as the frame draws it.
-pub struct Control {
-    pub id: Id,
+pub(super) struct Control {
+    pub(super) id: Id,
     /// Where the pointer reaches it: the bound Tk widgets (for a toggle, its box and its empty
     /// text label, not the gap between them). The first rect carries the accessibility info.
-    pub hit: Vec<Bounds>,
+    pub(super) hit: Vec<Bounds>,
     /// Whether it acts at all: false for disabled buttons and the toggles of entries not found.
-    pub enabled: bool,
+    pub(super) enabled: bool,
     /// What a press emits, if anything.
-    pub action: Option<UiAction>,
-    pub kind: Kind,
-    pub ring: Ring,
-    pub info: WidgetInfo,
+    pub(super) action: Option<UiAction>,
+    pub(super) kind: Kind,
+    pub(super) ring: Ring,
+    pub(super) info: WidgetInfo,
 }
 
 /// What the pointer does to a control this frame.
-pub struct Pointer {
+pub(super) struct Pointer {
     /// Show the hover colours.
-    pub hover_look: bool,
+    pub(super) hover_look: bool,
 }
 
 /// Remembered between frames.
@@ -104,7 +104,7 @@ enum Press {
 
 /// Collects this frame's controls, resolves pointer presses as they are drawn and the keyboard
 /// once all are known.
-pub struct Controls {
+pub(super) struct Controls {
     memory: Memory,
     /// Keyboard focus as the frame began.
     focus_at_start: Option<Id>,
@@ -125,7 +125,7 @@ fn memory_id() -> Id {
 
 impl Controls {
     /// Read the remembered state and this frame's keys and pointer press.
-    pub fn begin(ui: &Ui) -> Self {
+    pub(super) fn begin(ui: &Ui) -> Self {
         let mut memory: Memory = ui
             .ctx()
             .data(|d| d.get_temp(memory_id()))
@@ -181,12 +181,12 @@ impl Controls {
     }
 
     /// The keyboard focus as the frame began.
-    pub fn focused(&self) -> Option<Id> {
+    pub(super) fn focused(&self) -> Option<Id> {
         self.focus_at_start
     }
 
     /// Draw-time handling of one control: its pointer state, and its action if pressed.
-    pub fn control(&mut self, ui: &Ui, c: Control) -> Pointer {
+    pub(super) fn control(&mut self, ui: &Ui, c: Control) -> Pointer {
         let mut hovered = false;
         for (i, b) in c.hit.iter().enumerate() {
             if !b.is_mapped() {
@@ -246,7 +246,7 @@ impl Controls {
     }
 
     /// Make a tab stop that is not a control (the log), placed after the controls added so far.
-    pub fn stop(&mut self, id: Id, ring: Ring) {
+    pub(super) fn stop(&mut self, id: Id, ring: Ring) {
         self.extra_stop = Some((
             self.stops.len(),
             Stop {
@@ -275,7 +275,7 @@ impl Controls {
 
     /// Apply this frame's keys in order, paint the focus ring and remember the state. Returns
     /// every action of the frame, pointer and keyboard, in the order they happened.
-    pub fn finish(mut self, ui: &Ui) -> Vec<UiAction> {
+    pub(super) fn finish(mut self, ui: &Ui) -> Vec<UiAction> {
         let mut stops = std::mem::take(&mut self.stops);
         if let Some((at, stop)) = self.extra_stop.take() {
             stops.insert(at.min(stops.len()), stop);
@@ -335,11 +335,11 @@ impl Controls {
 
 /// The focus ring: a 2 px white band 2 px outside the control, with a 1 px black band inside
 /// it, the dark-theme focus visual of Windows. It stays clear of the control's own pixels.
-pub const RING_GAP: f32 = 1.0;
-pub const RING_INNER: f32 = 1.0;
-pub const RING_OUTER: f32 = 2.0;
+const RING_GAP: f32 = 1.0;
+const RING_INNER: f32 = 1.0;
+const RING_OUTER: f32 = 2.0;
 
-pub fn paint_ring(painter: &egui::Painter, ring: Ring) {
+fn paint_ring(painter: &egui::Painter, ring: Ring) {
     let bands = [
         (RING_GAP + RING_INNER, RING_INNER, theme::FOCUS_RING_INNER),
         (

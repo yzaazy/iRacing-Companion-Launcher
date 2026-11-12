@@ -36,7 +36,7 @@ pub fn width(ctx: &egui::Context, text: &str, font: &Font) -> i32 {
 }
 
 /// The widest line of `text`, and its number of lines.
-pub fn block_size(ctx: &egui::Context, text: &str, font: &Font) -> (i32, i32) {
+pub(super) fn block_size(ctx: &egui::Context, text: &str, font: &Font) -> (i32, i32) {
     let lines: Vec<&str> = text.split('\n').collect();
     let w = lines.iter().map(|l| width(ctx, l, font)).max().unwrap_or(0);
     (w, lines.len() as i32)
@@ -163,7 +163,7 @@ fn is_combining(c: char) -> bool {
 }
 
 /// The distance from the galley's top to its first baseline.
-pub fn baseline_offset(galley: &Galley, font: &Font) -> f32 {
+pub(super) fn baseline_offset(galley: &Galley, font: &Font) -> f32 {
     galley
         .rows
         .iter()
@@ -174,14 +174,14 @@ pub fn baseline_offset(galley: &Galley, font: &Font) -> f32 {
 
 /// Paint a laid-out block so its first line's pen starts at `left` and its baseline sits on
 /// `baseline`.
-pub fn paint(painter: &Painter, galley: Arc<Galley>, font: &Font, left: i32, baseline: i32) {
+fn paint(painter: &Painter, galley: Arc<Galley>, font: &Font, left: i32, baseline: i32) {
     let offset = baseline_offset(&galley, font);
     let pos: Pos2 = pos2(left as f32, baseline as f32 - offset);
     painter.galley(pos, galley, Color32::PLACEHOLDER);
 }
 
 /// Lay out and paint one block of text with its first baseline at `top + ascent`.
-pub fn paint_block(
+pub(super) fn paint_block(
     ctx: &egui::Context,
     painter: &Painter,
     text: &str,

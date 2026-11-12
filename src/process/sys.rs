@@ -43,17 +43,17 @@ const UNIX_EPOCH_IN_FILETIME_TICKS: u64 = 116_444_736_000_000_000;
 
 /// The two psutil exceptions the Python catches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ProcError {
+pub(super) enum ProcError {
     NoSuchProcess,
     AccessDenied,
 }
 
 /// One row of a process snapshot.
 #[derive(Debug, Clone)]
-pub(crate) struct ProcEntry {
-    pub pid: u32,
-    pub ppid: u32,
-    pub name: String,
+pub(super) struct ProcEntry {
+    pub(super) pid: u32,
+    pub(super) ppid: u32,
+    pub(super) name: String,
 }
 
 fn open_process(access: PROCESS_ACCESS_RIGHTS, pid: u32) -> windows::core::Result<Handle> {
@@ -67,7 +67,7 @@ fn is_code(err: &windows::core::Error, code: windows::Win32::Foundation::WIN32_E
 }
 
 /// Every running process with its parent PID and exe name (Toolhelp, as psutil's `ppid_map`).
-pub(crate) fn snapshot() -> Vec<ProcEntry> {
+pub(super) fn snapshot() -> Vec<ProcEntry> {
     let mut out = Vec::new();
     // SAFETY: CreateToolhelp32Snapshot takes only values and returns a new
     // handle or an error; a returned handle is owned by `Handle`, which closes it once.
@@ -126,7 +126,7 @@ fn filetime_ticks_to_epoch(ticks: u64) -> f64 {
 /// query-limited handle, after psutil's "is it still running" check; on access
 /// denied, the slower `NtQuerySystemInformation` fallback, which works for every
 /// process. A missing PID is `NoSuchProcess`.
-pub(crate) fn create_time(pid: u32) -> Result<f64, ProcError> {
+pub(super) fn create_time(pid: u32) -> Result<f64, ProcError> {
     match fast_create_time(pid) {
         Err(ProcError::AccessDenied) => nt_create_time(pid),
         other => other,
@@ -180,7 +180,7 @@ fn handle_create_time(h: &Handle) -> Option<f64> {
 
 /// psutil's `Process._ident` on Windows: the fast creation time, `None` where
 /// access is denied. `NoSuchProcess` when the PID is gone.
-pub(crate) fn identity(pid: u32) -> Result<Option<f64>, ProcError> {
+pub(super) fn identity(pid: u32) -> Result<Option<f64>, ProcError> {
     match fast_create_time(pid) {
         Ok(created) => Ok(Some(created)),
         Err(ProcError::AccessDenied) => Ok(None),
@@ -258,7 +258,7 @@ fn nt_create_time(pid: u32) -> Result<f64, ProcError> {
 
 /// psutil's `proc_kill`: `TerminateProcess(pid, SIGTERM)`. Access denied from
 /// `TerminateProcess` itself counts as success (the process already died).
-pub(crate) fn proc_kill(pid: u32) -> Result<(), ProcError> {
+fn proc_kill(pid: u32) -> Result<(), ProcError> {
     if pid == 0 {
         return Err(ProcError::AccessDenied);
     }
@@ -274,7 +274,7 @@ pub(crate) fn proc_kill(pid: u32) -> Result<(), ProcError> {
 /// psutil's `_raise_if_pid_reused` compares a fresh identity with it and
 /// treats a mismatch as `NoSuchProcess`. Here the check and the kill go
 /// through one handle, so the PID cannot change hands between them.
-pub(crate) fn kill_if_same(pid: u32, identity: Option<f64>) -> Result<(), ProcError> {
+pub(super) fn kill_if_same(pid: u32, identity: Option<f64>) -> Result<(), ProcError> {
     if pid == 0 {
         return Err(ProcError::AccessDenied);
     }
@@ -308,7 +308,7 @@ fn terminate(h: &Handle) -> Result<(), ProcError> {
 
 /// Outcome of psutil's `proc_wait`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum WaitOutcome {
+pub(super) enum WaitOutcome {
     Exited,
     TimedOut,
 }
@@ -316,7 +316,7 @@ pub(crate) enum WaitOutcome {
 /// psutil's `proc_wait`: wait on a `SYNCHRONIZE | PROCESS_QUERY_INFORMATION`
 /// handle. A PID that is already gone counts as exited; any other failure to open
 /// is access denied (some helpers refuse SYNCHRONIZE).
-pub(crate) fn proc_wait(pid: u32, timeout: Duration) -> Result<WaitOutcome, ProcError> {
+pub(super) fn proc_wait(pid: u32, timeout: Duration) -> Result<WaitOutcome, ProcError> {
     let h = match open_process(PROCESS_SYNCHRONIZE | PROCESS_QUERY_INFORMATION, pid) {
         Ok(h) => h,
         Err(e) if is_code(&e, ERROR_INVALID_PARAMETER) => return Ok(WaitOutcome::Exited),
@@ -408,7 +408,7 @@ impl Drop for AttributeList {
 /// name, the command line built by `list2cmdline`, inherited environment and
 /// working directory, and only the NUL handle inherited (Python's handle list).
 /// Returns the new PID.
-pub(crate) fn spawn_detached(exe_path: &str) -> std::io::Result<u32> {
+pub(super) fn spawn_detached(exe_path: &str) -> std::io::Result<u32> {
     let sa = SECURITY_ATTRIBUTES {
         nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
         lpSecurityDescriptor: std::ptr::null_mut(),

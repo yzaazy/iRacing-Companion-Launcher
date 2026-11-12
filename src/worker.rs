@@ -71,7 +71,7 @@ impl Sequencer {
     }
 
     /// Runs one command to completion; the last event is `LaunchFinished` or `CloseFinished`.
-    pub fn run(&mut self, command: Command, emit: &mut dyn FnMut(Event)) {
+    fn run(&mut self, command: Command, emit: &mut dyn FnMut(Event)) {
         let mut out = Out {
             emit,
             game_status: &mut self.game_status,
@@ -326,6 +326,7 @@ pub struct Inline {
 }
 
 impl Inline {
+    /// Public for tests, like the type.
     pub fn new(sequencer: Sequencer, observe: Box<dyn FnMut(&Event)>) -> Self {
         Self {
             sequencer,

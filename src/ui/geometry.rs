@@ -13,19 +13,19 @@ use crate::ui::pack::{Anchor, Bounds};
 use crate::ui::text;
 use crate::ui::theme::{self, Font};
 
-pub const FOOTER_TEXT: &str = "© 2026 Developed & Designed by Tobias Termeczky • Vibed with Claude";
-pub const GAMES_HEADING: &str = "Racing Simulators & Games";
-pub const APPS_HEADING: &str = "Companion Apps";
-pub const LOG_HEADING: &str = "Activity Log";
-pub const NONE_LABEL: &str = "None";
-pub const BROWSE_LABEL: &str = "Browse";
+const FOOTER_TEXT: &str = "© 2026 Developed & Designed by Tobias Termeczky • Vibed with Claude";
+const GAMES_HEADING: &str = "Racing Simulators & Games";
+const APPS_HEADING: &str = "Companion Apps";
+const LOG_HEADING: &str = "Activity Log";
+pub(super) const NONE_LABEL: &str = "None";
+const BROWSE_LABEL: &str = "Browse";
 /// GameCard wraps names longer than this.
 const GAME_NAME_WRAP: usize = 18;
 
 /// A text label: the widget rect and where its text block starts.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextGeom {
-    pub text: String,
+    pub(super) text: String,
     pub font: Font,
     /// The label widget.
     pub label: Bounds,
@@ -52,6 +52,7 @@ impl TextGeom {
         }
     }
 
+    /// Each line's baseline in window pixels. Public for tests.
     pub fn baselines(&self) -> Vec<i32> {
         (0..self.lines)
             .map(|i| self.top + self.font.ascent + i * self.font.linespace())
@@ -132,7 +133,7 @@ pub struct Geometry {
 }
 
 /// The app card subtitle (`StatusCard.set_status`).
-pub fn subtitle(app: &AppCard) -> String {
+fn subtitle(app: &AppCard) -> String {
     match app.status {
         Status::NotFound => "Not installed".to_owned(),
         Status::Running if app.helper_count > 0 => {
