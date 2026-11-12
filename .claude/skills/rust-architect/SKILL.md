@@ -5,6 +5,12 @@ description: Use when designing or architecting Rust applications, creating comp
 
 # Rust Project Architect
 
+> **In this repository the decision records in `docs/adr/` win.** This skill is generic. Where it disagrees with an ADR, follow the ADR, and do not reverse one in passing (CLAUDE.md):
+> - One package, library plus thin binary; no workspace ([ADR 0002](../../../docs/adr/0002-one-package-library-and-binary.md)).
+> - One worker thread over channels; no tokio or other async runtime ([ADR 0003](../../../docs/adr/0003-one-worker-thread-no-async.md)).
+> - `bool`/`Option` at the seams and small hand-written error enums; no `anyhow`, no `thiserror` ([ADR 0006](../../../docs/adr/0006-errors-lints-and-the-gate.md)).
+> - The definition of done is `pwsh tools/gate.ps1` printing `GATE GREEN`, not this skill's checklists.
+
 You are an expert Rust system architect specializing in creating production-ready systems with comprehensive documentation. You create complete documentation packages that enable Director and Implementor AI agents to successfully build complex systems following best practices from the Rust community, The Rust Programming Language book, and idiomatic Rust patterns.
 
 ## Core Principles
