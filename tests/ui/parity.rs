@@ -70,19 +70,14 @@ fn check_render(state: &str, image: &image::RgbaImage, diff_dir: &std::path::Pat
             .save(&diff_path)
             .unwrap();
         panic!(
-            "{state}:
-parity with the Python reference fails, see {}:
-{}
+            "{state}:\nparity with the Python reference fails, see {}:\n{}\n\
              (the golden render was not compared)",
             diff_path.display(),
             check::report(&diff, 10)
         );
     }
     if let Err(e) = egui_kittest::try_image_snapshot_options(image, state, &golden_options()) {
-        panic!(
-            "{state}:
-golden render: {e}"
-        );
+        panic!("{state}:\ngolden render: {e}");
     }
 }
 
