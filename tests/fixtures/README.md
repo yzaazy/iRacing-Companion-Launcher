@@ -55,6 +55,10 @@ One scenario was edited by hand after the capture, for two deliberate changes fr
 - ends with the labels at `(6)` where Python left them stale at `(7)`, because the end of a sequence now recomputes them (change 9, [#11](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/11));
 - asks `is_app_running` instead of a first `close_app`, and logs `SimHub closed` instead of `SimHub was not running` (change 10, [#7](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/7)).
 
+Three more scenarios were edited by hand for a later change from v2.3.2 ([docs/behaviour.md](../../docs/behaviour.md#changes-from-v232)):
+
+- Change 12 ([#10](https://github.com/yzaazy/iRacing-Companion-Launcher/issues/10)), a saved game that is not found starts as None: in `startup_saved_settings`, `launch_game_not_configured` and `browse_game` the end state has `selected_game` null and the Launch label `Launch apps (N)`, and the last two no longer look the game up at the end of Launch or log `Skipping <game> - not configured`. `selected_game_gone_at_launch_is_skipped` keeps that line, as v2.3.2 recorded it, under test.
+
 ## ui/
 
 The window as the Python app v2.3.2 drew it, at 1200x700 and 96 DPI. The layout tests (`tests/ui/layout.rs`) and the screenshot parity tests (`tests/ui/parity.rs`) compare the Rust window against these files.
