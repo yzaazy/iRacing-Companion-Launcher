@@ -264,4 +264,137 @@ mod tests {
             assert!(!is_falsy(&serde_json::from_str(v).unwrap()), "{v}");
         }
     }
+
+    mod props {
+        use super::*;
+        use proptest::prelude::*;
+
+        /// `load` on a file holding `bytes`.
+        fn load_bytes(bytes: &[u8]) -> State {
+            let file = tempfile::NamedTempFile::new().unwrap();
+            std::fs::write(file.path(), bytes).unwrap();
+            load(file.path())
+        }
+
+        /// Any JSON value, nested a few levels deep.
+        fn json() -> impl Strategy<Value = Value> {
+            let leaf = prop_oneof![
+                Just(Value::Null),
+                any::<bool>().prop_map(Value::from),
+                any::<i64>().prop_map(Value::from),
+                any::<u64>().prop_map(Value::from),
+                any::<f64>()
+                    .prop_filter("JSON has no NaN or infinity", |f| f.is_finite())
+                    .prop_map(Value::from),
+                ".{0,8}".prop_map(Value::from),
+            ];
+            leaf.prop_recursive(4, 32, 6, |inner| {
+                prop_oneof![
+                    prop::collection::vec(inner.clone(), 0..6).prop_map(Value::from),
+                    prop::collection::vec((".{0,6}", inner), 0..6)
+                        .prop_map(|kv| Value::Object(kv.into_iter().collect())),
+                ]
+            })
+        }
+
+        /// An object shaped like the state file, each field well-typed, of
+        /// another type, or missing.
+        fn state_like() -> impl Strategy<Value = Value> {
+            let pid = prop_oneof![
+                3 => any::<u32>().prop_map(Value::from),
+                1 => json(),
+            ];
+            let create_time = prop_oneof![
+                3 => (0.0..2.0e9_f64).prop_map(Value::from),
+                1 => json(),
+            ];
+            let exe_path = prop_oneof![3 => ".{0,12}".prop_map(Value::from), 1 => json()];
+            let entry = (
+                prop::option::of(pid),
+                prop::option::of(create_time),
+                prop::option::of(exe_path),
+            )
+                .prop_map(|(pid, create_time, exe_path)| {
+                    let fields = [
+                        ("pid", pid),
+                        ("create_time", create_time),
+                        ("exe_path", exe_path),
+                    ];
+                    Value::Object(
+                        fields
+                            .into_iter()
+                            .filter_map(|(k, v)| Some((k.to_owned(), v?)))
+                            .collect(),
+                    )
+                });
+            let slot = prop_oneof![4 => entry, 1 => json()];
+            prop::collection::vec((".{0,10}", slot), 0..5)
+                .prop_map(|kv| Value::Object(kv.into_iter().collect()))
+        }
+
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases(256))]
+
+            #[test]
+            fn load_never_panics_on_bytes(bytes in prop::collection::vec(any::<u8>(), 0..256)) {
+                let state = load_bytes(&bytes);
+                prop_assert!(to_python_json(&state).is_ok());
+            }
+
+            #[test]
+            fn load_never_panics_on_json(value in prop_oneof![json(), state_like()]) {
+                let state = load_bytes(&serde_json::to_vec(&value).unwrap());
+                prop_assert!(to_python_json(&state).is_ok());
+            }
+
+            /// What the tracker writes, it reads back as the same state: same
+            /// keys in the same order, same values, floats to within 2 units in
+            /// the last place (see `floats_read_back_exactly`).
+            #[test]
+            fn written_state_reads_back_the_same(value in state_like()) {
+                let state = load_bytes(&serde_json::to_vec(&value).unwrap());
+                let again = load_bytes(to_python_json(&state).unwrap().as_bytes());
+                let keys = |s: &State| s.0.iter().map(|(k, _)| k.clone()).collect::<Vec<_>>();
+                prop_assert_eq!(keys(&again), keys(&state));
+                for ((_, a), (_, b)) in again.0.iter().zip(&state.0) {
+                    let (a, b) = (serde_json::to_value(a).unwrap(), serde_json::to_value(b).unwrap());
+                    prop_assert!(close(&a, &b), "{:?} read back as {:?}", b, a);
+                }
+            }
+        }
+
+        /// Equal, except that floats may differ by 2 units in the last place.
+        fn close(a: &Value, b: &Value) -> bool {
+            match (a, b) {
+                (Value::Number(x), Value::Number(y)) if x.is_f64() || y.is_f64() => {
+                    match (x.as_f64(), y.as_f64()) {
+                        (Some(x), Some(y)) => x.to_bits().abs_diff(y.to_bits()) <= 2,
+                        _ => false,
+                    }
+                }
+                (Value::Array(x), Value::Array(y)) => {
+                    x.len() == y.len() && x.iter().zip(y).all(|(x, y)| close(x, y))
+                }
+                (Value::Object(x), Value::Object(y)) => {
+                    x.len() == y.len()
+                        && x.iter().all(|(k, v)| y.get(k).is_some_and(|w| close(v, w)))
+                }
+                _ => a == b,
+            }
+        }
+
+        /// Found by `written_state_reads_back_the_same`: serde_json's default
+        /// float parsing is not correctly rounded and reads about one
+        /// `create_time` in eight up to 2 units in the last place off, so a
+        /// rewritten state file can differ from Python's in the last digit.
+        /// Python's `json` reads it exactly. The tracker's 0.5 s tolerance is
+        /// unaffected. serde_json's `float_roundtrip` feature would fix it; that
+        /// changes the bytes written, so it waits for the owner's decision.
+        #[test]
+        #[ignore = "known: serde_json misreads some floats by 1-2 ulp; see the doc comment"]
+        fn floats_read_back_exactly() {
+            let text = "{\r\n  \"App\": {\r\n    \"pid\": 1,\r\n    \"create_time\": 2081698010.2156038\r\n  }\r\n}";
+            assert_eq!(to_python_json(&load_bytes(text.as_bytes())).unwrap(), text);
+        }
+    }
 }
