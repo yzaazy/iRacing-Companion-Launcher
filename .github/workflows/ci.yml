@@ -27,11 +27,13 @@ jobs:
       - name: Install the pinned toolchain
         run: rustup toolchain install
 
-      # Only main writes the cache; pull requests restore it.
+      # Every run writes the cache, a failing one too, so the next push to a pull
+      # request starts warm. A pull request's cache is its own; main's serves new
+      # pull requests and tags.
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: gate
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
 
       - name: Gate
         run: pwsh tools/gate.ps1
