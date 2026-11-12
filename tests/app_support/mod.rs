@@ -9,7 +9,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use iracing_companion_launcher::app::{DialogRequest, FileDialog, Settings};
-use iracing_companion_launcher::core::config::{SetPathError, SharedConfig};
+use iracing_companion_launcher::core::config::SharedConfig;
 use iracing_companion_launcher::core::definitions;
 use iracing_companion_launcher::managers::Backend;
 use iracing_companion_launcher::model::LogLevel;
@@ -212,7 +212,7 @@ impl Settings for RecordingSettings {
         self.rec.push(json!(["config_save"]));
         Settings::save(&mut self.inner)
     }
-    fn set_app_path(&mut self, key: &str, path: &str) -> Result<(), SetPathError> {
+    fn set_app_path(&mut self, key: &str, path: &str) -> std::io::Result<()> {
         self.rec.push(json!(["set_app_path", key, path]));
         self.inner.set_app_path(key, path)
     }

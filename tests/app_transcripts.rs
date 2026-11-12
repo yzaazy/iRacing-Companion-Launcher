@@ -1,7 +1,8 @@
 //! Replays the golden transcripts recorded from the Python controller up to
 //! v2.3.2 (`tests/fixtures/app/transcripts.json`) against the Rust controller
 //! and worker with a fake backend, and asserts identical transcripts and end
-//! states. Sequences run inline here so the order is deterministic.
+//! states, with change 11 in `docs/behaviour.md` applied to every recorded
+//! transcript. Sequences run inline here so the order is deterministic.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)] // helpers outside #[test] functions; a panic there fails the test
 
@@ -117,6 +118,44 @@ fn replay(scenario: &Value) -> Run {
     }
 }
 
+/// The Python transcript with change 11 in `docs/behaviour.md` applied (#13): a
+/// picked path with a `%`, where v2.3.2's `set_app_path` raised and the Browse
+/// handler stopped, is now saved, so the handler goes on as for any other path.
+fn with_percent_paths_saved(python: &[Value]) -> Vec<Value> {
+    let mut out = Vec::new();
+    let mut step = (String::new(), String::new());
+    for (i, item) in python.iter().enumerate() {
+        out.push(item.clone());
+        if item[0] == "step" {
+            step = (
+                item[1].as_str().unwrap().to_owned(),
+                item[2].as_str().unwrap_or_default().to_owned(),
+            );
+        }
+        let raised =
+            item[0] == "set_app_path" && python.get(i + 1).is_none_or(|next| next[0] == "step");
+        if !raised {
+            continue;
+        }
+        let (key, path) = (item[1].as_str().unwrap(), item[2].as_str().unwrap());
+        assert!(path.contains('%'), "set_app_path raised on {path}");
+        let (action, name) = (&step.0, &step.1);
+        if action == "browse_app" {
+            out.push(json!(["app_status", name, "idle", 0]));
+            out.push(json!(["config_set", format!("{key}_enabled"), "True"]));
+            out.push(json!(["config_save"]));
+        } else {
+            out.push(json!(["game_status", name, "idle"]));
+        }
+        out.push(json!([
+            "log",
+            "success",
+            format!("{name} path configured: {path}")
+        ]));
+    }
+    out
+}
+
 fn first_difference(expected: &[Value], actual: &[Value]) -> Option<usize> {
     (0..expected.len().max(actual.len())).find(|&i| expected.get(i) != actual.get(i))
 }
@@ -129,7 +168,8 @@ fn every_scenario_replays_the_python_transcript() {
     for scenario in &all {
         let name = scenario["name"].as_str().unwrap();
         let run = replay(scenario);
-        let expected = scenario["transcript"].as_array().unwrap();
+        let expected = with_percent_paths_saved(scenario["transcript"].as_array().unwrap());
+        let expected = expected.as_slice();
         if let Some(i) = first_difference(expected, &run.transcript) {
             let from = i.saturating_sub(3);
             failures.push(format!(
