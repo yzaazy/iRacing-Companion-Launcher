@@ -3,20 +3,15 @@
 //! The controller and the worker reach both managers through the [`Backend`]
 //! trait, so tests can swap in a scripted fake that never touches a process.
 
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use crate::core::config::{ConfigStore, config_key};
+use crate::core::config::{SharedConfig, config_key};
 use crate::core::definitions::{self, AppDef, GameDef};
 use crate::detect::paths::find_path_in_list;
 use crate::detect::shortcuts::find_shortcut_target;
 use crate::detect::steam::check_steam_game_installed;
 use crate::process::tracker::ProcessTracker;
 use crate::process::{is_process_running, kill_process, launch_process, shell_open};
-
-/// `ConfigManager` is one object shared by the window and both managers in
-/// Python; here the controller (UI thread) and the managers (worker thread) share it.
-pub type SharedConfig = Arc<Mutex<ConfigStore>>;
 
 /// Wait after a tracked app launch (`launch_and_track`'s `wait_time=2.0`).
 const APP_LAUNCH_WAIT: Duration = Duration::from_secs(2);
@@ -42,11 +37,6 @@ pub trait Backend: Send {
     fn find_game_path(&mut self, game: &str) -> Option<String>;
     fn is_game_running(&mut self, game: &str) -> bool;
     fn launch_game(&mut self, game: &str, path: &str) -> bool;
-}
-
-fn lock(config: &SharedConfig) -> MutexGuard<'_, ConfigStore> {
-    // A panic elsewhere must not take config access down with it.
-    config.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// `AppManager`: companion app detection, launch and close.
@@ -83,17 +73,17 @@ impl AppManager {
         let info = self.def(app)?.clone();
         let key = config_key(app);
 
-        if let Some(saved) = lock(&self.config).app_path(&key) {
+        if let Some(saved) = self.config.lock().app_path(&key) {
             return Some(saved);
         }
         if let Some(target) = find_shortcut_target(info.shortcut_names, false) {
             // Python raises here if configparser refuses the value (a `%` in
             // the path) and startup crashes; the port keeps the path unsaved.
-            lock(&self.config).set_app_path(&key, &target);
+            self.config.lock().set_app_path(&key, &target);
             return Some(target);
         }
         if let Some(found) = find_path_in_list(&info.paths) {
-            lock(&self.config).set_app_path(&key, &found);
+            self.config.lock().set_app_path(&key, &found);
             return Some(found);
         }
         None
@@ -180,12 +170,12 @@ impl GameManager {
         let appid = self.def(game)?.steam_appid;
         let key = format!("game_{}", config_key(game));
 
-        if let Some(saved) = lock(&self.config).app_path(&key) {
+        if let Some(saved) = self.config.lock().app_path(&key) {
             return Some(saved);
         }
         if !appid.is_empty() && check_steam_game_installed(appid) {
             let url = format!("steam://rungameid/{appid}");
-            lock(&self.config).set_app_path(&key, &url);
+            self.config.lock().set_app_path(&key, &url);
             return Some(url);
         }
         None

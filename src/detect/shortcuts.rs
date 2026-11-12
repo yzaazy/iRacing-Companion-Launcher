@@ -1,20 +1,20 @@
 //! Ports the Start Menu search in `utils/path_finder.py`.
 
 use std::ffi::OsString;
-use std::os::windows::ffi::{OsStrExt, OsStringExt};
+use std::os::windows::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 
-use windows::Win32::Foundation::{HANDLE, RPC_E_CHANGED_MODE};
 use windows::Win32::Storage::FileSystem::{
-    FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT, FindClose, FindFirstFileW,
-    FindNextFileW, WIN32_FIND_DATAW,
+    FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT, FindFirstFileW, FindNextFileW,
+    WIN32_FIND_DATAW,
 };
 use windows::Win32::System::Com::{
-    CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
-    CoUninitialize, IPersistFile, STGM_READ,
+    CLSCTX_INPROC_SERVER, CoCreateInstance, IPersistFile, STGM_READ,
 };
 use windows::Win32::UI::Shell::{IShellLinkW, SLGP_UNCPRIORITY, ShellLink};
 use windows::core::{Interface, PCWSTR};
+
+use crate::win::{ComApartment, FindHandle, wide};
 
 /// `IO_REPARSE_TAG_SYMLINK` (winnt.h); the constant lives behind a `windows`
 /// feature this crate does not enable.
@@ -111,7 +111,7 @@ fn rglob_literal<T>(
 /// following symlinks, in `FindFirstFileW` order. An unreadable directory
 /// yields nothing, as `rglob` swallows the `OSError`.
 fn subdirectories(dir: &Path) -> Vec<PathBuf> {
-    let pattern = wide(&dir.join("*"));
+    let pattern = wide(dir.join("*"));
     let mut data = WIN32_FIND_DATAW::default();
     let Ok(handle) = (unsafe { FindFirstFileW(PCWSTR(pattern.as_ptr()), &mut data) }) else {
         return Vec::new();
@@ -142,14 +142,6 @@ fn subdirectories(dir: &Path) -> Vec<PathBuf> {
     dirs
 }
 
-struct FindHandle(HANDLE);
-
-impl Drop for FindHandle {
-    fn drop(&mut self) {
-        let _ = unsafe { FindClose(self.0) };
-    }
-}
-
 /// `winshell.shortcut(path).path`: a path ending in `.lnk` (case-sensitive,
 /// as winshell checks) is loaded through `IShellLinkW` and its stored target
 /// read without resolving it; any other path becomes the target itself.
@@ -160,7 +152,7 @@ fn shortcut_path(lnk: &Path) -> Option<String> {
     if !text.ends_with(".lnk") {
         return Some(text.into_owned());
     }
-    let _com = ComGuard::init()?;
+    let _com = ComApartment::enter()?;
     let link: IShellLinkW =
         unsafe { CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER) }.ok()?;
     // winshell only loads when the file exists; an unloaded link has an
@@ -174,40 +166,4 @@ fn shortcut_path(lnk: &Path) -> Option<String> {
     unsafe { link.GetPath(&mut buffer, std::ptr::null_mut(), SLGP_UNCPRIORITY.0 as u32) }.ok()?;
     let len = buffer.iter().position(|&c| c == 0).unwrap_or(MAX_PATH);
     Some(String::from_utf16_lossy(&buffer[..len]))
-}
-
-/// COM for the calling thread. The UI thread arrives with COM already
-/// initialised (either mode), a worker thread without it: initialise as an
-/// apartment like pythoncom does, accept an existing multithreaded apartment
-/// as is, and balance every successful init on drop.
-struct ComGuard {
-    owns_init: bool,
-}
-
-impl ComGuard {
-    fn init() -> Option<Self> {
-        let hr = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
-        if hr == RPC_E_CHANGED_MODE {
-            Some(Self { owns_init: false })
-        } else if hr.is_ok() {
-            Some(Self { owns_init: true })
-        } else {
-            None
-        }
-    }
-}
-
-impl Drop for ComGuard {
-    fn drop(&mut self) {
-        if self.owns_init {
-            unsafe { CoUninitialize() };
-        }
-    }
-}
-
-fn wide(path: &Path) -> Vec<u16> {
-    path.as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect()
 }

@@ -6,6 +6,7 @@ pub mod managers;
 pub mod model;
 pub mod process;
 pub mod ui;
+mod win;
 pub mod worker;
 
 /// Ports `iracing_launcher_app/core/`.

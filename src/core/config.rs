@@ -9,6 +9,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use windows::Win32::Globalization::{GetACP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS, MultiByteToWideChar};
 
@@ -28,6 +29,24 @@ pub struct ConfigStore {
     dir: PathBuf,
     defaults: Items,
     sections: Vec<(String, Items)>,
+}
+
+/// `ConfigManager` is one object shared by the window and both managers in
+/// Python; here the controller (UI thread) and the managers (worker thread)
+/// share one store. Clones share it too.
+#[derive(Debug, Clone)]
+pub struct SharedConfig(Arc<Mutex<ConfigStore>>);
+
+impl SharedConfig {
+    pub fn new(store: ConfigStore) -> Self {
+        Self(Arc::new(Mutex::new(store)))
+    }
+
+    /// The store, for one call. A panic elsewhere must not take config access
+    /// down with it, so a poisoned lock is taken over as it is.
+    pub fn lock(&self) -> MutexGuard<'_, ConfigStore> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
 }
 
 /// Where `config.ini` and `process_state.json` live (contracts.md, "Config and state location").

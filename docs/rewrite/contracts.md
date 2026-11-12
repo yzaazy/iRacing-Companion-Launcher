@@ -18,6 +18,7 @@ The seams between agents. Each agent builds its own module against these and nob
 | `src/core/definitions.rs`, `config.rs`, `log.rs` | core | `core/*.py` |
 | `src/process/mod.rs`, `tracker.rs` | process | `managers/process_manager.py`, `process_tracker.py` |
 | `src/detect/shortcuts.rs`, `steam.rs`, `paths.rs` | detect | `utils/*.py` |
+| `src/win.rs` (crate-private: `wide`, `basename`, `ComApartment`, `Handle`, `FindHandle`, `RegKey`) | shared | — |
 | `src/ui/theme.rs`, `layout.rs`, `widgets.rs`, `sections.rs`, `mod.rs`, `tests/ui/` | ui | `ui/sections/`, `ui/widgets/`, `ui/constants.py` |
 | `src/managers.rs`, `src/app.rs`, `src/worker.rs`, `src/dialog.rs` | controller | `managers/app_manager.py`, `game_manager.py`, `ui/main_window.py` |
 | `build.rs`, `windows installer.iss`, `[package.metadata.winresource]` in `Cargo.toml`, the Rust section of `CLAUDE.md` | packaging (done) | `.spec`, `version.py`, `tools/update_version.py` |
@@ -120,6 +121,11 @@ impl ConfigStore {
     pub fn set_setting(&mut self, key: &str, value: &str);     // does not save
     pub fn save(&self) -> bool;
 }
+pub struct SharedConfig; // one ConfigStore shared by the controller and the managers
+impl SharedConfig {
+    pub fn new(store: ConfigStore) -> Self;
+    pub fn lock(&self) -> MutexGuard<'_, ConfigStore>; // tolerates a poisoned lock
+}
 
 // core/log.rs
 pub fn line(level: LogLevel, message: &str) -> LogLine; // prefixes [HH:MM:SS]
@@ -153,7 +159,7 @@ pub fn check_steam_game_installed(appid: &str) -> bool;
 - **UI**: call `ui::install_fonts` once at startup and `ui::draw(ui, &state)` once per frame. `draw` paints the whole viewport and requests its own repaints for the button flash, focus changes and drag-scrolling; the controller still requests one when an event changes the state. Actions are emitted on the frame of the press, as CustomTkinter does, or of Space or Enter on the focused control; `ToggleApp` carries the new value; `SelectGame` fires only for a radio that is not already selected; controls of not-found entries and disabled buttons emit nothing. The log jumps to the end when its length or last line changes; log text carries no trailing newline. `ui::sections::geometry(ctx, state, window)` resolves the full layout, because sizes depend on measured text.
 - **Fonts**: startup reads only Segoe UI regular and bold and Consolas. A character they lack is resolved on first use through Windows' font-link list for Segoe UI, loading a fallback file only when it holds the character. The five fixture states load no fallback.
 - **Keyboard and hit areas**: the UI keeps its own focus (see deliberate difference 10 in `behaviour.md`) and does not use egui's. Hit areas are exact, without egui's 5 px slack. `main.rs` turns off egui's Ctrl+Plus/Minus/0 zoom.
-- **Config**: checkbox keys are `config_key(name) + "_enabled"`, game path keys `"game_" + config_key(name)`. Booleans are written as `True` / `False`. `set_setting` does not save. `setting("selected_game")` is `Some("")` for None and `None` when missing; both mean no game. `ConfigStore` has no interior locking.
+- **Config**: checkbox keys are `config_key(name) + "_enabled"`, game path keys `"game_" + config_key(name)`. Booleans are written as `True` / `False`. `set_setting` does not save. `setting("selected_game")` is `Some("")` for None and `None` when missing; both mean no game. `ConfigStore` has no interior locking; `SharedConfig` shares one store across threads.
 - **Process**: `launch_and_track`, `close_tracked` and `launch_process` block for their waits, so they run on the worker thread. `is_tracked_running` and `get_child_names` each take a full process snapshot. The exe-name fallbacks in `is_app_running` and `close_app` belong to the manager, as in Python.
 - **Detection**: synchronous, safe from any thread, writes nothing. Saving a detected path is the manager's job.
 - **Tests that render** build their harness with `tests/ui/support.rs`, which gives every harness a renderer on one wgpu device for the whole process: two headless GPU devices created at once crash intermittently, one device shared by several threads does not.

@@ -3,17 +3,13 @@
 //! Name-based running checks and kills would match the developer's real
 //! apps, so they are covered by the transcript tests through the fake backend.
 
-use std::sync::{Arc, Mutex};
-
-use iracing_companion_launcher::core::config::ConfigStore;
-use iracing_companion_launcher::managers::{
-    AppManager, Backend, GameManager, Managers, SharedConfig,
-};
+use iracing_companion_launcher::core::config::{ConfigStore, SharedConfig};
+use iracing_companion_launcher::managers::{AppManager, Backend, GameManager, Managers};
 use iracing_companion_launcher::process::tracker::ProcessTracker;
 
 fn config_in(dir: &std::path::Path, text: &str) -> SharedConfig {
     std::fs::write(dir.join("config.ini"), text).unwrap();
-    Arc::new(Mutex::new(ConfigStore::load(dir)))
+    SharedConfig::new(ConfigStore::load(dir))
 }
 
 fn tracker_in(dir: &std::path::Path) -> ProcessTracker {

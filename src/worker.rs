@@ -16,11 +16,11 @@ use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender};
 
 use serde::{Deserialize, Serialize};
-use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoUninitialize};
 
 use crate::core::log;
 use crate::managers::Backend;
 use crate::model::{LogLevel, LogLine, Status};
+use crate::win::ComApartment;
 
 /// What the controller asks the worker to run. The serde derives on this and
 /// [`Event`] keep both readable in tests and transcripts.
@@ -302,41 +302,6 @@ impl Worker {
         Self {
             commands: command_tx,
             events: event_rx,
-        }
-    }
-}
-
-/// A single-threaded COM apartment for the current thread while it lives: the
-/// worker thread from its start to its end, and the UI thread around the file
-/// dialog.
-///
-/// `shell_open` calls `ShellExecuteW` here, which may hand the target to shell
-/// extensions that need COM. Python made those calls on the Tk thread, which
-/// importing `winshell` (through `pythoncom`) had already made an apartment.
-/// The per-call guard in `detect::shortcuts` on this thread then nests inside
-/// this one: its `CoInitializeEx` returns `S_FALSE` and its drop balances it.
-pub(crate) struct ComApartment {
-    owns_init: bool,
-}
-
-impl ComApartment {
-    pub(crate) fn enter() -> Self {
-        // The flags pythoncom uses. S_FALSE (already an apartment) still counts
-        // and is balanced; RPC_E_CHANGED_MODE (already multithreaded) is an
-        // error that leaves the thread as it was, and is tolerated.
-        // SAFETY: plain call on the current thread; balanced in Drop when it succeeds.
-        let hr = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
-        Self {
-            owns_init: hr.is_ok(),
-        }
-    }
-}
-
-impl Drop for ComApartment {
-    fn drop(&mut self) {
-        if self.owns_init {
-            // SAFETY: balances the successful CoInitializeEx in `enter`, on the same thread.
-            unsafe { CoUninitialize() };
         }
     }
 }

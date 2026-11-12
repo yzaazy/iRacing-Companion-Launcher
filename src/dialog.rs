@@ -17,7 +17,7 @@ use windows::Win32::UI::Shell::{
 use windows::core::PCWSTR;
 
 use crate::app::{DialogRequest, FileDialog};
-use crate::worker::ComApartment;
+use crate::win::{ComApartment, wide};
 
 /// The Windows open dialog as Tk 8.6's `tk_getOpenFile` opens it
 /// (`GetFileNameVista` in `win/tkWinDialog.c`), modal to the window.
@@ -121,15 +121,11 @@ fn tk_open_options(defaults: FILEOPENDIALOGOPTIONS) -> FILEOPENDIALOGOPTIONS {
     flags | FOS_OVERWRITEPROMPT
 }
 
-fn wide(text: &str) -> Vec<u16> {
-    text.encode_utf16().chain(std::iter::once(0)).collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::{open_dialog, tk_open_options};
     use crate::app::DialogRequest;
-    use crate::worker::ComApartment;
+    use crate::win::ComApartment;
     use windows::Win32::UI::Shell::{
         FOS_FILEMUSTEXIST, FOS_FORCEFILESYSTEM, FOS_NOCHANGEDIR, FOS_NODEREFERENCELINKS,
         FOS_NOVALIDATE, FOS_OVERWRITEPROMPT, FOS_PATHMUSTEXIST, FOS_PICKFOLDERS,

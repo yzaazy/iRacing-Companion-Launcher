@@ -20,12 +20,12 @@
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::PoisonError;
 
-use crate::core::config::{self, config_key};
+use crate::core::config::{self, SharedConfig, config_key};
 use crate::core::log;
-use crate::managers::{Backend, SharedConfig};
+use crate::managers::Backend;
 use crate::model::{AppCard, GameCard, LogLevel, Status, UiAction, ViewState};
+use crate::win::basename;
 use crate::worker::{Command, Dispatch, Event};
 
 /// The calls `main_window.py` makes on `ConfigManager` and its `config` parser.
@@ -46,23 +46,23 @@ pub trait Settings {
 
 impl Settings for SharedConfig {
     fn bool_setting(&self, key: &str, fallback: bool) -> bool {
-        let store = self.lock().unwrap_or_else(PoisonError::into_inner);
+        let store = self.lock();
         store.bool_setting(key, fallback)
     }
     fn setting(&self, key: &str) -> Option<String> {
-        let store = self.lock().unwrap_or_else(PoisonError::into_inner);
+        let store = self.lock();
         store.setting(key)
     }
     fn set_setting(&mut self, key: &str, value: &str) {
-        let mut store = self.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut store = self.lock();
         store.set_setting(key, value);
     }
     fn save(&mut self) -> bool {
-        let store = self.lock().unwrap_or_else(PoisonError::into_inner);
+        let store = self.lock();
         store.save()
     }
     fn set_app_path(&mut self, key: &str, path: &str) -> bool {
-        let mut store = self.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut store = self.lock();
         // ConfigStore::set_app_path returns false for a refusal and for a
         // failed save alike; only the refusal stops Browse.
         store.set_app_path(key, path);
@@ -95,17 +95,6 @@ fn py_bool(value: bool) -> &'static str {
 
 fn enabled_key(name: &str) -> String {
     format!("{}_enabled", config_key(name))
-}
-
-/// `ntpath.basename`: after the drive, after the last `\` or `/`.
-fn basename(path: &str) -> &str {
-    let bytes = path.as_bytes();
-    let tail = if bytes.len() >= 2 && bytes[1] == b':' {
-        &path[2..]
-    } else {
-        path
-    };
-    tail.rsplit(['\\', '/']).next().unwrap_or(tail)
 }
 
 /// Sees every log line and card status the controller produces itself.
@@ -617,19 +606,5 @@ impl Controller {
         if let Some(card) = self.state.apps.iter_mut().find(|c| c.name == name) {
             card.checked = checked;
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::basename;
-
-    #[test]
-    fn basename_splits_like_ntpath() {
-        assert_eq!(basename("C:/Program Files/A/Fanatec.exe"), "Fanatec.exe");
-        assert_eq!(basename(r"C:\A\b.exe"), "b.exe");
-        assert_eq!(basename("C:b.exe"), "b.exe");
-        assert_eq!(basename("b.exe"), "b.exe");
-        assert_eq!(basename("C:/A/"), "");
     }
 }

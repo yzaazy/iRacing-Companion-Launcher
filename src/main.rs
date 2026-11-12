@@ -3,12 +3,10 @@
 // Release builds are windowed; debug builds keep a console for diagnostics.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::sync::{Arc, Mutex};
-
 use iracing_companion_launcher::app::Controller;
-use iracing_companion_launcher::core::config::{ConfigStore, resolve_config_dir};
+use iracing_companion_launcher::core::config::{ConfigStore, SharedConfig, resolve_config_dir};
 use iracing_companion_launcher::dialog::NativeDialog;
-use iracing_companion_launcher::managers::{Managers, SharedConfig};
+use iracing_companion_launcher::managers::Managers;
 use iracing_companion_launcher::process::tracker::ProcessTracker;
 use iracing_companion_launcher::ui;
 use iracing_companion_launcher::worker::{Sequencer, Worker};
@@ -78,7 +76,7 @@ fn main() -> eframe::Result {
     // iRacingLauncherGUI.__init__: config, tracker, managers, then the startup
     // checks, all before the window first paints.
     let config_dir = resolve_config_dir();
-    let config: SharedConfig = Arc::new(Mutex::new(ConfigStore::load(&config_dir)));
+    let config = SharedConfig::new(ConfigStore::load(&config_dir));
     let tracker = ProcessTracker::new(config_dir.join(STATE_FILE));
     let mut managers = Managers::new(config.clone(), tracker);
     let startup = Controller::startup(

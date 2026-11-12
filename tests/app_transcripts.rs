@@ -5,11 +5,9 @@
 
 mod app_support;
 
-use std::sync::{Arc, Mutex};
-
 use app_support::{FakeBackend, FakeDialog, Recorder, RecordingSettings};
 use iracing_companion_launcher::app::Controller;
-use iracing_companion_launcher::core::config::ConfigStore;
+use iracing_companion_launcher::core::config::{ConfigStore, SharedConfig};
 use iracing_companion_launcher::model::{Status, UiAction};
 use iracing_companion_launcher::worker::{Inline, Sequencer};
 use serde_json::{Value, json};
@@ -42,7 +40,7 @@ struct Run {
 fn replay(scenario: &Value) -> Run {
     let dir = tempfile::tempdir().unwrap();
     let rec = Recorder::default();
-    let config = Arc::new(Mutex::new(seeded_config(dir.path(), &scenario["settings"])));
+    let config = SharedConfig::new(seeded_config(dir.path(), &scenario["settings"]));
     let settings = RecordingSettings::new(config, rec.clone());
     let mut backend = FakeBackend::new(scenario["script"].clone(), rec.clone());
     let picks = scenario["picks"]
@@ -156,7 +154,7 @@ fn startup_saves_config_to_disk() {
         .unwrap();
     let dir = tempfile::tempdir().unwrap();
     let rec = Recorder::default();
-    let config = Arc::new(Mutex::new(seeded_config(dir.path(), &scenario["settings"])));
+    let config = SharedConfig::new(seeded_config(dir.path(), &scenario["settings"]));
     let mut backend = FakeBackend::new(scenario["script"].clone(), rec.clone());
     let _ = Controller::startup(&mut backend, Box::new(config), "3.0.0", None);
     let saved = std::fs::read_to_string(dir.path().join("config.ini")).unwrap();

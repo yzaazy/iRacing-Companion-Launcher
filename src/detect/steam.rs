@@ -2,9 +2,11 @@
 
 use windows::Win32::Foundation::ERROR_SUCCESS;
 use windows::Win32::System::Registry::{
-    HKEY, HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_64KEY, RegCloseKey, RegOpenKeyExW,
+    HKEY, HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_64KEY, RegOpenKeyExW,
 };
 use windows::core::HSTRING;
+
+use crate::win::RegKey;
 
 const UNINSTALL_KEY: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
 
@@ -25,6 +27,6 @@ pub fn check_steam_game_installed_in(hive: HKEY, uninstall_key: &str, appid: &st
     if opened != ERROR_SUCCESS {
         return false;
     }
-    let _ = unsafe { RegCloseKey(key) };
+    drop(RegKey(key));
     true
 }

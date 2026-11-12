@@ -21,6 +21,7 @@ use super::{
     ProcError, WaitOutcome, create_time, identity, kill_if_same, pids_by_exe, proc_wait,
     shell_open, snapshot, spawn_detached,
 };
+use crate::win::basename;
 
 /// Tolerance (seconds) when comparing persisted vs. live creation time. Python
 /// stores wall-clock seconds, so a small NTP correction can shift it slightly.
@@ -396,11 +397,6 @@ fn to_python_json(state: &impl Serialize) -> serde_json::Result<String> {
     Ok(out)
 }
 
-/// `ntpath.basename`.
-fn basename(path: &str) -> &str {
-    path.rsplit(['\\', '/', ':']).next().unwrap_or(path)
-}
-
 // ---------------------------------------------------------------------------
 // Process tree (psutil semantics)
 // ---------------------------------------------------------------------------
@@ -606,17 +602,6 @@ mod tests {
                 Ok(MaybeState(None))
             ));
         }
-    }
-
-    #[test]
-    fn basename_matches_ntpath() {
-        assert_eq!(
-            basename(r"C:\Program Files\Elgato\StreamDeck.exe"),
-            "StreamDeck.exe"
-        );
-        assert_eq!(basename("C:/a/b.exe"), "b.exe");
-        assert_eq!(basename("C:b.exe"), "b.exe");
-        assert_eq!(basename("b.exe"), "b.exe");
     }
 
     #[test]

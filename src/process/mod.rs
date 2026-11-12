@@ -8,13 +8,12 @@
 pub mod tracker;
 
 use std::ffi::c_void;
-use std::os::windows::ffi::OsStrExt;
 use std::time::Duration;
 
 use windows::Wdk::System::SystemInformation::{NtQuerySystemInformation, SystemProcessInformation};
 use windows::Win32::Foundation::{
-    CloseHandle, ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER, FILETIME, GENERIC_READ,
-    GENERIC_WRITE, HANDLE, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER, FILETIME, GENERIC_READ, GENERIC_WRITE,
+    WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows::Win32::Security::SECURITY_ATTRIBUTES;
 use windows::Win32::Storage::FileSystem::{
@@ -36,6 +35,8 @@ use windows::Win32::System::Threading::{
 use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 use windows::core::{PCWSTR, PWSTR};
+
+use crate::win::{Handle, wide};
 
 /// `GetExitCodeProcess` value for a process that has not exited.
 const STILL_ACTIVE: u32 = 259;
@@ -126,23 +127,6 @@ pub(crate) struct ProcEntry {
     pub pid: u32,
     pub ppid: u32,
     pub name: String,
-}
-
-/// Owns a Win32 handle and closes it on drop.
-struct Handle(HANDLE);
-
-impl Drop for Handle {
-    fn drop(&mut self) {
-        // SAFETY: the handle was returned open by Win32 and is closed exactly once.
-        let _ = unsafe { CloseHandle(self.0) };
-    }
-}
-
-fn wide(s: &str) -> Vec<u16> {
-    std::ffi::OsStr::new(s)
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect()
 }
 
 fn open_process(access: PROCESS_ACCESS_RIGHTS, pid: u32) -> windows::core::Result<Handle> {
@@ -524,7 +508,7 @@ pub(crate) fn spawn_detached(exe_path: &str) -> std::io::Result<u32> {
     si.StartupInfo.hStdError = nul.0;
     si.lpAttributeList = list.ptr();
 
-    let mut cmdline = wide(&list2cmdline(exe_path));
+    let mut cmdline = wide(list2cmdline(exe_path));
     let mut pi = PROCESS_INFORMATION::default();
     // SAFETY: every pointer is valid for the duration of the call; `cmdline` is
     // writable as CreateProcessW requires.

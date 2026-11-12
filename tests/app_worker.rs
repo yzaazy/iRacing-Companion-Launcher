@@ -4,14 +4,14 @@
 
 mod app_support;
 
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, channel};
-use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use app_support::{FakeBackend, FakeDialog, Recorder};
 use iracing_companion_launcher::app::Controller;
-use iracing_companion_launcher::core::config::ConfigStore;
+use iracing_companion_launcher::core::config::{ConfigStore, SharedConfig};
 use iracing_companion_launcher::core::definitions;
 use iracing_companion_launcher::managers::Backend;
 use iracing_companion_launcher::model::UiAction;
@@ -105,7 +105,7 @@ fn wait_until(controller: &mut Controller, done: impl Fn(&Controller) -> bool) {
 fn commands_queue_in_order_with_their_own_selection() {
     let dir = tempfile::tempdir().unwrap();
     let rec = Recorder::default();
-    let config = Arc::new(Mutex::new(ConfigStore::load(dir.path())));
+    let config = SharedConfig::new(ConfigStore::load(dir.path()));
     let script = json!({
         "find_app_path": every_app(json!("C:/fake/app.exe")),
         "find_game_path": {},
@@ -198,7 +198,7 @@ fn commands_queue_in_order_with_their_own_selection() {
 fn worker_thread_is_a_com_apartment() {
     let dir = tempfile::tempdir().unwrap();
     let rec = Recorder::default();
-    let config = Arc::new(Mutex::new(ConfigStore::load(dir.path())));
+    let config = SharedConfig::new(ConfigStore::load(dir.path()));
     let script = json!({
         "find_app_path": every_app(json!("C:/fake/app.exe")),
         "find_game_path": {},

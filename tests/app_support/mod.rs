@@ -8,8 +8,9 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use iracing_companion_launcher::app::{DialogRequest, FileDialog, Settings};
+use iracing_companion_launcher::core::config::SharedConfig;
 use iracing_companion_launcher::core::definitions;
-use iracing_companion_launcher::managers::{Backend, SharedConfig};
+use iracing_companion_launcher::managers::Backend;
 use iracing_companion_launcher::model::LogLevel;
 use iracing_companion_launcher::worker::Event;
 use serde_json::{Value, json};
