@@ -448,16 +448,9 @@ fn process_that_refuses_everything_is_tracked_and_survives_close() {
     );
 
     // The creation time still validates, through the NtQuerySystemInformation
-    // fallback psutil also uses, and agrees with psutil.
+    // fallback psutil also uses.
     let mut t = ProcessTracker::new(state.clone());
     assert_eq!(t.is_tracked_running(KEY), (true, 0));
-    let state_s = state.to_string_lossy().into_owned();
-    if let Some(theirs) = python(&d, &["ctime", repo_root(), &state_s, KEY, &pid.to_string()]) {
-        let ours = tracked_create_time(&state, KEY);
-        let theirs: f64 = theirs.parse().unwrap();
-        println!("create_time (fallback) pid {pid}: rust {ours:?} psutil {theirs:?}");
-        assert!((ours - theirs).abs() < 1e-3);
-    }
 
     // As in Python: close reports true and forgets the entry, but the process
     // refused termination and keeps running. Name-based kill fails too.
@@ -559,136 +552,143 @@ fn malformed_entries_follow_python() {
 }
 
 // ---------------------------------------------------------------------------
-// Cross-check with psutil and the Python ProcessTracker
+// process_state.json as the Python tracker wrote it (tests/fixtures/process)
 // ---------------------------------------------------------------------------
 
-const PY_SCRIPT: &str = r#"
-import importlib.util, json, sys
-mode, root, state, key = sys.argv[1:5]
-spec = importlib.util.spec_from_file_location(
-    "process_tracker", root + "/iracing_launcher_app/managers/process_tracker.py")
-pt = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(pt)
-import psutil
-if mode == "ctime":
-    print(repr(psutil.Process(int(sys.argv[5])).create_time()))
-elif mode == "launch":
-    t = pt.ProcessTracker(state)
-    print(json.dumps({"ok": t.launch_and_track(key, sys.argv[5], wait_time=1.0)}))
-elif mode == "inspect":
-    t = pt.ProcessTracker(state)
-    alive, count = t.is_tracked_running(key)
-    names = t.get_child_names(key)
-    t.state_file_path = state + ".py"
-    t._save()
-    print(json.dumps({"tracked": t.is_tracked(key), "alive": alive,
-                      "count": count, "names": names}))
-"#;
+/// The second key in the captured files: non-ASCII and an astral character.
+const GONE: &str = "Dümmy Gone 😀";
 
-/// Runs the script, or None when Python with psutil is not available.
-fn python(d: &Dummies, args: &[&str]) -> Option<String> {
-    let probe = Command::new("python")
-        .args(["-c", "import psutil"])
-        .output()
-        .ok()?;
-    if !probe.status.success() {
-        eprintln!("skipped: python with psutil not available");
-        return None;
+fn fixture(name: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/process")
+        .join(name);
+    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+}
+
+/// What the Python tracker reported and stored while the fixtures were captured.
+fn python_view() -> Value {
+    serde_json::from_str(&fixture("python_view.json")).unwrap()
+}
+
+/// `(pid, create_time)` as written into a state file.
+type Numbers = (String, String);
+
+/// The PID and creation time the Python tracker wrote for `key`.
+fn python_numbers(view: &Value, key: &str) -> Numbers {
+    let entry = &view["entries"][key];
+    (
+        entry[0].as_u64().unwrap().to_string(),
+        entry[1].as_str().unwrap().to_owned(),
+    )
+}
+
+/// Launches `exe` under `key` through a scratch tracker and returns the PID and
+/// creation time of the live process as Rust writes them.
+fn live_numbers(d: &Dummies, scratch: &str, key: &str, exe: &str) -> Numbers {
+    let scratch = d.dir.path().join(scratch);
+    let mut t = ProcessTracker::new(scratch.clone());
+    assert!(t.launch_and_track(key, exe, WAIT, false));
+    let entry = &read_state(&scratch)[key];
+    (entry["pid"].to_string(), entry["create_time"].to_string())
+}
+
+/// A captured file with each Python PID and creation time swapped for a live
+/// process's. Every other byte is Python's.
+fn with_live(text: &str, swaps: &[(&Numbers, &Numbers)]) -> String {
+    let mut out = text.to_owned();
+    for (python, live) in swaps {
+        for (field, from, to) in [
+            ("pid", &python.0, &live.0),
+            ("create_time", &python.1, &live.1),
+        ] {
+            let from = format!("\"{field}\": {from},");
+            assert_eq!(out.matches(&from).count(), 1, "{from} in {text}");
+            out = out.replace(&from, &format!("\"{field}\": {to},"));
+        }
     }
-    let script = d.dir.path().join("crosscheck.py");
-    std::fs::write(&script, PY_SCRIPT).unwrap();
-    let out = Command::new("python")
-        .arg(&script)
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "python failed: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    Some(String::from_utf8(out.stdout).unwrap().trim().to_owned())
-}
-
-fn repo_root() -> &'static str {
-    env!("CARGO_MANIFEST_DIR")
+    out
 }
 
 #[test]
-fn create_time_matches_psutil() {
-    let mut d = Dummies::new();
-    let exe = d.exe("ctime");
-    let state = d.state_file();
-    let mut t = ProcessTracker::new(state.clone());
-    assert!(t.launch_and_track(KEY, &exe, WAIT, false));
-    let pid = read_state(&state)[KEY]["pid"].as_u64().unwrap().to_string();
-    let ours = tracked_create_time(&state, KEY);
-    let state_s = state.to_string_lossy();
-    let Some(theirs) = python(&d, &["ctime", repo_root(), &state_s, KEY, &pid]) else {
-        return;
-    };
-    let theirs: f64 = theirs.parse().unwrap();
-    println!(
-        "create_time pid {pid}: rust {ours:?} psutil {theirs:?} diff {:e}",
-        ours - theirs
-    );
-    assert!((ours - theirs).abs() < 1e-3);
+fn python_numbers_are_formatted_like_rust() {
+    // Python writes `repr(float)` and `int`. Rust formats the same values to the
+    // same text, so swapping in live numbers below keeps each file Python's.
+    let view = python_view();
+    let written = fixture("python_written.json");
+    for key in [GONE, KEY] {
+        let (pid, ct) = python_numbers(&view, key);
+        let value: f64 = ct.parse().unwrap();
+        assert!(value.fract() != 0.0, "sub-second precision: {ct}");
+        assert_eq!(serde_json::to_string(&value).unwrap(), ct);
+        assert_eq!(
+            serde_json::to_string(&pid.parse::<u64>().unwrap()).unwrap(),
+            pid
+        );
+        assert!(
+            written.contains(&format!(
+                "\"pid\": {pid},\r\n    \"create_time\": {ct},\r\n"
+            )),
+            "{written}"
+        );
+    }
 }
 
 #[test]
-fn python_state_file_is_accepted() {
+fn python_state_file_is_read_and_rewritten_byte_for_byte() {
     let mut d = Dummies::new();
     let root = d.tree();
+    let solo = d.exe("gone");
+    let view = python_view();
+    let (py_app, py_gone) = (python_numbers(&view, KEY), python_numbers(&view, GONE));
+    let app = live_numbers(&d, "scratch app.json", KEY, &root);
+    let gone = live_numbers(&d, "scratch gone.json", GONE, &solo);
     let state = d.state_file();
-    let state_s = state.to_string_lossy().into_owned();
-    let Some(out) = python(&d, &["launch", repo_root(), &state_s, KEY, &root]) else {
-        return;
-    };
-    assert_eq!(out, r#"{"ok": true}"#);
 
-    let mut t = ProcessTracker::new(state.clone());
-    assert!(
-        t.is_tracked(KEY),
-        "{}",
-        std::fs::read_to_string(&state).unwrap()
+    // Python's file, with both of its processes alive again.
+    let written = with_live(
+        &fixture("python_written.json"),
+        &[(&py_app, &app), (&py_gone, &gone)],
     );
+    std::fs::write(&state, &written).unwrap();
+    let mut t = ProcessTracker::new(state.clone());
+    for key in ["Empty", GONE, KEY] {
+        assert!(t.is_tracked(key), "{key}");
+    }
+    assert_eq!(std::fs::read_to_string(&state).unwrap(), written);
     assert!(wait_until(Duration::from_secs(15), || t
         .is_tracked_running(KEY)
         == (true, 2)));
+    assert_eq!(t.is_tracked_running(GONE), (true, 0));
+    // The same tree as Python saw it, under this test's prefix.
+    assert_eq!(view["running"], serde_json::json!([true, 2]));
+    let python_prefix = view["prefix"].as_str().unwrap();
+    let python_names: Vec<String> = view["names"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| n.as_str().unwrap().replace(python_prefix, &d.prefix))
+        .collect();
+    assert_eq!(t.get_child_names(KEY), python_names);
+
+    // Every save writes the bytes Python wrote at the same step.
     assert!(t.close_tracked(KEY));
+    assert_eq!(
+        std::fs::read_to_string(&state).unwrap(),
+        with_live(&fixture("python_closed.json"), &[(&py_gone, &gone)])
+    );
     for role in ["root", "child", "grandchild"] {
         assert!(!is_process_running(&d.name(role)), "{role} survived");
     }
-}
 
-#[test]
-fn rust_state_file_is_accepted_by_python() {
-    let mut d = Dummies::new();
-    let root = d.tree();
-    let state = d.state_file();
-    let state_s = state.to_string_lossy().into_owned();
-    let mut t = ProcessTracker::new(state.clone());
-    assert!(t.launch_and_track(KEY, &root, WAIT, false));
-    assert!(wait_until(Duration::from_secs(15), || t
-        .is_tracked_running(KEY)
-        == (true, 2)));
-    let names = t.get_child_names(KEY);
-
-    let Some(out) = python(&d, &["inspect", repo_root(), &state_s, KEY]) else {
-        return;
-    };
-    let seen: Value = serde_json::from_str(&out).unwrap();
+    d.stop("gone");
+    assert!(wait_until(Duration::from_secs(10), || !is_process_running(
+        &d.name("gone")
+    )));
+    let t = ProcessTracker::new(state.clone());
+    assert!(!t.is_tracked(GONE));
+    assert!(t.is_tracked("Empty"));
     assert_eq!(
-        seen,
-        serde_json::json!({"tracked": true, "alive": true, "count": 2, "names": names})
+        std::fs::read_to_string(&state).unwrap(),
+        fixture("python_dropped.json")
     );
-    // Python re-saving the state it loaded produces our bytes exactly.
-    assert_eq!(
-        std::fs::read(format!("{state_s}.py")).unwrap(),
-        std::fs::read(&state).unwrap()
-    );
-
-    let mut t = ProcessTracker::new(state);
-    assert!(t.close_tracked(KEY));
-    assert!(!is_process_running(&d.name("root")));
 }
