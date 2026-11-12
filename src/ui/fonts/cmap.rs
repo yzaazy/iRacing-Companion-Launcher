@@ -246,7 +246,12 @@ fn format4(sub: &[u8]) -> Option<Coverage> {
         }
         for code in start..=end {
             let at = ro_at + ro + 2 * (code - start) as usize;
-            if u16_at(sub, at).is_some_and(|g| g != 0) {
+            // Each code's glyph lies further on than the last, so the first one past the end of
+            // the table ends the segment: a lying table cannot cost two billion lookups.
+            let Some(glyph) = u16_at(sub, at) else {
+                break;
+            };
+            if glyph != 0 {
                 match out.last_mut() {
                     Some((_, hi)) if *hi + 1 == code => *hi = code,
                     _ => out.push((code, code)),
@@ -275,11 +280,17 @@ mod tests {
             sub.extend(end.to_be_bytes());
             sub.extend(glyph.to_be_bytes());
         }
+        font_with(10, &sub, cmap_len)
+    }
+
+    /// A one-face font whose only table is a `cmap` of `cmap_len` bytes holding `sub` as its one
+    /// Windows (platform 3) subtable with `encoding`.
+    fn font_with(encoding: u16, sub: &[u8], cmap_len: Option<u32>) -> Vec<u8> {
         let mut cmap = Vec::new();
         cmap.extend(0u16.to_be_bytes());
         cmap.extend(1u16.to_be_bytes());
         cmap.extend(3u16.to_be_bytes());
-        cmap.extend(10u16.to_be_bytes());
+        cmap.extend(encoding.to_be_bytes());
         cmap.extend(12u32.to_be_bytes());
         cmap.extend(sub);
 
@@ -293,6 +304,23 @@ mod tests {
         out.extend(cmap_len.unwrap_or(cmap.len() as u32).to_be_bytes());
         out.extend(cmap);
         out
+    }
+
+    /// A format 4 subtable with one segment per `(start, end, id_range_offset)` (all deltas 0),
+    /// and `glyphs` after the segment arrays.
+    fn format4_table(segments: &[(u16, u16, u16)], glyphs: &[u16]) -> Vec<u8> {
+        let seg_x2 = 2 * segments.len() as u16;
+        let mut sub = Vec::new();
+        for v in [4, 0, 0, seg_x2, 0, 0, 0] {
+            sub.extend(u16::to_be_bytes(v));
+        }
+        sub.extend(segments.iter().flat_map(|s| s.1.to_be_bytes()));
+        sub.extend(0u16.to_be_bytes());
+        sub.extend(segments.iter().flat_map(|s| s.0.to_be_bytes()));
+        sub.extend(segments.iter().flat_map(|_| 0u16.to_be_bytes()));
+        sub.extend(segments.iter().flat_map(|s| s.2.to_be_bytes()));
+        sub.extend(glyphs.iter().flat_map(|g| g.to_be_bytes()));
+        sub
     }
 
     /// Writes `bytes` to a file of its own and reads it the way `probe_file` does.
@@ -359,5 +387,33 @@ mod tests {
         let faces = read_file("groups", &bytes).unwrap();
         assert!(faces.faces[0].1.is_empty());
         assert!(!covers(&bytes, 0, 'A'));
+    }
+
+    #[test]
+    fn format4_segment_ends_at_the_end_of_the_table() {
+        // 0x41..=0x45 looks its glyphs up in [5, 0, 7]; the last two codes lie past the end.
+        let sub = format4_table(&[(0x41, 0x45, 2)], &[5, 0, 7]);
+        let bytes = font_with(1, &sub, None);
+        let faces = read_faces(&mut bytes.as_slice()).unwrap();
+        assert_eq!(faces.faces[0].1, [(0x41, 0x41), (0x43, 0x43)]);
+        assert!(covers(&bytes, 0, 'C'));
+        assert!(!covers(&bytes, 0, 'B'));
+    }
+
+    #[test]
+    fn lying_format4_segment_table_completes_at_once() {
+        // 32,767 segments of 65,535 codes each, every lookup past the end of the table: walked
+        // code by code, about two billion lookups.
+        let segments = vec![(0, 0xFFFE, 0xFFFF); 32_767];
+        let bytes = font_with(1, &format4_table(&segments, &[]), None);
+        let started = std::time::Instant::now();
+        let faces = read_faces(&mut bytes.as_slice()).unwrap();
+        assert!(faces.faces[0].1.is_empty());
+        assert!(!covers(&bytes, 0, 'A'));
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "took {:?}",
+            started.elapsed()
+        );
     }
 }
