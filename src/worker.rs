@@ -240,11 +240,9 @@ fn close_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: O
         }
 
         let path = backend.find_app_path(&app);
-        // No detected path: the first close_app already kills a running
-        // instance, so the second one below reports "was not running" and the
-        // card goes back to not-found. A quirk carried over from v2.3.2 (`docs/behaviour.md`,
-        // "Known quirks carried over from v2.3.2").
-        if path.is_none() && !backend.close_app(&app) {
+        // No detected path: closed only when running, and the card goes back to
+        // not-found either way (`docs/behaviour.md`, "Changes from v2.3.2").
+        if path.is_none() && !backend.is_app_running(&app) {
             continue;
         }
 
@@ -253,18 +251,18 @@ fn close_apps(backend: &mut dyn Backend, out: &mut Out, apps: &[String], game: O
         let children = backend.child_names(&app);
         out.helpers("helpers to close", &children);
 
-        if backend.close_app(&app) {
+        let closed = backend.close_app(&app);
+        if closed {
             out.log(LogLevel::Success, &format!("{app} closed"));
-            out.app(&app, Status::Stopped, 0);
         } else {
             out.log(LogLevel::Warning, &format!("{app} was not running"));
-            let status = if path.is_none() {
-                Status::NotFound
-            } else {
-                Status::Idle
-            };
-            out.app(&app, status, 0);
         }
+        let status = match (path.is_some(), closed) {
+            (false, _) => Status::NotFound,
+            (true, true) => Status::Stopped,
+            (true, false) => Status::Idle,
+        };
+        out.app(&app, status, 0);
     }
 
     let still_running =

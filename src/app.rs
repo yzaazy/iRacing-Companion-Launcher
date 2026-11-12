@@ -8,9 +8,9 @@
 //! ## Buttons across a queue
 //!
 //! [`ButtonState::normal`] is the Python widget state, changed
-//! exactly where Python changes them: recomputing the button labels sets both, a
-//! press disables its own button, and the end of its sequence enables it
-//! unconditionally (even where the label update would not have).
+//! where Python changes them: recomputing the button labels sets both, and a
+//! press disables its own button. The end of a sequence recomputes the labels,
+//! where Python enabled its button unconditionally (#11).
 //! On top of that a button stays disabled while any command of its kind is
 //! queued or running. Python can only re-enable a button mid-sequence through
 //! `update()` re-entrancy (a checkbox clicked while the log repaints), which a
@@ -118,10 +118,9 @@ impl ButtonState {
         self.pending += 1;
     }
 
-    /// The end of its sequence enables the button unconditionally.
+    /// The end of its sequence: its command is no longer queued.
     fn finish(&mut self) {
         self.pending = self.pending.saturating_sub(1);
-        self.normal = true;
     }
 }
 
@@ -591,15 +590,15 @@ impl Controller {
                     card.status = status;
                 }
             }
-            // The end of a sequence enables its button unconditionally; the
-            // labels are not recomputed, so a count can go stale, as in Python.
+            // The end of a sequence applies the button rule, so a button is not
+            // re-enabled when nothing is selected any more (#11).
             Event::LaunchFinished => {
                 self.launch.finish();
-                self.refresh_buttons();
+                self.update_button_text();
             }
             Event::CloseFinished => {
                 self.close.finish();
-                self.refresh_buttons();
+                self.update_button_text();
             }
         }
     }
