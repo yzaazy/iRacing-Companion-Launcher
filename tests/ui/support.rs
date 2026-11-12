@@ -5,7 +5,7 @@ use eframe::egui_wgpu::{self, WgpuSetup, WgpuSetupExisting};
 use egui::{Color32, Key, Pos2, Vec2};
 use egui_kittest::wgpu::{WgpuTestRenderer, create_render_state, default_wgpu_setup};
 use egui_kittest::{Harness, HarnessBuilder, LazyRenderer};
-use iracing_companion_launcher::contract::{UiAction, ViewState};
+use iracing_companion_launcher::model::{UiAction, ViewState};
 use iracing_companion_launcher::ui::{self, sections};
 use serde_json::Value;
 use std::collections::BTreeMap;

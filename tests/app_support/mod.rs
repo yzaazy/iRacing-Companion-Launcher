@@ -8,9 +8,10 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use iracing_companion_launcher::app::{DialogRequest, FileDialog, Settings};
-use iracing_companion_launcher::contract::{Event, LogLevel};
 use iracing_companion_launcher::core::definitions;
 use iracing_companion_launcher::managers::{Backend, SharedConfig};
+use iracing_companion_launcher::model::LogLevel;
+use iracing_companion_launcher::worker::Event;
 use serde_json::{Value, json};
 
 /// The ordered transcript shared by every fake.
@@ -40,7 +41,7 @@ impl Recorder {
     pub fn event(&self, event: &Event) {
         match event {
             Event::Log(line) => {
-                let level = serde_json::to_value(&line.level).unwrap();
+                let level = serde_json::to_value(line.level).unwrap();
                 let text = if line.level == LogLevel::Divider {
                     line.text.as_str()
                 } else {

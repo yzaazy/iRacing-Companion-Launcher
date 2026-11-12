@@ -1,7 +1,7 @@
 //! Log lines as `ActivityLogger` writes them, minus the trailing newline.
 
-use iracing_companion_launcher::contract::LogLevel;
 use iracing_companion_launcher::core::log::{divider, line};
+use iracing_companion_launcher::model::LogLevel;
 
 #[test]
 fn line_has_a_local_time_prefix() {

@@ -9,7 +9,7 @@ pub mod text;
 pub mod theme;
 pub mod widgets;
 
-use crate::contract::{UiAction, ViewState};
+use crate::model::{UiAction, ViewState};
 
 /// Pure function of `state`; returns what the user did this frame. Draws over the whole
 /// viewport, whatever margin the `ui` it is given has.

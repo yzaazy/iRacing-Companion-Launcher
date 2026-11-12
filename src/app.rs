@@ -34,11 +34,11 @@ use windows::Win32::UI::Shell::{
 };
 use windows::core::PCWSTR;
 
-use crate::contract::{AppCard, Command, Event, GameCard, LogLevel, Status, UiAction, ViewState};
 use crate::core::config::{self, config_key};
 use crate::core::log;
 use crate::managers::{Backend, SharedConfig};
-use crate::worker::{ComApartment, Dispatch};
+use crate::model::{AppCard, GameCard, LogLevel, Status, UiAction, ViewState};
+use crate::worker::{ComApartment, Command, Dispatch, Event};
 
 /// The calls `main_window.py` makes on `ConfigManager` and its `config` parser.
 pub trait Settings {
@@ -258,7 +258,7 @@ impl Startup {
             .state
             .games
             .iter()
-            .map(|g| (g.name.clone(), g.status.clone()))
+            .map(|g| (g.name.clone(), g.status))
             .collect()
     }
 

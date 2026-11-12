@@ -5,7 +5,7 @@
 //! long name, the log scrollbar). [`show`] paints that geometry and turns clicks into actions.
 //! The layout test reads the same geometry, so what is tested is what is drawn.
 
-use crate::contract::{AppCard, GameCard, Status, UiAction, ViewState};
+use crate::model::{AppCard, GameCard, Status, UiAction, ViewState};
 use crate::ui::input::{Control, Controls, Kind, Ring};
 use crate::ui::layout::{self, Anchor, Bounds, ButtonRow, CardParts, Layout, LogText, Trailing};
 use crate::ui::log as log_view;
@@ -519,7 +519,7 @@ fn game_card(
             widgets::dot(
                 painter,
                 geom.parts.trailing,
-                theme::status_color(&game.status),
+                theme::status_color(game.status),
             );
         }
     }
@@ -582,7 +582,7 @@ fn app_card(ui: &Ui, controls: &mut Controls, id: Id, geom: &AppCardGeom, app: &
         widgets::dot(
             painter,
             geom.parts.trailing,
-            theme::status_color(&app.status),
+            theme::status_color(app.status),
         );
     }
 }

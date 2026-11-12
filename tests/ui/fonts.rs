@@ -6,9 +6,7 @@
 
 use crate::support::{WINDOW, builder, fixtures};
 use egui::epaint::text::{FontFamily, FontId, MissingGlyphPolicy};
-use iracing_companion_launcher::contract::{
-    AppCard, GameCard, LogLevel, LogLine, Status, ViewState,
-};
+use iracing_companion_launcher::model::{AppCard, GameCard, LogLevel, LogLine, Status, ViewState};
 use iracing_companion_launcher::ui::{self, fonts, theme};
 use std::path::Path;
 

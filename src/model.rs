@@ -1,8 +1,11 @@
-//! Shared types between the UI, the controller and the worker (no single Python file; see docs/rewrite/contracts.md).
+//! What the screen shows and what the user did (no single Python file; see docs/rewrite/contracts.md).
+//!
+//! The serde derives stay because `docs/rewrite/fixtures.json` deserialises
+//! into [`ViewState`] and the controller transcripts are recorded as JSON.
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Status {
     Idle,
@@ -14,7 +17,7 @@ pub enum Status {
     NotFound,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LogLevel {
     Info,
@@ -27,14 +30,14 @@ pub enum LogLevel {
 }
 
 /// One activity log line. `text` is final, timestamp included.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct LogLine {
     pub level: LogLevel,
     pub text: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct AppCard {
     pub name: String,
@@ -43,14 +46,14 @@ pub struct AppCard {
     pub helper_count: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct GameCard {
     pub name: String,
     pub status: Status,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ViewState {
     pub version: String,
@@ -66,7 +69,7 @@ pub struct ViewState {
     pub close_enabled: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UiAction {
     ToggleApp { name: String, checked: bool },
@@ -76,34 +79,4 @@ pub enum UiAction {
     BrowseGame(String),
     Launch,
     Close,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Command {
-    Launch {
-        apps: Vec<String>,
-        game: Option<String>,
-    },
-    Close {
-        apps: Vec<String>,
-        game: Option<String>,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Event {
-    Log(LogLine),
-    AppStatus {
-        name: String,
-        status: Status,
-        helper_count: usize,
-    },
-    GameStatus {
-        name: String,
-        status: Status,
-    },
-    LaunchFinished,
-    CloseFinished,
 }

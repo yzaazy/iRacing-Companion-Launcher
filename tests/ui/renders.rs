@@ -3,7 +3,7 @@
 
 use crate::support::{WINDOW, builder, fixture, geometry, render, render_at, repo_path};
 use egui::{Color32, Key};
-use iracing_companion_launcher::contract::{AppCard, GameCard, Status};
+use iracing_companion_launcher::model::{AppCard, GameCard, Status};
 use iracing_companion_launcher::ui::layout::Bounds;
 use iracing_companion_launcher::ui::{self, theme};
 
@@ -64,18 +64,18 @@ fn display_scale_keeps_dots_and_focus_inside_their_cards() {
             .iter()
             .zip(&geom.apps)
             .filter(|(_, g)| g.browse.is_none())
-            .map(|(a, g)| (&a.name, a.status.clone(), g.card.painted()))
+            .map(|(a, g)| (&a.name, a.status, g.card.painted()))
             .chain(
                 state
                     .games
                     .iter()
                     .zip(&geom.games)
                     .filter(|(_, g)| g.browse.is_none())
-                    .map(|(a, g)| (&a.name, a.status.clone(), g.card.painted())),
+                    .map(|(a, g)| (&a.name, a.status, g.card.painted())),
             );
         let mut checked = 0;
         for (card_name, status, card) in dots {
-            let color = theme::status_color(&status);
+            let color = theme::status_color(status);
             // The card and a 12 pt band around it.
             let band = Bounds::new(card.x - 12, card.y - 12, card.w + 24, card.h + 24);
             let (x0, y0) = (

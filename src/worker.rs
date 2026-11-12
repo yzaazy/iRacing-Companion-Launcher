@@ -15,11 +15,45 @@
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender};
 
+use serde::{Deserialize, Serialize};
 use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoUninitialize};
 
-use crate::contract::{Command, Event, LogLevel, Status};
 use crate::core::log;
 use crate::managers::Backend;
+use crate::model::{LogLevel, LogLine, Status};
+
+/// What the controller asks the worker to run. The serde derives on this and
+/// [`Event`] keep both readable in tests and transcripts.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Command {
+    Launch {
+        apps: Vec<String>,
+        game: Option<String>,
+    },
+    Close {
+        apps: Vec<String>,
+        game: Option<String>,
+    },
+}
+
+/// What a sequence reports back, in order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Event {
+    Log(LogLine),
+    AppStatus {
+        name: String,
+        status: Status,
+        helper_count: usize,
+    },
+    GameStatus {
+        name: String,
+        status: Status,
+    },
+    LaunchFinished,
+    CloseFinished,
+}
 
 /// Executes commands against a [`Backend`], reporting through `emit`.
 pub struct Sequencer {
@@ -78,7 +112,7 @@ impl Out<'_> {
     }
 
     fn game(&mut self, name: &str, status: Status) {
-        self.game_status.insert(name.to_owned(), status.clone());
+        self.game_status.insert(name.to_owned(), status);
         (self.emit)(Event::GameStatus {
             name: name.to_owned(),
             status,

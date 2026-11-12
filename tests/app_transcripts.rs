@@ -9,8 +9,8 @@ use std::sync::{Arc, Mutex};
 
 use app_support::{FakeBackend, FakeDialog, Recorder, RecordingSettings};
 use iracing_companion_launcher::app::Controller;
-use iracing_companion_launcher::contract::{Status, UiAction};
 use iracing_companion_launcher::core::config::ConfigStore;
+use iracing_companion_launcher::model::{Status, UiAction};
 use iracing_companion_launcher::worker::{Inline, Sequencer};
 use serde_json::{Value, json};
 

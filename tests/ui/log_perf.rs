@@ -9,7 +9,7 @@
 //! ```
 
 use crate::support::WINDOW;
-use iracing_companion_launcher::contract::{AppCard, LogLevel, LogLine, Status, ViewState};
+use iracing_companion_launcher::model::{AppCard, LogLevel, LogLine, Status, ViewState};
 use iracing_companion_launcher::ui;
 use std::time::{Duration, Instant};
 
@@ -58,7 +58,7 @@ fn line(levels: &[LogLevel], i: usize) -> LogLine {
         ""
     };
     LogLine {
-        level: levels[i % levels.len()].clone(),
+        level: levels[i % levels.len()],
         text: format!(
             "[12:{:02}:{:02}] Line {i}: something happened{tail}",
             i / 60 % 60,

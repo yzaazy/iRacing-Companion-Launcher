@@ -15,7 +15,7 @@
 //! egui's own focus is not used: no control senses focus, so egui's Tab handling and its
 //! Space/Enter "fake clicks" never reach them.
 
-use crate::contract::UiAction;
+use crate::model::UiAction;
 use crate::ui::layout::Bounds;
 use crate::ui::theme;
 use egui::{CursorIcon, Id, Key, PointerButton, Sense, Stroke, StrokeKind, Ui, WidgetInfo};

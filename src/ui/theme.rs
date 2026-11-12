@@ -3,7 +3,7 @@
 //! Values come from the Python source and CustomTkinter's dark `blue.json` theme; `ui-spec.json`
 //! confirms each one against the reference screenshots (`colors`, `shapes`, `fonts`).
 
-use crate::contract::{LogLevel, Status};
+use crate::model::{LogLevel, Status};
 use egui::Color32;
 
 const fn hex(rgb: u32) -> Color32 {
@@ -107,7 +107,7 @@ pub const RADIO_BORDER_CHECKED: f32 = 6.0;
 pub const SCROLLBAR_WIDTH: f32 = 8.0;
 
 /// `STATUS_COLORS`; `stopping` has no entry in Python and falls back to idle grey.
-pub fn status_color(status: &Status) -> Color32 {
+pub fn status_color(status: Status) -> Color32 {
     match status {
         Status::Starting => hex(0xffa726),
         Status::Running => hex(0x66bb6a),
@@ -117,7 +117,7 @@ pub fn status_color(status: &Status) -> Color32 {
 }
 
 /// `LOG_COLORS`.
-pub fn log_color(level: &LogLevel) -> Color32 {
+pub fn log_color(level: LogLevel) -> Color32 {
     match level {
         LogLevel::Info => hex(0xd4d4d4),
         LogLevel::Success => hex(0x66bb6a),

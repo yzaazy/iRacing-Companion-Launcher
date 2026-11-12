@@ -1,8 +1,8 @@
 //! Library half of the launcher (ports the `iracing_launcher_app` package); `main.rs` is the window shell.
 
 pub mod app;
-pub mod contract;
 pub mod managers;
+pub mod model;
 pub mod process;
 pub mod ui;
 pub mod worker;

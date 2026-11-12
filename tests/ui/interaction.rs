@@ -7,7 +7,7 @@ use crate::support::{
 };
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable as _;
-use iracing_companion_launcher::contract::{LogLevel, LogLine, UiAction};
+use iracing_companion_launcher::model::{LogLevel, LogLine, UiAction};
 use iracing_companion_launcher::ui::layout::Bounds;
 use iracing_companion_launcher::ui::theme;
 

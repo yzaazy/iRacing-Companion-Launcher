@@ -9,7 +9,7 @@
 //! The log is append-only (`ActivityLogger` never edits or removes a line), so a frame checks
 //! that by its length and its first and last lines and lays out only lines it has not seen.
 
-use crate::contract::{LogLine, ViewState};
+use crate::model::{LogLine, ViewState};
 use crate::ui::input::{Controls, Ring};
 use crate::ui::layout::{Bounds, LogText};
 use crate::ui::text::{self, Run};
@@ -35,7 +35,7 @@ fn line_galley(ctx: &egui::Context, line: &LogLine, width: f32) -> Arc<Galley> {
     let text = format!("{}\n", line.text);
     let run = Run {
         text: &text,
-        color: theme::log_color(&line.level),
+        color: theme::log_color(line.level),
     };
     text::layout(ctx, &[run], &theme::LOG_FONT, Some(width))
 }

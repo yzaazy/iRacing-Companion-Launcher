@@ -1,8 +1,9 @@
 //! The shared types read the fixture shape from `docs/rewrite/contracts.md` and round-trip.
 
-use iracing_companion_launcher::contract::{
-    AppCard, Event, GameCard, LogLevel, LogLine, Status, UiAction, ViewState,
+use iracing_companion_launcher::model::{
+    AppCard, GameCard, LogLevel, LogLine, Status, UiAction, ViewState,
 };
+use iracing_companion_launcher::worker::Event;
 use std::collections::BTreeMap;
 
 const FIXTURE: &str = r#"{

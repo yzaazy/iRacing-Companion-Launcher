@@ -11,10 +11,10 @@ use std::time::{Duration, Instant};
 
 use app_support::{FakeBackend, FakeDialog, Recorder};
 use iracing_companion_launcher::app::Controller;
-use iracing_companion_launcher::contract::UiAction;
 use iracing_companion_launcher::core::config::ConfigStore;
 use iracing_companion_launcher::core::definitions;
 use iracing_companion_launcher::managers::Backend;
+use iracing_companion_launcher::model::UiAction;
 use iracing_companion_launcher::worker::{Sequencer, Worker};
 use serde_json::{Value, json};
 use windows::Win32::Foundation::S_FALSE;

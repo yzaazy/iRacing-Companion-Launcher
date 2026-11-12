@@ -14,7 +14,7 @@ The seams between agents. Each agent builds its own module against these and nob
 
 | Path | Owner | Ports |
 |---|---|---|
-| `Cargo.toml`, `src/lib.rs`, `src/main.rs`, `src/contract.rs` | scaffold (frozen) | — |
+| `Cargo.toml`, `src/lib.rs`, `src/main.rs`, `src/model.rs` | scaffold (frozen) | — |
 | `src/core/definitions.rs`, `config.rs`, `log.rs` | core | `core/*.py` |
 | `src/process/mod.rs`, `tracker.rs` | process | `managers/process_manager.py`, `process_tracker.py` |
 | `src/detect/shortcuts.rs`, `steam.rs`, `paths.rs` | detect | `utils/*.py` |
@@ -28,9 +28,9 @@ The scaffold created every module file as a compiling stub with the signatures b
 
 Frozen files change only in two announced cases: the ui agent updates the one `ui::draw` call in `main.rs` when it changes the seam below, and the controller agent replaces the placeholder app in `main.rs` and removes the scaffold-only `#![allow(...)]` in `lib.rs` in wave 2. A missing `windows` feature is added as a single line in `Cargo.toml` and named in your report.
 
-## Shared types (`src/contract.rs`)
+## Shared types (`src/model.rs`, and `Command` and `Event` in `src/worker.rs`)
 
-All derive `Debug, Clone, PartialEq` and serde `Serialize, Deserialize` with `snake_case` names, so a fixture file deserialises straight into `ViewState`.
+`src/model.rs` holds what the screen shows and what the user did; `Command` and `Event`, the worker's protocol, live in `src/worker.rs`. All derive `Debug, Clone, PartialEq, Eq` and serde `Serialize, Deserialize` with `snake_case` names, so a fixture file deserialises straight into `ViewState` and transcripts record events as JSON. `Status` and `LogLevel` are also `Copy, Hash` and are passed by value.
 
 ```rust
 pub enum Status { Idle, Starting, Running, Failed, Stopping, Stopped, NotFound }
@@ -63,6 +63,7 @@ pub enum UiAction {
     Close,
 }
 
+// src/worker.rs
 pub enum Command {
     Launch { apps: Vec<String>, game: Option<String> },
     Close { apps: Vec<String>, game: Option<String> },

@@ -1,6 +1,6 @@
 //! Ports `core/activity_logger.py`: builds timestamped activity log lines.
 
-use crate::contract::{LogLevel, LogLine};
+use crate::model::{LogLevel, LogLine};
 use windows::Win32::Foundation::SYSTEMTIME;
 use windows::Win32::System::SystemInformation::GetLocalTime;
 
