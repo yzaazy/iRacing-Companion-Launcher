@@ -190,14 +190,12 @@ impl Backend for Managers {
             return Some(saved);
         }
         if let Some(target) = self.shortcut_target(info.shortcut_names) {
-            // Python raises here if configparser refuses the value (a `%` in
-            // the path) and startup crashes; the port keeps the path unsaved.
             // A failed save is ignored, as in Python.
             let _ = self.config.lock().set_app_path(&key, &target);
             return Some(target);
         }
         if let Some(found) = find_path_in_list(&info.paths) {
-            // Refused or unsaved, the path is still used, as above.
+            // Unsaved, the path is still used, as above.
             let _ = self.config.lock().set_app_path(&key, &found);
             return Some(found);
         }
@@ -286,7 +284,7 @@ impl Backend for Managers {
         }
         if !appid.is_empty() && self.steam_game_installed(appid) {
             let url = format!("steam://rungameid/{appid}");
-            // A steam:// URL is always accepted; a failed save is ignored, as in Python.
+            // A failed save is ignored, as in Python.
             let _ = self.config.lock().set_app_path(&key, &url);
             return Some(url);
         }

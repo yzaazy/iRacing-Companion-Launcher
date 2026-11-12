@@ -48,7 +48,7 @@ configparser input and output, and the app definitions, written on 2026-11-11 (c
 
 The transcripts name the backend calls by the Python method names (`get_child_names`, ...); `tests/app_support/mod.rs` maps them to the Rust names. `files/` holds the files the browse scenarios pick in the file dialog; the paths in `transcripts.json` point at them.
 
-`tests/app_transcripts.rs` replays every scenario against the Rust controller and requires the same transcript and end state.
+`tests/app_transcripts.rs` replays every scenario against the Rust controller and requires the same transcript and end state, with one deliberate change applied to the recorded transcript: a picked path containing `%` is saved (change 9 in `docs/behaviour.md`), where v2.3.2's handler raised.
 
 ## ui/
 

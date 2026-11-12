@@ -19,9 +19,10 @@
 //! is all Python defines, the visible states are identical.
 
 use std::collections::HashMap;
+use std::io;
 use std::path::Path;
 
-use crate::core::config::{SetPathError, SharedConfig, config_key};
+use crate::core::config::{SharedConfig, config_key};
 use crate::core::log;
 use crate::managers::Backend;
 use crate::model::{AppCard, GameCard, LogLevel, Status, UiAction, ViewState};
@@ -38,9 +39,8 @@ pub trait Settings {
     fn set_setting(&mut self, key: &str, value: &str);
     /// `save_config()`: true when the file was written.
     fn save(&mut self) -> bool;
-    /// `set_app_path(key, path)`, which saves. [`SetPathError::Refused`] is
-    /// where Python raises; [`SetPathError::Save`] is its `False` return.
-    fn set_app_path(&mut self, key: &str, path: &str) -> Result<(), SetPathError>;
+    /// `set_app_path(key, path)`, which saves; `Err` is Python's `False` return.
+    fn set_app_path(&mut self, key: &str, path: &str) -> io::Result<()>;
 }
 
 impl Settings for SharedConfig {
@@ -60,7 +60,7 @@ impl Settings for SharedConfig {
         let store = self.lock();
         store.save().is_ok()
     }
-    fn set_app_path(&mut self, key: &str, path: &str) -> Result<(), SetPathError> {
+    fn set_app_path(&mut self, key: &str, path: &str) -> io::Result<()> {
         let mut store = self.lock();
         store.set_app_path(key, path)
     }
@@ -427,9 +427,8 @@ impl Controller {
             return;
         }
 
-        if !self.store_browsed_path(&config_key(name), &path) {
-            return;
-        }
+        // Python ignores set_app_path's result here.
+        let _ = self.settings.set_app_path(&config_key(name), &path);
 
         self.app_status(name, Status::Idle, 0);
         self.set_checked(name, true);
@@ -479,9 +478,9 @@ impl Controller {
             return;
         }
 
-        if !self.store_browsed_path(&format!("game_{}", config_key(name)), &path) {
-            return;
-        }
+        let key = format!("game_{}", config_key(name));
+        // Python ignores set_app_path's result here.
+        let _ = self.settings.set_app_path(&key, &path);
 
         self.game_status(name, Status::Idle);
         self.log(
@@ -489,16 +488,6 @@ impl Controller {
             &format!("{name} path configured: {path}"),
         );
         self.update_button_text();
-    }
-
-    /// `set_app_path` in both Browse handlers. False where Python raises out of
-    /// the handler (configparser refuses the path), so nothing after it happens.
-    /// Python ignores a failed save here.
-    fn store_browsed_path(&mut self, key: &str, path: &str) -> bool {
-        match self.settings.set_app_path(key, path) {
-            Err(SetPathError::Refused) => false,
-            Ok(()) | Err(SetPathError::Save(_)) => true,
-        }
     }
 
     /// The exe-name and existence checks both Browse handlers share, with their error lines.
